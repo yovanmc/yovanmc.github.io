@@ -8,6 +8,11 @@ const MONO = "'JetBrains Mono',monospace";
 const SERIF = "'Marcellus',serif";
 const MOBILE_BREAKPOINT = 760;
 
+// The KH stained-glass Station hero is temporarily hidden while the design is
+// reworked. The component (and its scrim) stay intact — flip this to true to
+// bring it back.
+const SHOW_STATION = false;
+
 type Col = "root" | "sub";
 
 /** tiny WebAudio blip synth (lazily created, respects autoplay policy) */
@@ -262,7 +267,7 @@ export default function App() {
     >
       <Atmosphere />
 
-      <Station scale={glassScale} opacity={ringOpacity} top={isMobile ? "31%" : "40%"} />
+      {SHOW_STATION && <Station scale={glassScale} opacity={ringOpacity} top={isMobile ? "31%" : "40%"} />}
 
       {/* hero — idle */}
       <div
@@ -279,23 +284,25 @@ export default function App() {
           transition: "opacity .55s ease, transform .65s cubic-bezier(.16,1,.3,1)",
         }}
       >
-        {/* focus scrim — the new Station has a luminous medallion, so dim it softly
-            behind the name to keep the eyebrow/name/subline legible (KH-style void) */}
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            transform: "translate(-50%,-50%)",
-            width: "720px",
-            height: "420px",
-            background:
-              "radial-gradient(ellipse 48% 60% at 50% 50%, rgba(4,8,20,.88) 0%, rgba(4,8,20,.6) 40%, rgba(4,8,20,0) 76%)",
-            filter: "blur(9px)",
-            zIndex: 0,
-            pointerEvents: "none",
-          }}
-        />
+        {/* focus scrim — only needed behind the luminous Station medallion to keep
+            the eyebrow/name/subline legible; hidden when the Station is hidden */}
+        {SHOW_STATION && (
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%,-50%)",
+              width: "720px",
+              height: "420px",
+              background:
+                "radial-gradient(ellipse 48% 60% at 50% 50%, rgba(4,8,20,.88) 0%, rgba(4,8,20,.6) 40%, rgba(4,8,20,0) 76%)",
+              filter: "blur(9px)",
+              zIndex: 0,
+              pointerEvents: "none",
+            }}
+          />
+        )}
         <div style={{ position: "relative", zIndex: 1 }}>
           <div
             style={{
