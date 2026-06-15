@@ -220,6 +220,15 @@ export const CATS: Category[] = [
         link: "mailto:Yovmcollins@gmail.com",
         linkLabel: "COPY ADDRESS",
       },
+      {
+        title: "LinkedIn",
+        meta: "linkedin.com/in/yovanmcollins",
+        stat: "",
+        body: "Roles, history and the more professional version of all of the above.",
+        tags: ["Network"],
+        link: "https://www.linkedin.com/in/yovanmcollins",
+        linkLabel: "OPEN PROFILE",
+      },
     ],
   },
 ];
