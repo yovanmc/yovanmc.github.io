@@ -1,12 +1,18 @@
 /**
  * Content model for the RPG command menu.
  *
- * NOTE: every string below is PLACEHOLDER copy in Yovan's voice (carried over from
- * the design prototype). The structure is final; the copy/metrics/links are to be
- * replaced with Yovan's real projects and experience before this site is deployed.
+ * Projects + Contact (GitHub) are Yovan's REAL, confidentiality-reviewed content,
+ * carried over from the vetted case studies in the Astro portfolio repo. EXPERIENCE
+ * entries and the Contact email/LinkedIn are still PLACEHOLDER pending Yovan's input
+ * (employer names + which contact details to publish are privacy/confidentiality calls).
  */
 
 export type Metric = [value: string, label: string];
+
+export interface Link {
+  label: string;
+  url: string;
+}
 
 export interface Item {
   title: string;
@@ -18,10 +24,17 @@ export interface Item {
   /** projects only */
   metrics?: Metric[];
   tags: string[];
-  /** contact actions */
-  copy?: string;
+  /** detail-panel primary button (opens the case study for projects/experience) */
   link?: string;
   linkLabel?: string;
+  /** contact: value copied to clipboard */
+  copy?: string;
+  /** case-study page outbound button: a source repo */
+  repo?: string;
+  /** case-study page outbound button: a public announcement */
+  announcement?: Link;
+  /** case-study page: external sources / press */
+  sources?: Link[];
 }
 
 export interface Category {
@@ -38,119 +51,128 @@ export const CATS: Category[] = [
     key: "projects",
     label: "Projects",
     blurb: "Systems I have designed, shipped and kept alive in production.",
-    tag: "07",
+    tag: "09",
     items: [
       {
-        title: "Ledgerline",
-        meta: "Distributed payments ledger",
-        stat: "2.4B entries / day",
-        body: "A double-entry ledger that settles transactions across regions with exactly-once guarantees and sub-second reconciliation.",
+        title: "MIA",
+        meta: "AI assistant at launch scale",
+        stat: "Millions of conversations",
+        body: "The AI assistant UWM publicly launched reaches borrowers by voice and text. I built the text channel and the backbone that gives every user their own dedicated number.",
         summary:
-          "Ledgerline is the settlement core of a multi-region payments platform. It maintains a strongly-consistent double-entry ledger, reconciles balances continuously, and exposes a deliberately narrow API so product teams move money without ever touching the books directly.",
+          "MIA is the AI assistant United Wholesale Mortgage built for its brokers, reaching borrowers by both voice and text. I worked on the text side and on the foundation underneath both channels. The piece I am proudest of is the dedicated number every user gets — 50,000 at launch, one per user — which routes to their personal MIA across calls and texts, loaded with their context. A broker can put it on a business card and it just works; you cannot do that with a shared short code, and per-user numbers are also what kept routing, replies, deliverability, and compliance manageable at scale. I designed and led the lifecycle of that backbone. MIA launched in 2025 at UWM LIVE! and the platform has since carried millions of borrower conversations.",
         metrics: [
-          ["2.4B", "entries / day"],
-          ["99.99%", "settlement uptime"],
-          ["<200ms", "p99 reconcile"],
+          ["Millions", "borrower conversations"],
+          ["50K", "dedicated numbers, one per user"],
+          ["2025", "launched at UWM LIVE!"],
         ],
-        tags: ["Go", "Postgres", "Kafka"],
+        tags: ["Messaging", "Telephony", "AI tooling"],
+        link: "#",
+        linkLabel: "CASE STUDY",
+        announcement: { label: "READ UWM'S ANNOUNCEMENT", url: "https://www.uwm.com/press-release-may-15-2025-2" },
+        sources: [
+          { label: "UWM: Mia announcement (May 2025)", url: "https://www.uwm.com/press-release-may-15-2025-2" },
+          { label: "HousingWire: UWM's AI tools (LEO and Mia)", url: "https://www.housingwire.com/articles/uwm-ai-tools-leo-mia-offer-analysis-virtual-borrower-assistance/" },
+          { label: "Scotsman Guide: \"Hi, this is Mia\"", url: "https://www.scotsmanguide.com/news/united-wholesale-mortgage-premieres-ai-loan-officer-assistant/" },
+          { label: "Mortgage Professional America: \"This has never been done\"", url: "https://www.mpamag.com/us/specialty/wholesale/mortgage-giant-launches-ai-powered-loan-officer-assistant-this-has-never-been-done-ever/536038" },
+          { label: "HousingWire: Mia after one year", url: "https://www.housingwire.com/articles/uwm-mia-borrower-engagement/" },
+        ],
+      },
+      {
+        title: "Backend-harness",
+        meta: "An outer loop for autonomous backend work",
+        stat: "Resumable mid-run",
+        body: "A single coding agent on a real backend repo runs out of context, grades its own work, and writes code that is confidently wrong. I built the orchestration layer it was missing.",
+        summary:
+          "Backend-harness sits on top of an existing inner loop and adds the outer loop it does not have. An orchestrator runs the whole thing and never reads the code itself; the agent that writes code and the agent that evaluates it are kept apart, with separate context, so the implementer cannot pass by grading its own work. Around that it runs the checks a careful developer would — unit, integration, and live API tests, plus a tiered mutation-testing gate so coverage means tests that catch a changed line. The two parts I am proudest of: disk-state resumability (it writes full state after every step and resumes at the exact phase it left off) and oscillation detection (it tracks failure identity and escalates to a person when the agent starts going in circles). It runs the same whether the agent underneath is Claude Code or Codex, is validated against .NET, and is open source under MIT.",
+        metrics: [["Resumable", "recovers from interruption mid-run"]],
+        tags: ["Agentic systems", "Orchestration", "Mutation testing"],
+        link: "#",
+        linkLabel: "CASE STUDY",
+        repo: "https://github.com/yovanmc/backend-harness",
+      },
+      {
+        title: "The failure that left no logs",
+        meta: "Cross-stack production debugging",
+        stat: "3 layers, no errors",
+        body: "Requests were being silently rejected and quietly retried, invisible to every dashboard. I traced the cause across a message bus, an HTTP ingress, and the OS network stack.",
+        summary:
+          "A service showed slightly lower throughput and one report of a message that never sent — but the audit trail showed no failures anywhere. I traced a message by hand and it never made it past the message-bus hop. The first real clue was an HTML 400 sitting in the retry topic's error field, from a path that did not emit HTML: something downstream was rejecting requests before our code ever saw them, and its logs were not in the observability tooling. That led me to Http.sys, the OS-level driver in front of every request. Backtracking ~50 requests one at a time revealed the pattern: every rejected request carried the same malformed header (a library was writing non-ASCII bytes), and Http.sys refuses those on sight. Rather than fight it, I routed around it with a consumer that pulled messages off the topic partitions directly, removing the HTTP layer entirely — zero changes required from any consumer, same at-least-once guarantees. Every negative indicator fell to zero as the change rolled out. The lesson stuck: just because every tool says everything is fine does not mean it is.",
+        metrics: [["3 layers", "message bus → OS kernel"]],
+        tags: ["Message bus", "Observability", "Cross-stack debugging"],
         link: "#",
         linkLabel: "CASE STUDY",
       },
       {
-        title: "Halcyon",
-        meta: "Real-time event gateway",
-        stat: "p99 < 8ms",
-        body: "An ingestion gateway that fans millions of concurrent events into downstream consumers with backpressure and replay.",
+        title: "Observability by default",
+        meta: "SRE automation, presented to Dynatrace's guild",
+        stat: "Seconds to set up",
+        body: "I automated reliability-guardian setup against Dynatrace's API, turning a manual, per-team job into something any team could stand up in seconds with golden-signal observability built in.",
         summary:
-          "Halcyon is the front door for real-time data. It accepts millions of concurrent event streams, applies backpressure so no downstream consumer is ever overwhelmed, and can replay any window of traffic exactly once after an outage.",
-        metrics: [
-          ["12M", "concurrent streams"],
-          ["<8ms", "p99 latency"],
-          ["exactly-once", "replay"],
-        ],
-        tags: ["Rust", "gRPC", "NATS"],
+          "A reliability guardian watches a service against health objectives and flags it when it drifts out of bounds. Setting one up in Dynatrace was a manual, per-team job — slow, easy to skip, and inconsistent across services. I automated the whole setup against Dynatrace's API so a team could stand one up in seconds with golden-signal observability built in from the start, and wired our load testing in so stress-test results became part of the health picture. Observability became a one-button setup, realistic to roll out across many services. In May 2024 Dynatrace invited me and an enterprise architect to present the work to their global automation guild as a reference implementation for enterprise-scale reliability. The part I am proudest of is that it was not a one-off — other people could use it without thinking about the plumbing underneath, and that is the part that actually scaled.",
+        metrics: [["Seconds", "to stand up what had been manual"]],
+        tags: ["Observability", "Automation", "SRE"],
         link: "#",
         linkLabel: "CASE STUDY",
       },
       {
-        title: "Atlas Mesh",
-        meta: "Service-mesh control plane",
-        stat: "1.2k services",
-        body: "Control plane that distributes routing, mTLS and policy to a fleet of sidecars with zero-downtime rollout.",
+        title: "notification-dispatch",
+        meta: "Event-driven dispatcher",
+        stat: "",
+        body: "An event-driven C# dispatcher built on Redis Streams, with retries, a dead-letter queue, and first-class observability.",
         summary:
-          "Atlas Mesh is the control plane behind a large service fleet. It distributes routing rules, mutual TLS and policy to every sidecar and ships changes across more than a thousand services without a second of downtime.",
-        metrics: [
-          ["1,200", "services"],
-          ["0", "downtime rollouts"],
-          ["mTLS", "everywhere"],
-        ],
-        tags: ["Go", "Envoy", "Kubernetes"],
+          "An event-driven C# notification dispatcher built on Redis Streams. It handles retries, routes anything that ultimately fails into a dead-letter queue, and ships with first-class observability so the health of the pipeline is visible rather than inferred.",
+        tags: ["C#", "Redis Streams"],
         link: "#",
         linkLabel: "CASE STUDY",
+        repo: "https://github.com/yovanmc/notification-dispatch",
       },
       {
-        title: "Quanta",
-        meta: "Time-series metrics store",
-        stat: "18M writes / s",
-        body: "A column-oriented store tuned for high-cardinality metrics with rollups and tiered retention.",
+        title: "VideoTriage",
+        meta: "Verified, crash-safe re-encode tool",
+        stat: "",
+        body: "A video re-encode and triage tool that replaces files in place only after a parity check, so a smaller encode never costs you the original.",
         summary:
-          "Quanta stores high-cardinality time-series metrics. A column-oriented engine with rollups and tiered retention keeps recent data fast and historical data cheap, sustaining heavy write volume without flinching.",
-        metrics: [
-          ["18M", "writes / sec"],
-          ["40:1", "compression"],
-          ["tiered", "retention"],
-        ],
-        tags: ["C++", "Cassandra"],
+          "VideoTriage re-encodes and triages a video library, replacing files in place only after a verified parity check — a smaller encode is swapped in only once it is proven to match the original on resolution, audio, and decode. The swap is crash-safe and the original is never lost; deletions are recoverable and audited.",
+        tags: [".NET", "WPF", "HandBrake"],
         link: "#",
         linkLabel: "CASE STUDY",
+        repo: "https://github.com/yovanmc/VideoTriage",
       },
       {
-        title: "Relay",
-        meta: "Webhook delivery engine",
-        stat: "99.99% delivered",
-        body: "Durable webhook pipeline with exponential retries, idempotency keys and a dead-letter console.",
+        title: "AudioShelf",
+        meta: "Spoken-audio library player",
+        stat: "",
+        body: "A spoken-audio library player with chapter-aware, per-author continue-listening.",
         summary:
-          "Relay delivers webhooks reliably. Every event is retried with exponential backoff, deduplicated with idempotency keys, and anything that ultimately fails lands in a searchable dead-letter console for one-click replay.",
-        metrics: [
-          ["99.99%", "delivered"],
-          ["idempotent", "retries"],
-          ["DLQ", "console"],
-        ],
-        tags: ["Go", "Redis", "Postgres"],
+          "AudioShelf is a Windows spoken-audio library and player. It tracks chapter-aware progress and offers per-author continue-listening, so picking up where you left off works the way it should across a large library of long-form audio.",
+        tags: ["Tauri", "React", "SQLite"],
         link: "#",
         linkLabel: "CASE STUDY",
+        repo: "https://github.com/yovanmc/AudioShelf",
       },
       {
-        title: "Vault Sync",
-        meta: "Secrets replication system",
-        stat: "cross-region",
-        body: "Replicates encrypted secrets across clusters with leader election and audited, versioned rollbacks.",
+        title: "MangaReader",
+        meta: "Local-first comic reader",
+        stat: "",
+        body: "A local-first manga and comic reader with archive (CBZ/CBR/CB7) and embedded-metadata support.",
         summary:
-          "Vault Sync replicates encrypted secrets across clusters. Leader election keeps a single source of truth, every change is versioned and audited, and rolling back to a known-good state is a single safe operation.",
-        metrics: [
-          ["cross-region", "sync"],
-          ["versioned", "rollbacks"],
-          ["audited", "changes"],
-        ],
-        tags: ["Rust", "etcd"],
+          "MangaReader is a local-first manga and comic reader. It reads CBZ/CBR/CB7 archives directly, pulls embedded metadata, and is strictly read-only against your library — built for fast browsing and reading at the scale of a real collection.",
+        tags: ["Tauri", "React", "SQLite"],
         link: "#",
         linkLabel: "CASE STUDY",
+        repo: "https://github.com/yovanmc/MangaReader",
       },
       {
-        title: "Beacon",
-        meta: "Observability pipeline",
-        stat: "40TB / day",
-        body: "A tracing and metrics pipeline built on OpenTelemetry with adaptive sampling and span-level search.",
+        title: "VideoShelf",
+        meta: "Play-everything video library",
+        stat: "",
+        body: "A play-everything video library and player with a personal home, watch stats, and subtitle sidecars.",
         summary:
-          "Beacon is the observability pipeline. Built on OpenTelemetry, it ingests traces and metrics at scale, samples adaptively to keep cost under control, and makes individual spans searchable within seconds.",
-        metrics: [
-          ["40TB", "ingested / day"],
-          ["adaptive", "sampling"],
-          ["span-level", "search"],
-        ],
-        tags: ["Go", "OpenTelemetry", "ClickHouse"],
+          "VideoShelf is a play-everything Windows video library and player. It scans and organizes a collection, surfaces a personal home with watch stats and continue-watching, plays effectively any format via LibVLC, and supports subtitle sidecars — the video counterpart to AudioShelf.",
+        tags: [".NET", "WPF", "LibVLCSharp"],
         link: "#",
         linkLabel: "CASE STUDY",
+        repo: "https://github.com/yovanmc/VideoShelf",
       },
     ],
   },
@@ -158,49 +180,16 @@ export const CATS: Category[] = [
     key: "experience",
     label: "Experience",
     blurb: "Where I have built systems and grown the teams around them.",
-    tag: "04",
+    tag: "PENDING",
     items: [
       {
-        title: "Staff Backend Engineer",
-        meta: "Nimbus Systems",
-        stat: "2023 — Present",
-        body: "Lead the platform group building the payments and event-streaming backbone serving the whole product.",
+        title: "Experience — pending",
+        meta: "Awaiting Yovan's real role history",
+        stat: "",
+        body: "This section is a placeholder. Real roles, companies, and dates have not been entered yet — they are a confidentiality/privacy decision and will be filled in directly.",
         summary:
-          "Leads the platform group that builds the payments and event-streaming backbone the whole product runs on. Sets technical direction, mentors the engineers around me, and keeps the core systems boring in the best possible way.",
-        tags: ["Go", "Kafka", "Kubernetes"],
-        link: "",
-        linkLabel: "",
-      },
-      {
-        title: "Senior Backend Engineer",
-        meta: "Corewave",
-        stat: "2020 — 2023",
-        body: "Owned the data-plane services and cut p99 latency by 4x while tripling throughput during a major rewrite.",
-        summary:
-          "Owned the data-plane services through a major rewrite, cutting p99 latency by four times while tripling throughput. The patterns established here still shape how the rest of the backend is built.",
-        tags: ["Rust", "gRPC", "Postgres"],
-        link: "",
-        linkLabel: "",
-      },
-      {
-        title: "Backend Engineer",
-        meta: "Driftpoint",
-        stat: "2018 — 2020",
-        body: "Built core APIs and the job-scheduling layer that powered the early product through its first scale.",
-        summary:
-          "Built the core APIs and the job-scheduling layer that carried the early product through its first real scale, back when every week seemed to bring a new order of magnitude.",
-        tags: ["Go", "Redis"],
-        link: "",
-        linkLabel: "",
-      },
-      {
-        title: "Software Engineer",
-        meta: "Hollowpeak",
-        stat: "2016 — 2018",
-        body: "Started as an intern and shipped internal tooling and services that stuck around for years.",
-        summary:
-          "Joined as an intern and converted to full-time, shipping internal tooling and backend services that quietly stuck around for years after.",
-        tags: ["Python", "Postgres"],
+          "Placeholder. The Experience entries will be replaced with Yovan's real role history once he confirms which employers to name (UWM is public via MIA; other roles may stay anonymized) and the dates to show.",
+        tags: ["pending"],
         link: "",
         linkLabel: "",
       },
@@ -213,32 +202,31 @@ export const CATS: Category[] = [
     tag: "→",
     items: [
       {
-        title: "Email",
-        meta: "yovan@example.com",
-        stat: "",
-        body: "The fastest way to reach me. I read everything and reply to most.",
-        tags: ["Inbox"],
-        copy: "yovan@example.com",
-        link: "mailto:yovan@example.com",
-        linkLabel: "COPY ADDRESS",
-      },
-      {
         title: "GitHub",
-        meta: "github.com/yovan",
+        meta: "github.com/yovanmc",
         stat: "",
         body: "Open-source experiments, infrastructure tools, and the occasional weekend rabbit hole.",
         tags: ["Code"],
-        link: "https://github.com",
+        link: "https://github.com/yovanmc",
         linkLabel: "OPEN PROFILE",
       },
       {
-        title: "LinkedIn",
-        meta: "linkedin.com/in/yovan",
+        title: "Email",
+        meta: "pending — address not yet confirmed",
         stat: "",
-        body: "Roles, history and the more professional version of all of the above.",
+        body: "Placeholder. The public contact address has not been confirmed — publishing an email is a privacy decision and will be set directly.",
+        tags: ["Inbox"],
+        link: "",
+        linkLabel: "",
+      },
+      {
+        title: "LinkedIn",
+        meta: "pending — profile URL not yet provided",
+        stat: "",
+        body: "Placeholder. The LinkedIn profile URL has not been provided yet.",
         tags: ["Network"],
-        link: "https://linkedin.com",
-        linkLabel: "OPEN PROFILE",
+        link: "",
+        linkLabel: "",
       },
     ],
   },

@@ -1,5 +1,5 @@
 import { useMemo, type CSSProperties, type ReactNode } from "react";
-import { CATS } from "../content";
+import { CATS, type Link } from "../content";
 import { rng } from "../lib/rng";
 
 export interface PageRef {
@@ -45,6 +45,10 @@ export function CaseStudyPage({ page, isMobile, onClose }: CaseStudyPageProps) {
   const showPeriod = !!(item && cat && cat.key !== "projects" && item.stat);
   const metrics = item?.metrics ?? [];
   const tags = item?.tags ?? [];
+  const ext: Link | null = item?.repo
+    ? { label: "VIEW REPOSITORY", url: item.repo }
+    : item?.announcement ?? null;
+  const sources = item?.sources ?? [];
   const idxLabel =
     page && cat
       ? String(page.si + 1).padStart(2, "0") + " / " + String(cat.items.length).padStart(2, "0")
@@ -218,8 +222,12 @@ export function CaseStudyPage({ page, isMobile, onClose }: CaseStudyPageProps) {
           ))}
         </div>
 
-        {isProject && (
+        {ext && (
           <div
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(ext.url, "_blank", "noopener");
+            }}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -235,8 +243,39 @@ export function CaseStudyPage({ page, isMobile, onClose }: CaseStudyPageProps) {
               boxShadow: "0 0 26px rgba(60,130,255,.14)",
             }}
           >
-            <span style={{ color: "#9fc4ff" }}>▸</span> VIEW REPOSITORY
+            <span style={{ color: "#9fc4ff" }}>▸</span> {ext.label}
           </div>
+        )}
+
+        {sources.length > 0 && (
+          <>
+            <div style={{ fontFamily: mono, fontSize: "11px", letterSpacing: ".34em", color: "#7fb0ff", margin: "46px 0 14px" }}>PRESS &amp; SOURCES</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {sources.map((s, i) => (
+                <div
+                  key={i}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(s.url, "_blank", "noopener");
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "9px",
+                    cursor: "pointer",
+                    fontFamily: mono,
+                    fontSize: "12.5px",
+                    letterSpacing: ".02em",
+                    color: "#9fc0ec",
+                    maxWidth: "680px",
+                  }}
+                >
+                  <span style={{ color: "#7fb0ff" }}>↗</span>
+                  {s.label}
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
