@@ -48,6 +48,9 @@ After painting, every opaque cell 4-adjacent to transparency becomes `e` (#18181
 - `glitchOf(grid, shifts, scans, noise)` — horizontal row-band displacement (gap stays transparent), solid-color scanlines, stray static pixels. 90ms glitch frames injected into an idle loop.
 - `eDither(grid, r1,r2,c1,c2)` — checkerboard-to-transparent for translucency (ghost edges, dissolving tails, smoke). **Run AFTER outline** (dither-then-outline turns the whole region into outline), and re-post anything that must stay solid (eyes) after dithering.
 - `eCarve` — punch transparent holes post-outline for "nothing behind this" reads (empty visor, chest rent).
+- Enemy-grid battle-anim helpers (added with the boss attack/hit/death sets; copy from any boss lab): `eOverlay(grid, pts)` and `eFlashOf(grid)` — enemy-size twins of the hero versions; `eDitherAll(grid, mod)` — whole-sprite `(r+c)%mod` dissolve for death reels; `eShift(grid, dr, dc)` — translate the whole grid (knockback/jitter); `pieceShift(src, moves)` + a `PIECES` list of bounding boxes — translate rigid sub-pieces independently (armor separation, falling parts); `eMerge(base, over)` — stamp one grid onto another (non-null wins).
+- **"Rotating" a rigid piece** (grids can't rotate): draw the piece's other orientation as dedicated shapes, drop the original piece via a `pieceShift` move off-grid, and `eMerge` the new orientation onto the base; the existing lift/translate frames read as the pivot tween. Silent Failure's horizontal point-and-swing (`handSword()` in its lab) is the worked example.
+- `goldHairOf`-style zone-bounded remaps (Conviction, hero lab): for persistent form swaps, remap letters ONLY inside explicit zone rectangles — some letters double as other features elsewhere (`E`/`F` are hair AND eye pupils), so a global remap corrupts them. Outline cells (`e`) inside the zones need their own conversion branch, because 1–2px shapes (twists, spike tips) are ENTIRELY outline after the outline pass.
 
 ## 4. Animation patterns
 
@@ -97,6 +100,10 @@ for ($i=0; $i -lt 20; $i++) { if (Test-Path $out) { break }; Start-Sleep -m 500 
 ```
 
 The page carries a green bar div at a known y (render-succeeded marker) and a `window.onerror` handler that prints a giant red JSERROR banner; the checker samples pixels for both via `System.Drawing`. For substantive/final models, an independent reviewer then judges the PNG against a written checklist (coherence, materials, scale vs hero, glitches) and must return pixel-coordinate evidence, not vibes — its numeric claims get re-verified against the Node dumps.
+
+### 5d. Approval loop
+
+Every animation set went through the same cycle, and it is the reason the style stayed consistent: build in a scratch copy of the lab → Node audits (5a/5b) → headless render check (5c) → present the animation to the owner → iterate on their verdict → only THEN copy into this directory and merge via PR. The owner's eye is the final gate; no set ships on numeric checks alone.
 
 ## 6. Extending
 
