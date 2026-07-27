@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>Battlefield system — glass platform + corruption variants</title>
+<style>
+  body { background: #0e1630; color: #cfd6e8; font-family: Consolas, monospace; margin: 20px; }
+  canvas { image-rendering: pixelated; display:block; }
+  .cell { margin-bottom: 26px; }
+  .cell div { font-size: 13px; margin-top: 4px; }
+  #err { color: #ff6b6b; font-size: 20px; }
+</style></head>
+<body>
+<div class="cell"><canvas id="cvbase" width="1024" height="576"></canvas><div>PURE BASE — the heart-station platform</div></div>
+<div class="cell"><canvas id="cvAS" width="1024" height="576"></canvas><div>ALERT STORM corruption</div></div>
+<div class="cell"><canvas id="cvCC" width="1024" height="576"></canvas><div>CASCADE corruption</div></div>
+<div class="cell"><canvas id="cvSF" width="1024" height="576"></canvas><div>SILENT FAILURE corruption</div></div>
+<div class="cell"><canvas id="cvIS" width="1024" height="576"></canvas><div>IMPOSTER SYNDROME corruption</div></div>
+<div class="cell"><canvas id="cvER" width="1024" height="576"></canvas><div>EROSION REEL — boss HP 100/66/33/0</div></div>
+<div id="err"></div>
+<script>
+window.onerror = function (msg, src, line, col) {
+  document.getElementById('err').textContent = 'JSERROR: ' + msg + ' @line ' + line + ':' + col;
+  return false;
+};
+</script>
+<script>
+const SPR = {"hero":[["................................................","................................................","................................................","................................................","......................ee.ee.ee.ee...............","...................eeeHEeEEeHEeEEe..............","...................eFeGEFGEFEGEEEe..............","...................ee.eECCECEEFHHe..............","...................ee.eXCCWCBWHEEe..............","...................ee.eAACAABBFHHe..............","...................ee.eLECELBBHEEe..............","...................eFeCCCCCCBBFHHe..............","...................eHeCCCCCCBBHEEe..............","...................ee.eCCCCCBBFHWe..............","...................ee.eBbCCCBBHEX...............","...................EX.ebbbbBeeEe................","...................W....eCBe..Fe................","........................eCBe..WX................","......................eebbbbeee.................","..................eeeeYYWYYYWYYeeeee............","..................eYfYYYYVYVYYYYYgYe............","..................eIYYIfYYYYYYYbbbYe............","...................eYYIfYYYYYYYbbbYe............","................WX.eYYIfYgYYYYYbbbYe............","................WP.ebbIfYYgYYgYbbbYe............",".................PKeCBIfYYYYYYYbbbBe............","..................PPDBIfYYYgYYYbbbBe............","...................PKBIfYYYYgYYbbbBe............","...................ePPIfgYYYYYYbbbBe............","...................eCWWfYYYYYYYbbbBe............","...................eCBXfYgggggYbbbBe............","...................eCBIYYYYYYYYbbbBe............","....................eCCbWbbcbbcbbbBe............","....................eeBaaaaaaaZZZZBe............","......................ehaaaaaaZZZZee............","......................ehaaaaiaZZZe..............","......................eaaaiaaaZZZWPPP...........","......................eaaYeeeYZZZWPOOOO.........",".....................eaaae...eZZYeOOOOWW........",".....................ehaae...eZZYe....WX........",".....................ehaae...eZZYe..............",".....................ehaae...eZZYe..............",".....................ehaae...eZZYe..............",".....................ehaae...eZZYe..............",".....................ehiie...eYYYe..............",".....................ehiae...eYZYe..............",".....................ehaae...eZZYe..............",".....................ehaae...eZZYe..............",".....................ehaae...eZZYe..............",".....................ehaie...eZZYe..............",".....................ehaae...eZZYe..............",".....................eZZZe...eZZYe..............","..................eeeKKKJe...eKKKKe.............","..................eLKJKKKe...eLKKJe.............","..................eKJKJKKe...eKJKKe.............","..................eJJJJJJe...eJJJJe.............","..................eeeeeeee...eeeeee.............","................................................","................................................","................................................"],["................................................","................................................","................................................","................................................","................................................","......................ee.ee.ee.ee...............","...................eeeHEeEEeHEeEEe..............","...................eFeGEFGEFEGEEEe..............","...................ee.eECCECEEFHHe..............","...................ee.eXCCWCBWHEEe..............","...................ee.eAACAABBFHHe..............","...................ee.eLECELBBHEEe..............","...................eFeCCCCCCBBFHHe..............","...................eHeCCCCCCBBHEEe..............","...................ee.eCCCCCBBFHWe..............","...................ee.eBbCCCBBHEX...............","...................EX.ebbbbBeeEe................","...................W....eCBe..Fe................","........................eCBe..WX................","......................eebbbbeee.................","..................eeeeYYWYYYWYYeeeee............","..................eYfYYYYVYVYYYYYgYe............","..................eIYYIfYYYYYYYbbbYe............","...................eYYIfYYYYYYYbbbYe............","................WX.eYYIfYgYYYYYbbbYe............","................WP.ebbIfYYgYYgYbbbYe............",".................PKeCBIfYYYYYYYbbbBe............","..................PPDBIfYYYgYYYbbbBe............","...................PKBIfYYYYgYYbbbBe............","...................ePPIfgYYYYYYbbbBe............","...................eCWWfYYYYYYYbbbBe............","...................eCBXfYgggggYbbbBe............","...................eCBIYYYYYYYYbbbBe............","....................eCCbWbbcbbcbbbBe............","....................eeBhaaaaaaZZZZBe............","......................ehaaaaiaZZZZee............","......................eaaaiaaaZZZe..............","......................eaaYeeeYZZZWPPP...........",".....................eaaae...eZZYWPOOOO.........",".....................ehaae...eZZYeOOOOWW........",".....................ehaae...eZZYe....WX........",".....................ehaae...eZZYe..............",".....................ehaae...eZZYe..............",".....................ehaae...eZZYe..............",".....................ehiie...eYYYe..............",".....................ehiae...eYZYe..............",".....................ehaae...eZZYe..............",".....................ehaae...eZZYe..............",".....................ehaae...eZZYe..............",".....................ehaie...eZZYe..............",".....................ehaae...eZZYe..............",".....................eZZZe...eZZYe..............","..................eeeKKKJe...eKKKKe.............","..................eLKJKKKe...eLKKJe.............","..................eKJKJKKe...eKJKKe.............","..................eJJJJJJe...eJJJJe.............","..................eeeeeeee...eeeeee.............","................................................","................................................","................................................"]],"boss":[["................................................................","..............................eeeeeee...........................",".............................eKKKKKKKe..........................",".............................eJJJJJJJe..........................",".............................eWWWXWWWe..........................",".............................eJELELEJe..........................",".............................eJEEEEEJe..........................",".............................eJJJJJJJe..........................",".............................eIIIIIIIe..........................",".............................eIIIIIIIe..........................",".............................eIIIIIIIe..........................","..............................eOOOOOe...........................","..............................eOOPOOe...........................","...........................eeeOOOOOOOeee........................","....................eeeeeeeOOOOOOOOOOOOOeeeeeee.....eWXWWe......","..................eeJKKKKKJOOOOOOOOOOOOOJKKKKKJee...eeWWee......","..................eOJJJJJJJOOOOOOOOOOOOOJJJJJJJOe.....KP........","..................eOJJJWJJJOOOOOOOOOOOOOJJJWJJJOe.....KP........","..................eOeJJJJJJOOOOOOOOOOOOOJJJJJJeOe.....LP........","..................ee.eeeeeeOOOOOOOOOOOOOeeeeee.ee.....LP........","..................eOee.....eOOOOOOOOOOOe.....eeOe.....KP........","..................eOOe......eJJJJJJJJJe......eOOe.....KP........","..................eOOe......eJIIWXWIIIe......eOOe.....KP........","..................eOOe......eJIIIIIIIIe......eOOe.....KP........","..................eOOe......eJIOPOOIIIe......eOOe.....LP........","..................eOOe......eJIOOOOIIIe......eOOe.....KP........",".................eJJJe......eJIIIIIIIIe......eJJJe....KP........",".................eKKKe......eggggggggge......eKKKe....KP........",".................eJJJe......eJIIIIIIIIe......eJJJe....KP........",".................eJJJe.......eOOOOOOOe.......eJJJe....KP........",".................eIIIe.......eOOOPOOOe.......eIIIe....KP........",".................eeeee.......eOOOOOOOe.......eeeee....KP........",".............................eOOOPOOOe................KP........","..........................eeeJJJJJJJJJeee.............KP........","..........................eJJJgJJWJJgJJJe.............Ke........","..........................eIIIIIIIIIIIIIe.............Ke........","..........................eeIIIIIIIIIIIee.............Le........","............................eOOONNOOOOe.........................","............................eOOONNOOOOe.........................","............................eOOONNOOOOe.........................",".............................O.O.N.O.O..........................","..............................O.N.O.O...........................",".............................e.O.N.O.e..........................","..............................O.N.O.O...........................",".............................e.O.N.O.e..........................","..............................e.N.O.e...........................","...............................O.N.O............................","..............................e.N.O.e...........................","...............................O.N.e............................","................................N.e.............................","........................OP.....e.N..............................","........................OO......N.e.............................","...............................e.e..............................","........................................OP......................","........................................OO......................","..............................OP................................","..............................OO................................","................................................................","................................................................","................................................................"],["................................................................","................................................................","..............................eeeeeee...........................",".............................eKKKKKKKe..........................",".............................eJJJJJJJe..........................",".............................eWWWXWWWe..........................",".............................eJELELEJe..........................",".............................eJEEEEEJe..........................",".............................eJJJJJJJe..........................",".............................eIIIIIIIe..........................",".............................eIIIIIIIe..........................",".............................eIIIIIIIe..........................","..............................eOOPOOe...........................","....................eeeeeee...eOOOOOe...eeeeeee.....eWXWWe......","....................eKKKKKJeeeOOOOOOOeeeJKKKKKe.....eeWWee......","....................eJJJJJJOOOOOOOOOOOOOJJJJJJe.......KP........","..................eeJJJWJJJOOOOOOOOOOOOOJJJWJJJee.....KP........","..................eOeJJJJJJOOOOOOOOOOOOOJJJJJJeOe.....LP........","..................ee.eeeeeeOOOOOOOOOOOOOeeeeee.ee.....LP........","..................eOee.....eOOOOOOOOOOOe.....eeOe.....KP........","..................eOOe.....eOOOOOOOOOOOe.....eOOe.....KP........","..................eOOe.....eOOOOOOOOOOOe.....eOOe.....KP........","..................eOOe......eJJJJJJJJJe......eOOe.....KP........","..................eOOe......eJIIWXWIIIe......eOOe.....LP........","..................eOOe......eJIIIIIIIIe......eOOe.....KP........",".................eJJJe......eJIOPOOIIIe......eJJJe....KP........",".................eKKKe......eJIOOOOIIIe......eKKKe....KP........",".................eJJJe......eJIIIIIIIIe......eJJJe....KP........",".................eJJJe......eggggggggge......eJJJe....KP........",".................eIIIe......eJIIIIIIIIe......eIIIe....KP........",".................eeeee.......eOOOPOOOe.......eeeee....KP........",".............................eOOOOOOOe................KP........",".............................eOOOPOOOe................KP........",".............................eOOOOOOOe................Ke........","..........................eeeJJJJJJJJJeee.............Ke........","..........................eJJJgJJWJJgJJJe.............Le........","..........................eIIIIIIIIIIIIIe.......................","..........................eeIIIIIIIIIIIee.......................","............................eOOONNOOOOe.........................","............................eOOONNOOOOe.........................","............................eOOONNOOOOe.........................","............................e.O.N.O.O.e.........................",".............................e.O.N.O.e..........................","..............................O.N.O.O...........................",".............................e.O.N.O.e..........................","..............................O.N.O.O...........................","...............................O.N.O............................","..............................e.N.O.e...........................","...............................O.N.O............................","..............................e.N.O.e...........................","...............................e.N..............................",".........................OP.....N.e.............................",".........................OO....e.N..............................","................................e.e.............................",".......................................OP.......................",".......................................OO.......................","...............................OP...............................","...............................OO...............................","................................................................","................................................................"]]};
+// Battlefield system — glass platform base + per-boss corruption variants + erosion reel
+// Grid-as-data 256x144, shared 38-slot palette. Injected into the lab page AND eval'd by audits.
+const PAL = {
+  A:'#2e1a10', B:'#7d4e26', C:'#b5793a', D:'#d49a5c',
+  E:'#100a10', F:'#241a20', G:'#3a2a20', H:'#55402e',
+  I:'#4a4440', J:'#8a8078', K:'#cfc8bc', L:'#f0ece0',
+  M:'#0f0d18', N:'#1c1830', O:'#2e2a44', P:'#4a4468',
+  Q:'#3f0e12', R:'#6b1418', S:'#bd2421', T:'#e04838',
+  U:'#4a3a18', V:'#947d42', W:'#c9a94f', X:'#e7cb6b',
+  Y:'#3a3632', Z:'#6e6862', a:'#a29a90',
+  b:'#1c1410', c:'#3a2c1e', d:'#5a4630',
+  e:'#181818',
+  f:'#55524c', g:'#2a2724',
+  h:'#c3bbae', i:'#948d80',
+  j:'#6a3d8f', k:'#9d6bc4'
+};
+const SR = 144, SC = 256;
+const FEET = 122;
+const BOSS_AT = [66,34], HERO_AT = [66,168];
+// disc: top-face ellipse center (122,128), semi-axes 108 x 8
+const DCX=128, DCY=122, DA=108, DB=8;
+// glass must stay under both combatants' feet in every variant
+const SAFE = [[48,94],[181,210]];
+
+function mk(k){ return Array.from({length:SR},()=>Array(SC).fill(k)); }
+function fillR(g,r1,r2,c1,c2,k){ for(let r=Math.max(0,r1);r<=Math.min(SR-1,r2);r++) for(let c=Math.max(0,c1);c<=Math.min(SC-1,c2);c++) g[r][c]=k; }
+function hl(g,r,c1,c2,k){ fillR(g,r,r,c1,c2,k); }
+function vl(g,c,r1,r2,k){ fillR(g,r1,r2,c,c,k); }
+function dot(g,r,c,k){ if(r>=0&&r<SR&&c>=0&&c<SC) g[r][c]=k; }
+function stamp(g,packed,r0,c0){
+  for(let r=0;r<packed.length;r++){ const row=packed[r];
+    for(let c=0;c<row.length;c++){ const ch=row[c];
+      if(ch!=='.'){ const rr=r0+r, cc=c0+c; if(rr>=0&&rr<SR&&cc>=0&&cc<SC) g[rr][cc]=ch; } } }
+}
+const hsh = (r,c) => ((r*73+c*151+((r*c)>>3))%97+97)%97;   // deterministic per-cell hash
+const uOf = (r,c) => Math.hypot((c-DCX)/DA,(r-DCY)/DB);    // normalized elliptical radius
+const inDisc = (r,c) => r>=DCY-DB && r<=DCY+DB && uOf(r,c)<=1;
+const inSafe = c => SAFE.some(([a2,b2])=>c>=a2&&c<=b2);
+const secOf = (r,c) => { let a=Math.atan2((r-DCY)/DB,(c-DCX)/DA); if(a<0)a+=2*Math.PI; return Math.floor(a/(Math.PI/6))%12; };
+const ringOf = u => u<0.15?0 : u<0.38?1 : u<0.68?2 : 3;
+
+// ---- pure base: stained-glass disc in the void ----
+// opt: shafts (bool), motes: 'up'|'red'|'purple'|'off'
+function buildBase(ph, opt){
+  opt = opt || {};
+  const g = mk('M');
+  if(opt.shafts!==false){
+    for(let r=0;r<=96;r++){ const o1=Math.floor(r/3), o2=Math.floor(r/4);
+      fillR(g,r,r,58+o1,66+o1,'N'); vl(g,62+o1,r,r,'O');
+      fillR(g,r,r,150+o2,155+o2,'N'); }
+  }
+  const motes=[[20,30],[34,110],[15,200],[50,240],[62,12],[78,150],[40,70],[70,220],[26,170],[86,40],[58,190],[92,120]];
+  const mk2={up:'P',red:'T',purple:'k'}[opt.motes||'up'];
+  if(mk2) for(const [r,c] of motes) dot(g, ph? (opt.motes==='red'?r+1:r-1):r, c, mk2);
+  // glass cells by (ring,sector) hash: N/O/P
+  for(let r=DCY-DB;r<=DCY+DB;r++) for(let c=0;c<SC;c++){
+    const u=uOf(r,c); if(u>1) continue;
+    const ring=ringOf(u), sec=secOf(r,c);
+    g[r][c] = ring===0 ? 'W' : ['N','O','P'][(ring*5+sec*7+(ring+sec)%2)%3];
+  }
+  dot(g,DCY,DCX,'X'); dot(g,DCY,DCX-1,'X'); dot(g,DCY,DCX+1,'X');
+  // cames: two rings + 12 spokes in V
+  for(const s of [0.38,0.68]) for(let t=0;t<720;t++){ const a=t*Math.PI/360;
+    dot(g, Math.round(DCY+DB*s*Math.sin(a)), Math.round(DCX+DA*s*Math.cos(a)), 'V'); }
+  for(let k2=0;k2<12;k2++){ const a=k2*Math.PI/6;
+    for(let t=0.15;t<=1;t+=0.02) dot(g, Math.round(DCY+DB*t*Math.sin(a)), Math.round(DCX+DA*t*Math.cos(a)), 'V'); }
+  // seal pass: any two glass tones from DIFFERENT (ring,sector) cells touching directly
+  // get a came px between them (parametric came drawing skips shallow-tangent boundaries)
+  for(let r=DCY-DB;r<=DCY+DB;r++) for(let c=0;c<SC;c++){
+    if(!inDisc(r,c)) continue;
+    const a2=g[r][c]; if(!isGlass(a2)) continue;
+    for(const [dr,dc] of [[0,1],[1,0]]){
+      const rr=r+dr, cc=c+dc; if(!inDisc(rr,cc)) continue;
+      const b2=g[rr][cc]; if(!isGlass(b2)||a2===b2) continue;
+      if(ringOf(uOf(r,c))!==ringOf(uOf(rr,cc)) || secOf(r,c)!==secOf(rr,cc)) g[rr][cc]='V';
+    }
+  }
+  // front rim band W with X glints
+  for(let t=0;t<360;t++){ const a=t*Math.PI/360;
+    dot(g, Math.round(DCY+DB*Math.sin(a)), Math.round(DCX+DA*Math.cos(a)), 'W');
+    dot(g, Math.round(DCY+(DB+1)*Math.sin(a)), Math.round(DCX+(DA+0.5)*Math.cos(a)), 'W'); }
+  for(let t=30;t<330;t+=42){ const a=t*Math.PI/360;
+    dot(g, Math.round(DCY+DB*Math.sin(a)), Math.round(DCX+DA*Math.cos(a)), ph&&t%84===30?'L':'X'); }
+  // side face: N with O facet seams, dithered out
+  for(let c=0;c<SC;c++){ const x=(c-DCX)/DA; if(x*x>1) continue;
+    const rB=Math.floor(DCY+DB*Math.sqrt(1-x*x));
+    fillR(g,rB+2,rB+6,c,c,'N');
+    if(c%16===0) vl(g,c,rB+2,rB+6,'O');
+    for(let r=rB+7;r<=rB+10;r++) if((r+c)%2===0) dot(g,r,c,'N'); }
+  // sparse glass glints
+  for(let r=DCY-DB;r<=DCY+DB;r++) for(let c=0;c<SC;c++)
+    if(inDisc(r,c)&&g[r][c]==='P'&&hsh(r,c)===3) g[r][c]='K';
+  return g;
+}
+
+// remap glass cells in place: fn(r,c,cur) -> letter|null(no change)
+function glassMap(g, fn){
+  for(let r=DCY-DB;r<=DCY+DB;r++) for(let c=0;c<SC;c++){
+    if(!inDisc(r,c)) continue;
+    const v=fn(r,c,g[r][c]); if(v) g[r][c]=v; }
+}
+const isGlass = ch => ch==='N'||ch==='O'||ch==='P'||ch==='K';
+
+// ---- Alert Storm: red screech corruption ----
+function varAS(ph){
+  const g = buildBase(ph, {shafts:false, motes:'red'});
+  glassMap(g,(r,c,cur)=>{ if(!isGlass(cur)) return null;
+    const h=hsh(r,c); return h%4===0?'Q' : h%7===0?'R' : null; });
+  // cracks radiating from an impact point on the boss side
+  for(const [dr,dc] of [[-1,3],[0,4],[1,3],[-1,-4]]){
+    let r=120,c=70;
+    for(let s2=0;s2<9;s2++){ r+=dr*(s2%2); c+=dc; if(inDisc(r,c)) dot(g,r,c,'S'); } }
+  // rim glints run hot
+  for(let t=30;t<330;t+=42){ const a=t*Math.PI/360;
+    dot(g, Math.round(DCY+DB*Math.sin(a)), Math.round(DCX+DA*Math.cos(a)), ph&&t%84===30?'T':'S'); }
+  // wing silhouettes circling above
+  for(const [r,c] of [[18,60],[26,150],[14,200],[34,100],[22,230]]){
+    const fl=ph?1:0;
+    dot(g,r+fl,c-2,'R'); dot(g,r-1+fl,c-1,'R'); dot(g,r+fl,c,'Q'); dot(g,r-1+fl,c+1,'R'); dot(g,r+fl,c+2,'R'); }
+  return g;
+}
+
+// ---- Cascade: chained rim + pulse shimmer ----
+function varCC(ph){
+  const g = buildBase(ph, {motes:'up'});
+  // outer-ring glass shimmers gold in alternating sectors (traveling pulse)
+  glassMap(g,(r,c,cur)=>{ if(!isGlass(cur)) return null;
+    const u=uOf(r,c); if(ringOf(u)!==3) return null;
+    return (secOf(r,c)%2===ph?1:0) ? 'W' : null; });
+  // scorched cells
+  glassMap(g,(r,c,cur)=> isGlass(cur)&&hsh(r,c)%6===0 ? 'g' : null);
+  // chain links clamped around the front rim
+  for(let t=24;t<340;t+=24){ const a=t*Math.PI/360;
+    const r=Math.round(DCY+(DB+1)*Math.sin(a)), c=Math.round(DCX+DA*Math.cos(a));
+    fillR(g,r-1,r,c-2,c+1,(t/24)%2===0?'J':'I'); dot(g,r-1,c-1,'K'); }
+  // topology constellation, lit
+  for(const [r,c] of [[24,40],[18,120],[30,205]]) fillR(g,r,r+1,c,c+2,'P');
+  for(let c=43;c<120;c++) dot(g, Math.round(25+(18-25)*(c-43)/77), c, 'O');
+  for(let c=123;c<205;c++) dot(g, Math.round(19+(30-19)*(c-123)/82), c, 'O');
+  return g;
+}
+
+// ---- Silent Failure: missing panes, dead light ----
+function varSF(ph){
+  const g = buildBase(ph, {shafts:false, motes:'off'});
+  glassMap(g,(r,c,cur)=>{ if(!isGlass(cur)) return null;
+    if(inSafe(c)) return null;
+    const h=hsh(r,c); return h%5===0?'M' : h%9===0?'N' : null; });
+  // side-face chunks gone
+  for(const [c1,c2] of [[104,118],[140,152],[226,236]])
+    for(let c=c1;c<=c2;c++){ const x=(c-DCX)/DA; if(x*x>1) continue;
+      const rB=Math.floor(DCY+DB*Math.sqrt(1-x*x)); fillR(g,rB+2,rB+10,c,c,'M'); }
+  // three slow falling motes only
+  for(const [r,c] of [[30,80],[60,180],[45,128]]) dot(g, ph?r+1:r, c, 'O');
+  return g;
+}
+
+// ---- Imposter Syndrome: purple remap + glitch (also erosion stage 0) ----
+// pure fraction: corruption survives only at u > rp
+function corruptGlass(g, rp){
+  glassMap(g,(r,c,cur)=>{ const u=uOf(r,c); if(u<=rp) return null;
+    if(cur==='N'||cur==='O') return 'j';
+    if(cur==='P') return 'k';
+    if(cur==='K') return 'k';
+    if(cur==='W'&&ringOf(u)===0) return null;
+    return null; });
+  // cracked cames + rim within the corrupt zone
+  for(let r=DCY-DB;r<=DCY+DB;r++) for(let c=0;c<SC;c++){
+    if(!inDisc(r,c)) continue; const u=uOf(r,c); if(u<=rp) continue;
+    if(g[r][c]==='V'&&hsh(r,c)%3===0) g[r][c]='S';
+    if(g[r][c]==='W'&&u>0.9&&hsh(r,c)%2===0) g[r][c]='k'; }
+}
+function glitchScene(g, bands, statics){
+  for(const [r1,r2,dx] of bands){
+    for(let r=r1;r<=r2&&r<SR;r++){ const row=g[r].slice();
+      for(let c=0;c<SC;c++){ const s2=c-dx; g[r][c] = (s2>=0&&s2<SC)? row[s2] : 'M'; } } }
+  for(let i=0;i<statics;i++){ const r=(i*37+13)%SR, c=(i*89+31)%SC; g[r][c]= i%3===0?'K':'k'; }
+}
+function varIS(ph){
+  const g = buildBase(ph, {shafts:false, motes:'purple'});
+  corruptGlass(g, 0);
+  glitchScene(g, ph? [[20,23,2],[70,72,-3],[110,111,2]] : [[30,32,-2],[84,86,3]], 24);
+  hl(g, ph?40:90, 0, SC-1, 'F');
+  return g;
+}
+// erosion reel: boss HP 100/66/33/0 -> pure radius 0 / .38 / .68 / full
+function erosionStage(t, ph){
+  const rp=[0,0.38,0.68,1.01][t];
+  const g = buildBase(ph, {shafts: t===3, motes: t===3?'up':'purple'});
+  corruptGlass(g, rp);
+  const bands=[[[20,23,2],[70,72,-3],[110,111,2]],[[30,32,-2],[84,86,3]],[[52,53,2]],[]][t];
+  glitchScene(g, bands, [24,14,6,0][t]);
+  return g;
+}
+
+// keys: base, AS, CC, SF, IS -> 2-phase reels; ER -> 4-stage reel
+const BUILDERS = { base:(ph)=>buildBase(ph,{}), AS:varAS, CC:varCC, SF:varSF, IS:varIS };
+function compose(key, ph){
+  const g = BUILDERS[key](ph);
+  stamp(g, SPR.boss[ph], BOSS_AT[0], BOSS_AT[1]);
+  stamp(g, SPR.hero[ph], HERO_AT[0], HERO_AT[1]);
+  return g;
+}
+function composeER(t){
+  const g = erosionStage(t, t%2);
+  stamp(g, SPR.boss[t%2], BOSS_AT[0], BOSS_AT[1]);
+  stamp(g, SPR.hero[t%2], HERO_AT[0], HERO_AT[1]);
+  return g;
+}
+
+function draw(id, g){
+  const ctx = document.getElementById(id).getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  for(let r=0;r<SR;r++) for(let c=0;c<SC;c++){ ctx.fillStyle = PAL[g[r][c]]; ctx.fillRect(c*4, r*4, 4, 4); }
+}
+const FRAMES = {};
+for(const k of ['base','AS','CC','SF','IS']) FRAMES[k] = [compose(k,0), compose(k,1)];
+const ER = [composeER(0), composeER(1), composeER(2), composeER(3)];
+let ph = 0, et = 0;
+function tick(){ for(const k of ['base','AS','CC','SF','IS']) draw('cv'+k, FRAMES[k][ph]); ph = 1-ph; setTimeout(tick, 480); }
+function tickER(){ draw('cvER', ER[et]); et = (et+1)%4; setTimeout(tickER, 900); }
+tick(); tickER();
+document.body.style.borderTop = '10px solid #00ff00';
+</script>
+</body></html>

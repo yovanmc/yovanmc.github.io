@@ -105,7 +105,19 @@ The page carries a green bar div at a known y (render-succeeded marker) and a `w
 
 Every animation set went through the same cycle, and it is the reason the style stayed consistent: build in a scratch copy of the lab → Node audits (5a/5b) → headless render check (5c) → present the animation to the owner → iterate on their verdict → only THEN copy into this directory and merge via PR. The owner's eye is the final gate; no set ships on numeric checks alone.
 
-## 6. Extending
+## 6. Battlefield scenes (added 2026-07-27; lab = `battlefield.html`)
+
+The battle arena uses the same grid-as-data method at scene scale: a 256×144 grid rendered at 4x (16:9), palette letters only, sprites stamped on top (non-null wins) with both combatants' feet on the scene's ground line. The arena is the stained-glass platform (spec: `docs/superpowers/specs/2026-07-27-battlefield-system.md`).
+
+- **Disc geometry:** top-face ellipse center (122,128), semi-axes 108×8; normalized elliptical radius `u` classifies pixels into a gold core (u<0.15) and three pane rings (boundaries 0.38 / 0.68 / 1.0) × 12 sectors. Pane tone = deterministic hash of (ring, sector) over N/O/P; cames in `V`; rim band `W` with `X` glints.
+- **Seal pass (leaded-glass rule):** parametric came drawing skips shallow-tangent boundaries, so after cames are drawn, any two different glass tones from different (ring,sector) cells that touch directly get a `V` px between them. Audit: zero un-leaded boundaries.
+- **Determinism:** all noise (pane stains, holes, scorch, static) uses a per-cell hash `((r*73+c*151+((r*c)>>3))%97+97)%97` — never `Math.random` — so Node audits see the exact grids the page renders.
+- **Variant recipe:** build the base with options (shafts on/off, mote mode), then mutate glass through `glassMap(g, fn)`; `corruptGlass(g, rp)` remaps panes to the corruption purples outside pure-radius `rp` (zone-bounded — same principle as `goldHairOf`); `glitchScene` displaces horizontal scene bands and sprinkles static, applied BEFORE sprites are stamped so the combatants never shear.
+- **Footing rule:** variants that remove glass must skip the safe column ranges under both combatants; audited.
+- **Erosion:** stage t = corruptGlass at pure radius [0, .38, .68, 1.01] with glitch intensity stepping down; audits enforce strictly decreasing corruption counts and stage 3 == pure base at zero pixel diff.
+- **Scene-scale audits** (extends §5a): zero null cells (a null leaks page bg); sprites fully stamped, feet exactly on the ground line; corruption purples appear ONLY in the Imposter variant; and a silhouette-legibility gate — the % of sprite boundary pixels where both the outline and the nearest interior tone are within 30 RGB of the scene behind them must not exceed the same sprite measured on the labs' own `#0e1630` background by more than 5 points (the sprites were approved on that background; the arena may not read worse).
+
+## 7. Extending
 
 - New hero move: add an `arm` mode branch (pre-outline geometry) + post-outline re-posts for thin parts + hilt-visibility rules (`sheathed hilt` condition lists the modes where the sword stays at the hip).
 - New palette-swap enemy: `remapOf` + eye overlay + 2 glitch frames ≈ one sitting.
