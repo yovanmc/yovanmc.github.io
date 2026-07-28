@@ -13,13 +13,16 @@ const SERIF = "'Marcellus',serif";
 const MOBILE_BREAKPOINT = 760;
 
 /**
- * Top-level phase machine (milestone 3): intro → gate → play | browse.
- * - intro: the Dive to the Heart cinematic (root entry only — deep links bypass).
- * - gate: the fork. Two labeled paths at the intro's handoff; skip lands here.
+ * Top-level phase machine (milestone 3, revised M3c): gate → play | browse,
+ * with the intro INSIDE the play path (owner ruling 2026-07-28 superseding
+ * M2's intro-every-visit: root entry lands on the gate; the Dive to the Heart
+ * cinematic plays when "Enter the game" is chosen, first time per page load).
+ * - gate: the fork and the site's entry. No hero until the dive brings him.
+ * - intro: the cinematic; skip lands in play. Ends with the menu rising.
  * - play: the RPG command-menu experience (the old `booted` state).
  * - browse: the flat portfolio index; case-study pages open over it.
  * Path↔phase and per-phase input rules live in the M3 plan
- * (docs/superpowers/specs/2026-07-28-m3-split-plan.md).
+ * (docs/superpowers/specs/2026-07-28-m3-split-plan.md, M3c addendum).
  */
 type Phase = "intro" | "gate" | "play" | "browse";
 
@@ -66,7 +69,7 @@ function decideBoot(): BootState {
     if (t !== null) return { phase: "intro", page: null, freezeAt: parseInt(t, 10) || 0 };
     if (params.has("motion")) return { phase: "intro", page: null, forceMotion: true };
   }
-  return { phase: "intro", page: null };
+  return { phase: "gate", page: null };
 }
 
 /** tiny WebAudio blip synth (lazily created, respects autoplay policy) */
@@ -120,6 +123,9 @@ export default function App() {
 
   const [phase, setPhase] = useState<Phase>(boot.current.phase);
   const [introOn, setIntroOn] = useState(boot.current.phase === "intro");
+  // the dive has run this page load — later play-entries skip straight to the
+  // menu, and the hero stands at the station only once he has actually dived
+  const [hasDived, setHasDived] = useState(false);
   const [col, setCol] = useState<Col>("root");
   const [rootIdx, setRootIdx] = useState(0);
   const [subIdx, setSubIdx] = useState(0);
@@ -136,8 +142,8 @@ export default function App() {
   const booted = phase === "play";
 
   // live mirror of state so the keydown listener always reads current values
-  const stateRef = useRef({ phase, col, rootIdx, subIdx, page });
-  stateRef.current = { phase, col, rootIdx, subIdx, page };
+  const stateRef = useRef({ phase, col, rootIdx, subIdx, page, hasDived });
+  stateRef.current = { phase, col, rootIdx, subIdx, page, hasDived };
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -178,10 +184,17 @@ export default function App() {
 
   const enterPlay = useCallback(() => {
     snd.resume();
-    goPhase("play");
     setCol("root");
     setRootIdx(0);
     setSubIdx(0);
+    if (!stateRef.current.hasDived) {
+      // first play-entry this page load: the cinematic runs, menu rises at its end
+      setPhase("intro");
+      setIntroOn(true);
+      snd.enter();
+      return;
+    }
+    goPhase("play");
     snd.enter();
   }, [snd, goPhase]);
 
@@ -347,9 +360,11 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  // the intro lives inside the play path now — its handoff always lands in play
   const onIntroHandoff = useCallback(
-    (target: IntroTarget) => {
-      goPhase(target);
+    (_target: IntroTarget) => {
+      setHasDived(true);
+      goPhase("play");
     },
     [goPhase],
   );
@@ -408,8 +423,8 @@ export default function App() {
 
       <Station scale={glassScale} opacity={ringOpacity} top={isMobile ? "31%" : "40%"} />
 
-      {/* the intro's end pose, alive in site space — visible at the gate only */}
-      {phase !== "intro" && <HeroIdle vw={w} vh={h} visible={phase === "gate"} />}
+      {/* the intro's end pose, alive in site space — at the gate, only once he has dived */}
+      {phase !== "intro" && hasDived && <HeroIdle vw={w} vh={h} visible={phase === "gate"} />}
 
       {phase === "gate" && !page && (
         <Gate onPlay={enterPlay} onBrowse={enterBrowse} vw={w} vh={h} playMove={snd.move} playEnter={snd.enter} />

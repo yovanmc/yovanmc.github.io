@@ -95,6 +95,24 @@ Battle engine in-site; lore/unlocks (M4); FF-ambience enhancement; dialogue; per
 8. Confidentiality 3-lens panel (pinned sonnet) over the full publish surface.
 9. Owner approval → branch → PR → merge → Pages deploy → live spot check. **Rollback line:** revert the merge commit on main; Pages redeploys the revert (~2 min exposure floor — reason for the two-PR split).
 
+## M3c addendum — intro moved behind the play button (owner ruling 2026-07-28, post-ship)
+
+Owner ruling, same day M3b shipped, superseding M2's "full intro every visit":
+**root entry lands directly on the gate; the cinematic plays when "Enter the
+game" is chosen.** Consequences applied:
+
+- Entry gate shows the lit station + identity + both buttons, **no hero** — the
+  hero only stands on the glass after the dive brings him there (he persists at
+  the gate afterward, `hasDived`).
+- "Enter the game" → full cinematic → the menu rises at the handoff (the lab's
+  original ending, now literal). Skip lands in play. Reduced-motion = instant play.
+- The intro runs on the **first play-entry per page load**; re-entries within
+  the same load go straight to the menu. A fresh visit dives again.
+- The skip-adjacent "portfolio only" control is removed — the visitor already
+  chose the play path; browse stays one Esc away.
+- Deep links, `/browse`, the path table, and capture keys are unchanged
+  (`?t=`/`?motion=` still boot straight into the cinematic for captures).
+
 ## Known risks
 
 - Station swap changes the hero art site-wide — isolated in PR-A with its own baseline for exactly this reason.
