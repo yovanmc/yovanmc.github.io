@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { buildStationSvg } from "../station/buildStationSvg";
+import { buildStationCanon } from "../generated/stationCanon";
 
 interface StationProps {
   /** uniform scale applied to the 680px disc */
@@ -11,13 +11,12 @@ interface StationProps {
 }
 
 /**
- * The stained-glass Station hero. The SVG art itself is the locked, original
- * design (see buildStationSvg). We add only a gentle 9s "breathe"; unlike the
- * old CSS prototype we deliberately do NOT hue-rotate, so the tuned luminous-blue
- * palette stays intact.
+ * The stained-glass Station hero — the LOCKED station v1 canon (2026-07-27),
+ * extracted verbatim from the lab (see src/generated/stationCanon.js header).
+ * We add only a gentle 9s "breathe"; no hue-rotate, the canon palette stands.
  */
 export function Station({ scale, opacity, top }: StationProps) {
-  const svg = useMemo(() => buildStationSvg(), []);
+  const svg = useMemo(() => buildStationCanon(), []);
 
   return (
     <div
