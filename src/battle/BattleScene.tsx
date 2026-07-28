@@ -421,7 +421,7 @@ export default function BattleScene(props: Props) {
       setBanner("");
       return;
     }
-    setBanner(isScreamTurn(shown) ? "THE SWARM SCREAMS — ONE VOICE RUNS RED" : "");
+    setBanner(isScreamTurn(shown) ? "THE SWARM SCREAMS · ONE VOICE RUNS RED" : "");
   }, [shown, descend]);
 
   // ---- input (BattleScene owns keys while mounted; App early-returns on battle) ----
@@ -617,7 +617,7 @@ export default function BattleScene(props: Props) {
           {revealBoss ? (
             bar(real.hp, real.maxHp, "linear-gradient(90deg,#e04838,#bd2421)", isMobile ? 110 : 150)
           ) : (
-            <div style={{ fontFamily: MONO, fontSize: "12px", color: "#c9a4ff", letterSpacing: ".2em" }}>?? — DEBUG THE SCREAMER</div>
+            <div style={{ fontFamily: MONO, fontSize: "12px", color: "#c9a4ff", letterSpacing: ".2em" }}>?? · DEBUG THE SCREAMER</div>
           )}
         </div>
         <div style={{ fontFamily: MONO, fontSize: "10px", color: "#b9a8d8", marginTop: 5, letterSpacing: ".12em" }}>
@@ -690,7 +690,7 @@ export default function BattleScene(props: Props) {
                     <span style={{ width: 12, color: active ? "#c9a4ff" : "transparent" }}>▸</span>
                     <span style={{ flex: 1 }}>{c.label}</span>
                     <span style={{ fontFamily: MONO, fontSize: "11px", color: afford ? "#9f8fd0" : "#5f5576" }}>
-                      {c.mp > 0 ? c.mp + " MP" : "—"}
+                      {c.mp > 0 ? c.mp + " MP" : "FREE"}
                     </span>
                   </div>
                 );
@@ -751,7 +751,7 @@ export default function BattleScene(props: Props) {
               Resume <span style={{ fontFamily: MONO, fontSize: "10px", color: "#8a7ba8" }}>⏎ / ESC</span>
             </div>
             <div role="button" onClick={onForfeit} style={{ cursor: "pointer", padding: "10px 18px", color: "#b9a8d8", fontFamily: "'Sora',sans-serif", fontSize: "14px" }}>
-              Forfeit — back to the gate
+              Forfeit · back to the gate
             </div>
           </div>
         </div>
@@ -767,13 +767,13 @@ export default function BattleScene(props: Props) {
               <div style={{ fontFamily: MONO, fontSize: "12px", color: "#ffe9b0", letterSpacing: ".12em", marginTop: 10, lineHeight: 2 }}>
                 {state.events.some((e) => e.type === "forge") ? (
                   <>
-                    ⚔ FAN OUT — FORGED
+                    ⚔ FAN OUT · FORGED
                     <br />
                     +10 MAX HP · +2 MAX MP
                     <br />
                   </>
                 ) : (
-                  <>A VICTORY LAP — THE STORM REMEMBERS<br /></>
+                  <>A VICTORY LAP · THE STORM REMEMBERS<br /></>
                 )}
               </div>
             ) : null}
@@ -797,7 +797,7 @@ export default function BattleScene(props: Props) {
               RETRY ⏎
             </div>
             <div role="button" onClick={onForfeit} style={{ cursor: "pointer", padding: "8px 18px", color: "#b9a8d8", fontFamily: "'Sora',sans-serif", fontSize: "13px" }}>
-              Leave — back to the gate
+              Leave · back to the gate
             </div>
           </div>
         </div>
