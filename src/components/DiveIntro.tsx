@@ -17,7 +17,8 @@ import {
 } from "../generated/diveTimeline";
 
 /**
- * Dive to the Heart — the site's entry cinematic, ported from the locked lab
+ * Dive to the Heart — the play path's opening cinematic (M3c: it runs when
+ * "Enter the game" is chosen, not at site entry), ported from the locked lab
  * (docs/battle-prototypes/dive-intro.html, spec 2026-07-28-dive-intro-design.md).
  * The pure timeline is the generated module (verbatim, verified by
  * npm run verify:canon); this component is the render layer: the lab's
@@ -528,23 +529,6 @@ export function DiveIntro({ onHandoff, onDone, freezeAt, forceMotion }: DiveIntr
           transition: "opacity .4s ease",
         }}
       >
-        <span
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            e.stopPropagation();
-            skipTo("browse");
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.stopPropagation();
-              skipTo("browse");
-            }
-          }}
-          style={{ cursor: "pointer", color: "#b9aee6", textDecoration: "underline", textUnderlineOffset: "3px" }}
-        >
-          portfolio only ▸
-        </span>
         <span
           role="button"
           tabIndex={0}
