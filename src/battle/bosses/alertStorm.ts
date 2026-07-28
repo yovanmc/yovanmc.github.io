@@ -28,7 +28,10 @@ export interface AlertStormBoss {
   bats: Bat[];
 }
 
-export const ALERT_STORM_ID = "alert-storm";
+/** Canonical definition moved to ../rushOrder (M6 PR-1a — bootParams.ts
+ * needs it without pulling this module's engine.ts cycle into the eagerly
+ * loaded landing bundle); re-exported here for every existing import site. */
+export { ALERT_STORM_ID } from "../rushOrder";
 
 const VOLLEY_BASE = 7;
 const VOLLEY_FLOOR = 4;

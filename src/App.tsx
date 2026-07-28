@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { CATS } from "./content";
 import type { BattleAction, BattleState } from "./battle/engine";
+import { parseActions, parseBoss, parseDefeatedBosses } from "./battle/bootParams";
 import { Station } from "./components/Station";
 import { Atmosphere } from "./components/Atmosphere";
 import { CaseStudyPage, type PageRef } from "./components/CaseStudyPage";
@@ -36,6 +37,14 @@ interface BattleBoot {
   seed: number;
   attempt: number;
   actions?: BattleAction[];
+  /** M6 capture keys — parsed/validated in src/battle/bootParams.ts so the
+   * logic sits under the widened coverage gate and is unit-testable without
+   * a DOM harness. Optional: only decideBoot's capture-key path populates
+   * them; the FIGHT button and the dive handoff still pin Alert Storm
+   * fresh (M5 invariant, unchanged). Not consumed by rendering yet — the
+   * scene-shell split and kit-driven command menu are PR-1a task 6. */
+  boss?: string;
+  defeatedBosses?: string[];
 }
 
 interface BootState {
@@ -43,20 +52,6 @@ interface BootState {
   page: PageRef | null;
   freezeAt?: number;
   battle?: BattleBoot;
-}
-
-/** Dev capture key `&actions=ct,debug:3,pt:0` → engine actions (targets are bat ids). */
-function parseActions(raw: string | null): BattleAction[] | undefined {
-  if (!raw) return undefined;
-  const out: BattleAction[] = [];
-  for (const tok of raw.split(",")) {
-    const [name, tgt] = tok.split(":");
-    const target = tgt !== undefined ? parseInt(tgt, 10) : NaN;
-    if (name === "ct") out.push({ type: "ct" });
-    else if ((name === "attack" || name === "pt" || name === "debug") && !Number.isNaN(target))
-      out.push({ type: name, target });
-  }
-  return out.length ? out : undefined;
 }
 
 /** Initial-load decision — every arm of the plan's path table, computed synchronously. */
@@ -89,7 +84,13 @@ function decideBoot(): BootState {
     const params = new URLSearchParams(loc.search);
     const p = params.get("phase");
     if (p === "gate" || p === "play" || p === "browse") return { phase: p, page: null };
-    if (p === "battle")
+    if (p === "battle") {
+      const defeated = parseDefeatedBosses(params.get("defeated"));
+      if (defeated.rejected) {
+        console.warn(
+          "[dev] ?defeated= must be a rush-order prefix of alert-storm,cascade,silent-failure,imposter-syndrome — falling back to []",
+        );
+      }
       return {
         phase: "battle",
         page: null,
@@ -97,8 +98,11 @@ function decideBoot(): BootState {
           seed: parseInt(params.get("seed") ?? "", 10) || 42,
           attempt: parseInt(params.get("attempt") ?? "", 10) || 1,
           actions: parseActions(params.get("actions")),
+          boss: parseBoss(params.get("boss")),
+          defeatedBosses: defeated.value,
         },
       };
+    }
     const t = params.get("t");
     if (t !== null) return { phase: "intro", page: null, freezeAt: parseInt(t, 10) || 0 };
   }

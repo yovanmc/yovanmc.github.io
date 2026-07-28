@@ -18,27 +18,17 @@ import {
   reshuffle,
   spawnAlertStorm,
 } from "./bosses/alertStorm";
+import { IMPLEMENTED_BOSSES, RUSH_ORDER } from "./rushOrder";
 export type { Bat };
 export { isScreamTurn };
+// Re-exported for every existing import site (`from "./engine"`) — canonical
+// definitions live in ./rushOrder so bootParams.ts can import them without
+// pulling this module's engine<->alertStorm cycle into the eagerly loaded
+// landing bundle (measured regression + fix: see rushOrder.ts).
+export { IMPLEMENTED_BOSSES, RUSH_ORDER };
 
 /** Grows into a discriminated union as PR-1b+ add Cascade/Silent Failure/Imposter. */
 export type BossState = AlertStormBoss;
-
-/** Pinned boss-rush order (M6 plan §Cross-boss architecture). Fixed forever —
- * later PRs only ever read this, never reorder it. */
-export const RUSH_ORDER: readonly string[] = [
-  ALERT_STORM_ID,
-  "cascade",
-  "silent-failure",
-  "imposter-syndrome",
-];
-
-/** Prefix of RUSH_ORDER actually shipped in running code (pass-2 G1 — the
- * live-crash guard). Kit derivation, FIGHT's next-boss row, and the `boss=`
- * capture-key whitelist all intersect with this so a boss beaten ahead of its
- * own PR never grants a kit entry / route with no module behind it. Extend
- * this array, never remove from it, as each subsequent PR ships a boss. */
-export const IMPLEMENTED_BOSSES: readonly string[] = [ALERT_STORM_ID];
 
 export interface Hero {
   hp: number;
