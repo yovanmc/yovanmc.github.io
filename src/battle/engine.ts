@@ -70,10 +70,6 @@ export interface BattleState {
   turn: number;
   hero: Hero;
   boss: BossState;
-  /** @deprecated Alias of `boss.bats` — same array reference, never diverges.
-   * Kept only so BattleScene.tsx keeps compiling until PR-1a task 6's
-   * scene-shell split moves its readers onto `boss.bats` directly. */
-  bats: Bat[];
   /** Critical Thinking turns remaining (0 = inactive). */
   ctTurns: number;
   /** Conviction's persist-once-active flag (M6 §Multipliers). Not castable in
@@ -133,7 +129,6 @@ export function initBattle(opts: InitOptions): BattleState {
     turn: 1,
     hero: { hp: maxHp, maxHp, mp: maxMp, maxMp },
     boss,
-    bats: boss.bats, // alias — see BattleState.bats
     ctTurns: 0,
     conviction: false,
     dots: [],
@@ -241,7 +236,6 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
     ...state,
     hero: { ...state.hero },
     boss: { ...state.boss, bats: bossBats },
-    bats: bossBats, // alias — see BattleState.bats
     dots: state.dots.map((d) => ({ ...d })),
     cast: [...state.cast],
     defeatedBosses: [...state.defeatedBosses],
