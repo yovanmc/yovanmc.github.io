@@ -3,17 +3,71 @@ import { CATS } from "./content";
 import { Station } from "./components/Station";
 import { Atmosphere } from "./components/Atmosphere";
 import { CaseStudyPage, type PageRef } from "./components/CaseStudyPage";
+import { DiveIntro, HeroIdle, type IntroTarget } from "./components/DiveIntro";
+import { Gate } from "./components/Gate";
+import { BrowseIndex } from "./components/BrowseIndex";
 import { pathForPage, pageForPath } from "./router";
 
 const MONO = "'JetBrains Mono',monospace";
 const SERIF = "'Marcellus',serif";
 const MOBILE_BREAKPOINT = 760;
 
-// The KH stained-glass Station hero (design LOCKED — see README). The scrim at
-// the hero block renders only when this is on.
-const SHOW_STATION = true;
+/**
+ * Top-level phase machine (milestone 3): intro → gate → play | browse.
+ * - intro: the Dive to the Heart cinematic (root entry only — deep links bypass).
+ * - gate: the fork. Two labeled paths at the intro's handoff; skip lands here.
+ * - play: the RPG command-menu experience (the old `booted` state).
+ * - browse: the flat portfolio index; case-study pages open over it.
+ * Path↔phase and per-phase input rules live in the M3 plan
+ * (docs/superpowers/specs/2026-07-28-m3-split-plan.md).
+ */
+type Phase = "intro" | "gate" | "play" | "browse";
 
 type Col = "root" | "sub";
+
+interface BootState {
+  phase: Phase;
+  page: PageRef | null;
+  freezeAt?: number;
+  forceMotion?: boolean;
+}
+
+/** Initial-load decision — every arm of the plan's path table, computed synchronously. */
+function decideBoot(): BootState {
+  const loc = window.location;
+  const dev = import.meta.env.DEV || loc.hostname === "localhost";
+  let path = loc.pathname;
+
+  // 404.html stashes unknown deep-link paths (path-preserving fallback); a
+  // restored deep link bypasses the intro, same as a direct one.
+  try {
+    const stash = sessionStorage.getItem("dl");
+    if (stash) {
+      sessionStorage.removeItem("dl");
+      const stashPath = stash.split("?")[0];
+      if (pageForPath(stashPath) || stashPath === "/browse" || stashPath === "/browse/") {
+        window.history.replaceState({ phase: "browse" }, "", stash);
+        path = stashPath;
+      }
+    }
+  } catch {
+    /* sessionStorage unavailable — fall through to the normal table */
+  }
+
+  const initial = pageForPath(path);
+  if (initial) return { phase: "browse", page: initial };
+  if (path === "/browse" || path === "/browse/") return { phase: "browse", page: null };
+
+  if (dev) {
+    const params = new URLSearchParams(loc.search);
+    const p = params.get("phase");
+    if (p === "gate" || p === "play" || p === "browse") return { phase: p, page: null };
+    const t = params.get("t");
+    if (t !== null) return { phase: "intro", page: null, freezeAt: parseInt(t, 10) || 0 };
+    if (params.has("motion")) return { phase: "intro", page: null, forceMotion: true };
+  }
+  return { phase: "intro", page: null };
+}
 
 /** tiny WebAudio blip synth (lazily created, respects autoplay policy) */
 function useBlips() {
@@ -61,20 +115,29 @@ function useBlips() {
 }
 
 export default function App() {
-  const [booted, setBooted] = useState(false);
+  const boot = useRef<BootState | null>(null);
+  if (boot.current === null) boot.current = decideBoot();
+
+  const [phase, setPhase] = useState<Phase>(boot.current.phase);
+  const [introOn, setIntroOn] = useState(boot.current.phase === "intro");
   const [col, setCol] = useState<Col>("root");
   const [rootIdx, setRootIdx] = useState(0);
   const [subIdx, setSubIdx] = useState(0);
-  const [page, setPage] = useState<PageRef | null>(null);
+  const [page, setPage] = useState<PageRef | null>(boot.current.page);
   const [toast, setToast] = useState("");
   const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
+  const [h, setH] = useState(typeof window !== "undefined" ? window.innerHeight : 800);
 
   const snd = useBlips();
   const toastTimer = useRef<number | undefined>(undefined);
+  /** which surface opened the current page — decides where closing it lands */
+  const pageOrigin = useRef<"play" | "browse">(boot.current.page ? "browse" : "play");
+
+  const booted = phase === "play";
 
   // live mirror of state so the keydown listener always reads current values
-  const stateRef = useRef({ booted, col, rootIdx, subIdx, page });
-  stateRef.current = { booted, col, rootIdx, subIdx, page };
+  const stateRef = useRef({ phase, col, rootIdx, subIdx, page });
+  stateRef.current = { phase, col, rootIdx, subIdx, page };
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -103,9 +166,33 @@ export default function App() {
     [snd],
   );
 
+  // gate↔play↔browse transitions rewrite the current history entry (never push)
+  // so the back button only ever walks pages — popstate to "/" can't replay the intro.
+  const goPhase = useCallback((p: Exclude<Phase, "intro">) => {
+    setPhase(p);
+    const path = p === "browse" ? "/browse" : "/";
+    if (window.location.pathname !== path || (window.history.state?.phase ?? null) !== p) {
+      window.history.replaceState({ phase: p }, "", path);
+    }
+  }, []);
+
+  const enterPlay = useCallback(() => {
+    snd.resume();
+    goPhase("play");
+    setCol("root");
+    setRootIdx(0);
+    setSubIdx(0);
+    snd.enter();
+  }, [snd, goPhase]);
+
+  const enterBrowse = useCallback(() => {
+    snd.resume();
+    goPhase("browse");
+    snd.enter();
+  }, [snd, goPhase]);
+
   const enter = useCallback(() => {
     snd.resume();
-    setBooted(true);
     setCol("sub");
     setSubIdx(0);
     snd.enter();
@@ -114,9 +201,11 @@ export default function App() {
   const openPage = useCallback(
     (ri: number, si: number) => {
       snd.resume();
+      pageOrigin.current = stateRef.current.phase === "browse" ? "browse" : "play";
       setPage({ ri, si });
       const path = pathForPage({ ri, si });
-      if (path !== "/" && window.location.pathname !== path) window.history.pushState({ page: true }, "", path);
+      if (path !== "/" && window.location.pathname !== path)
+        window.history.pushState({ page: true, phase: stateRef.current.phase }, "", path);
       snd.enter();
     },
     [snd],
@@ -124,7 +213,10 @@ export default function App() {
 
   const closePage = useCallback(() => {
     setPage(null);
-    if (window.location.pathname !== "/") window.history.pushState(null, "", "/");
+    const home = pageOrigin.current === "browse" ? "/browse" : "/";
+    if (window.location.pathname !== home)
+      window.history.pushState({ phase: pageOrigin.current }, "", home);
+    if (pageOrigin.current === "browse" && stateRef.current.phase !== "browse") setPhase("browse");
     snd.back();
   }, [snd]);
 
@@ -132,17 +224,18 @@ export default function App() {
     snd.resume();
     const s = stateRef.current;
     if (s.page) {
-      setPage(null);
-      if (window.location.pathname !== "/") window.history.pushState(null, "", "/");
+      closePage();
+    } else if (s.phase === "browse") {
+      goPhase("gate");
       snd.back();
     } else if (s.col === "sub") {
       setCol("root");
       snd.back();
-    } else if (s.booted) {
-      setBooted(false);
+    } else if (s.phase === "play") {
+      goPhase("gate");
       snd.back();
     }
-  }, [snd]);
+  }, [snd, closePage, goPhase]);
 
   const activate = useCallback(
     (ri?: number, si?: number) => {
@@ -171,26 +264,33 @@ export default function App() {
     (e: React.MouseEvent) => {
       snd.resume();
       const s = stateRef.current;
+      if (s.phase !== "play") return; // background un-boot is a play-phase affordance only
       if (s.page) return; // CaseStudyPage handles its own background clicks
-      if (s.booted && !(e.target as HTMLElement).closest("[data-ui]")) {
-        setBooted(false);
+      if (!(e.target as HTMLElement).closest("[data-ui]")) {
+        goPhase("gate");
         setCol("root");
         snd.back();
       }
     },
-    [snd],
+    [snd, goPhase],
   );
 
-  // keyboard + resize
+  // keyboard + resize — phase-gated per the M3 input table
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const s = stateRef.current;
+      // intro and gate own their inputs entirely (DiveIntro / Gate listeners)
+      if (s.phase === "intro" || (s.phase === "gate" && !s.page)) return;
       const k = e.key;
       const handled = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", "Escape", "Backspace", " "];
       if (handled.includes(k)) e.preventDefault();
       snd.resume();
-      const s = stateRef.current;
       if (s.page) {
         if (k === "Escape" || k === "ArrowLeft" || k === "Backspace") back();
+        return;
+      }
+      if (s.phase === "browse") {
+        if (k === "Escape" || k === "Backspace") back();
         return;
       }
       const c = CATS[s.rootIdx];
@@ -210,7 +310,10 @@ export default function App() {
         back();
       }
     };
-    const onResize = () => setW(window.innerWidth);
+    const onResize = () => {
+      setW(window.innerWidth);
+      setH(window.innerHeight);
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize);
     return () => {
@@ -219,36 +322,45 @@ export default function App() {
     };
   }, [snd, back, enter, activate, setRoot, setSub]);
 
-  // deep-link entry + browser Back/Forward
+  // browser Back/Forward — the plan's popstate table; "/" NEVER resolves to intro here
   useEffect(() => {
-    const initial = pageForPath(window.location.pathname);
-    if (initial) {
-      setBooted(true);
-      setRootIdx(initial.ri);
-      setSubIdx(initial.si);
-      setPage(initial);
-    }
-    const onPop = () => {
-      const p = pageForPath(window.location.pathname);
-      setPage(p);
+    const onPop = (e: PopStateEvent) => {
+      const path = window.location.pathname;
+      const statePhase: Phase | undefined = e.state?.phase;
+      const p = pageForPath(path);
       if (p) {
-        setBooted(true);
+        setPage(p);
         setRootIdx(p.ri);
         setSubIdx(p.si);
+        const ph = statePhase === "play" ? "play" : "browse";
+        pageOrigin.current = ph;
+        setPhase(ph);
+      } else if (path === "/browse" || path === "/browse/") {
+        setPage(null);
+        setPhase("browse");
+      } else {
+        setPage(null);
+        setPhase(statePhase && statePhase !== "intro" ? statePhase : "gate");
       }
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const onIntroHandoff = useCallback(
+    (target: IntroTarget) => {
+      goPhase(target);
+    },
+    [goPhase],
+  );
+  const onIntroDone = useCallback(() => setIntroOn(false), []);
 
   // ---- derived view values ----
   const isMobile = w < MOBILE_BREAKPOINT;
   const cat = CATS[rootIdx];
   const item = cat.items[subIdx] ?? cat.items[0];
-  const ringOpacity = booted ? 0.2 : 0.82;
+  const ringOpacity = phase === "gate" || phase === "intro" ? 0.82 : 0.2;
   const glassScale = isMobile ? Math.max(0.44, Math.min(0.62, (w - 30) / 680)) : 1;
-  const heroScale = isMobile ? 0.56 : booted ? 0.9 : 1;
   const detailW = Math.max(330, Math.min(540, w - 612));
   const sheetOpen = isMobile && booted && !page;
 
@@ -294,89 +406,20 @@ export default function App() {
     >
       <Atmosphere />
 
-      {SHOW_STATION && <Station scale={glassScale} opacity={ringOpacity} top={isMobile ? "31%" : "40%"} />}
+      <Station scale={glassScale} opacity={ringOpacity} top={isMobile ? "31%" : "40%"} />
 
-      {/* hero — idle */}
-      <div
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: isMobile ? "31%" : "40%",
-          transform: `translate(-50%,-50%) scale(${heroScale})`,
-          textAlign: "center",
-          width: "100%",
-          zIndex: 3,
-          pointerEvents: "none",
-          opacity: booted ? 0 : 1,
-          transition: "opacity .55s ease, transform .65s cubic-bezier(.16,1,.3,1)",
-        }}
-      >
-        {/* focus scrim — only needed behind the luminous Station medallion to keep
-            the eyebrow/name/subline legible; hidden when the Station is hidden */}
-        {SHOW_STATION && (
-          <div
-            style={{
-              position: "absolute",
-              left: "50%",
-              top: "50%",
-              transform: "translate(-50%,-50%)",
-              width: "720px",
-              height: "420px",
-              background:
-                "radial-gradient(ellipse 48% 60% at 50% 50%, rgba(4,8,20,.88) 0%, rgba(4,8,20,.6) 40%, rgba(4,8,20,0) 76%)",
-              filter: "blur(9px)",
-              zIndex: 0,
-              pointerEvents: "none",
-            }}
-          />
-        )}
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <div
-            style={{
-              fontFamily: MONO,
-              fontSize: "12px",
-              letterSpacing: ".55em",
-              color: "#bcd6ff",
-              marginBottom: "20px",
-              paddingLeft: ".55em",
-              textShadow: "0 1px 14px rgba(2,6,18,.95), 0 0 6px rgba(2,6,18,.9)",
-            }}
-          >
-            PORTFOLIO
-          </div>
-          <div
-            style={{
-              fontFamily: SERIF,
-              fontSize: "120px",
-              lineHeight: 0.92,
-              letterSpacing: ".08em",
-              filter: "drop-shadow(0 0 38px rgba(90,150,255,.5))",
-              background: "linear-gradient(100deg,#eaf2ff,#ffffff 30%,#86b4ff 55%,#ffffff 78%,#eaf2ff)",
-              backgroundSize: "200% auto",
-              WebkitBackgroundClip: "text",
-              backgroundClip: "text",
-              color: "transparent",
-              animation: "shimmer 8s linear infinite",
-            }}
-          >
-            Yovan
-          </div>
-          <div
-            style={{
-              marginTop: "20px",
-              fontSize: "14px",
-              letterSpacing: ".34em",
-              color: "#d6e2f6",
-              textTransform: "uppercase",
-              textShadow: "0 1px 14px rgba(2,6,18,.95), 0 0 6px rgba(2,6,18,.9)",
-            }}
-          >
-            Backend Software Engineer
-          </div>
-        </div>
-      </div>
+      {/* the intro's end pose, alive in site space — visible at the gate only */}
+      {phase !== "intro" && <HeroIdle vw={w} vh={h} visible={phase === "gate"} />}
 
-      {/* header — browsing wordmark */}
+      {phase === "gate" && !page && (
+        <Gate onPlay={enterPlay} onBrowse={enterBrowse} vw={w} vh={h} playMove={snd.move} playEnter={snd.enter} />
+      )}
+
+      {phase === "browse" && !page && (
+        <BrowseIndex isMobile={isMobile} onItem={(ri, si) => activate(ri, si)} onEnterGame={() => goPhase("gate")} />
+      )}
+
+      {/* header — browsing wordmark (play phase only; browse carries its own) */}
       <div
         style={{
           position: "absolute",
@@ -396,13 +439,13 @@ export default function App() {
         <div style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".4em", color: "#7fb0ff", marginTop: "3px" }}>BACKEND SOFTWARE ENGINEER</div>
       </div>
 
-      {/* keyboard hint */}
+      {/* keyboard hint (play phase) */}
       <div
         style={{
           position: "absolute",
           right: "30px",
           top: "30px",
-          display: isMobile ? "none" : "flex",
+          display: isMobile || !booted ? "none" : "flex",
           gap: "18px",
           alignItems: "center",
           fontFamily: MONO,
@@ -528,8 +571,8 @@ export default function App() {
         )}
       </div>
 
-      {/* command system (desktop) */}
-      <div data-ui style={{ position: "absolute", left: "38px", bottom: "38px", zIndex: 7, display: isMobile ? "none" : "block" }}>
+      {/* command system (desktop, play phase) */}
+      <div data-ui style={{ position: "absolute", left: "38px", bottom: "38px", zIndex: 7, display: isMobile || !booted ? "none" : "block" }}>
         {/* root menu */}
         <div
           style={{
@@ -660,7 +703,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* mobile category sheet */}
+      {/* mobile category sheet (play phase) */}
       <div
         data-ui
         style={{
@@ -763,7 +806,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* mobile command bar */}
+      {/* mobile command bar (play phase only — never over the gate; M3 input table) */}
       <div
         data-ui
         style={{
@@ -772,7 +815,7 @@ export default function App() {
           right: 0,
           bottom: 0,
           zIndex: 24,
-          display: isMobile && !page ? "flex" : "none",
+          display: isMobile && booted && !page ? "flex" : "none",
           gap: "9px",
           padding: "12px 14px calc(14px + env(safe-area-inset-bottom, 0px))",
           background: "linear-gradient(180deg, rgba(8,13,28,0), rgba(8,13,28,.92) 46%)",
@@ -852,6 +895,15 @@ export default function App() {
       </div>
 
       <CaseStudyPage page={page} isMobile={isMobile} onClose={closePage} />
+
+      {introOn && (
+        <DiveIntro
+          onHandoff={onIntroHandoff}
+          onDone={onIntroDone}
+          freezeAt={boot.current.freezeAt}
+          forceMotion={boot.current.forceMotion}
+        />
+      )}
     </div>
   );
 }

@@ -51,6 +51,20 @@ function shareShells(): Plugin {
           count++;
         }
       }
+      // /browse shell (M3 browse path) — counted separately so the slug-count
+      // guard keeps its discriminating power.
+      const browseUrl = `${SITE}/browse/`;
+      const browseTitle = "Work & Experience — Yovan";
+      const browseHtml = base
+        .replace(/<title>[^<]*<\/title>/, `<title>${esc(browseTitle)}</title>`)
+        .replace(
+          /<meta name="description"[^>]*\/>/,
+          `<meta name="description" content="Browse the portfolio directly — case studies, experience, contact." />\n    ${ogBlock(browseTitle, "Browse the portfolio directly — case studies, experience, contact.", browseUrl)}`,
+        );
+      const browseDir = resolve(dist, "browse");
+      mkdirSync(browseDir, { recursive: true });
+      writeFileSync(resolve(browseDir, "index.html"), browseHtml);
+
       // root og block
       const rootUrl = `${SITE}/`;
       writeFileSync(
@@ -60,8 +74,8 @@ function shareShells(): Plugin {
           `<meta name="description" content="Yovan — Backend Software Engineer. Portfolio." />\n    ${ogBlock("Yovan — Backend Software Engineer", "Reliable services at scale — case studies, tooling, and the systems behind them.", rootUrl)}`,
         ),
       );
-      this.warn(`share-shells: wrote ${count} shells`);
-      if (count !== 8) this.error(`share-shells: expected 8 shells, wrote ${count} — slugs out of sync`);
+      this.warn(`share-shells: wrote ${count} slug shells + browse shell`);
+      if (count !== 8) this.error(`share-shells: expected 8 slug shells, wrote ${count} — slugs out of sync`);
     },
   };
 }
