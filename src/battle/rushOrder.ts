@@ -31,3 +31,15 @@ export const RUSH_ORDER: readonly string[] = [
  * this array, never remove from it, as each subsequent PR ships a boss.
  * M6 PR-1b task 3 grows it to include Cascade. */
 export const IMPLEMENTED_BOSSES: readonly string[] = [ALERT_STORM_ID, CASCADE_ID];
+
+/** Display names for the FIGHT submenu (M6 plan §App wiring, PR-1b task 5).
+ * Pinned here rather than in src/battle/fight.ts so the chooser-row helper
+ * stays a pure function of its inputs and App.tsx can read a name without
+ * pulling in anything beyond this leaf module. Covers the full RUSH_ORDER,
+ * not just IMPLEMENTED_BOSSES, ahead of PR-2/PR-3 needing the same names. */
+export const BOSS_NAMES: Record<string, string> = {
+  [ALERT_STORM_ID]: "Alert Storm",
+  [CASCADE_ID]: "The Cascade",
+  "silent-failure": "The Silent Failure",
+  "imposter-syndrome": "Imposter Syndrome",
+};
