@@ -41,8 +41,9 @@ interface BattleBoot {
    * logic sits under the widened coverage gate and is unit-testable without
    * a DOM harness. Optional: only decideBoot's capture-key path populates
    * them; the FIGHT button and the dive handoff still pin Alert Storm
-   * fresh (M5 invariant, unchanged). Not consumed by rendering yet — the
-   * scene-shell split and kit-driven command menu are PR-1a task 6. */
+   * fresh (M5 invariant, unchanged). `defeatedBosses` seeds the App-level
+   * `defeatedBosses` state at boot (see the `useState` initializer below);
+   * `boss` is not consumed by rendering yet. */
   boss?: string;
   defeatedBosses?: string[];
 }
@@ -161,8 +162,13 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>(boot.current.phase);
   const [introOn, setIntroOn] = useState(boot.current.phase === "intro");
   const [battleBoot, setBattleBoot] = useState<BattleBoot | null>(boot.current.battle ?? null);
-  // per-page-load run progress (M4 owns persistence and the unlock UI)
-  const [defeatedBosses, setDefeatedBosses] = useState<string[]>([]);
+  // per-page-load run progress (M4 owns persistence and the unlock UI).
+  // Seeded from the boot's capture-key `defeated=` (if any) so a
+  // `?phase=battle&defeated=alert-storm` boot reaches BattleScene with the
+  // matching rider/kit instead of starting fresh — single source of truth,
+  // this same state is what line ~519 passes to BattleScene and what the
+  // FIGHT row label below reads.
+  const [defeatedBosses, setDefeatedBosses] = useState<string[]>(boot.current.battle?.defeatedBosses ?? []);
   // the dive has run this page load — later play-entries skip straight to the
   // menu, and the hero stands at the station only once he has actually dived
   const [hasDived, setHasDived] = useState(false);
