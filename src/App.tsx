@@ -227,7 +227,9 @@ export default function App() {
     setRootIdx(0);
     setSubIdx(0);
     if (!stateRef.current.hasDived) {
-      // first play-entry this page load: the cinematic runs, menu rises at its end
+      // first play-entry this page load: the cinematic runs and lands in battle;
+      // warm the lazy battle chunk now so touchdown never shows a loading flash
+      void import("./battle/BattleScene");
       setPhase("intro");
       setIntroOn(true);
       snd.enter();
@@ -403,11 +405,14 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // the intro lives inside the play path now — its handoff always lands in play
+  // M5 PR-C: the dive lands directly in battle — touchdown, the Alert Storm
+  // descends, fight (owner ruling 2026-07-28). Victory lands in the menu world;
+  // re-entries within the same page load (hasDived) go straight to the menu.
   const onIntroHandoff = useCallback(
     (_target: IntroTarget) => {
       setHasDived(true);
-      goPhase("play");
+      setBattleBoot({ seed: (Math.random() * 2147483646) | 0 || 1, attempt: 1 });
+      goPhase("battle");
     },
     [goPhase],
   );
