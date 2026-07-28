@@ -131,3 +131,34 @@ The Dive to the Heart intro extends the method to DOM/SVG cinematics: locked ass
 ## 9. Canon extraction into the site (added 2026-07-28; tool = `tools/extract-canon.mjs`)
 
 The React site consumes locked lab art through generated modules, never retyped copies. `node tools/extract-canon.mjs` applies a specified, re-runnable transform (anchors + trailing-DOM-write strip + function wrap + id-suffix hook) to `station-glass.html` and emits `src/generated/stationCanon.js`, and extracts `dive-intro.html`'s whole `<script id="pure">` block into `src/generated/diveTimeline.js` (each with a hand-written `.d.ts`; the modules are `.js` under a `@ts-nocheck` header because the strict site tsconfig cannot compile lab JS — "verbatim" means verbatim below the header). `npm run verify:canon` re-runs both transforms and diffs the committed modules AND checks that `dive-intro.html`'s embedded station copy still matches the canon (3-copy drift guard). `node tools/audit-dive-parity.mjs` additionally proves the generated `computeState` byte-identical to the lab's across the full timeline. CI runs verify:canon on every PR and on the deploy path; if it fails, regenerate — never hand-edit a generated file. The render layer (`src/components/DiveIntro.tsx`) is the lab's `applyState` over React refs; its integration additions (viewport framing, the settle beat onto the site hero geometry, capture keys `?t=`/`?phase=`, the handoff fade) are M3 design, spec'd in `docs/superpowers/specs/2026-07-28-m3-split-plan.md`.
+
+### M5 battle extractions (added 2026-07-28; plan `docs/superpowers/specs/2026-07-28-be1-battle-engine-plan.md`)
+
+The extractor also emits three battle modules, each a two-anchor verbatim slice:
+
+- `src/generated/heroBattle.js` from `hero-battle.html` (`const PAL` → the
+  `getElementById('staticRow')` line): buildFrame + every frame/MS reel. The
+  Fan Out / Rollback / Root Cause / Conviction reels ship inertly until their
+  bosses wire them.
+- `src/generated/bossAlertStorm.js` from `boss-alert-storm.html` (`const EROWS`
+  → before `function drawCrop` — drawCrop/drawGrid reference symbols outside
+  the slice and would throw): per-bat primitives (`batFinal`/`batFinalPost` +
+  effect helpers + `SWARM` formation) are the renderer API; the monolithic
+  `stormOf`/`STORM_*` reels ride along inertly — they cannot express per-bat
+  death/marks/reshuffle, so `BattleScene` composes the swarm from primitives
+  against engine state.
+- `src/generated/battlefieldScene.js` from `battlefield.html` (`const PAL` →
+  before `const BUILDERS`): scene builders incl. `varAS`, excluding the `SPR`
+  actor literal and `compose`/`composeER` — the renderer owns actor placement
+  (top-left-anchored 1:1 stamps at `BOSS_AT`/`HERO_AT`, same as the lab's
+  compose).
+
+**PAL ownership:** exactly one module exports `PAL` — `diveTimeline.js`; the
+hero/battlefield modules keep their verbatim local `const PAL` and re-export
+diveTimeline's. `verify:canon` asserts all four lab palettes stay
+value-identical (parsed + deep-equal, not text — quoting/layout differ).
+
+**Frozen embed:** the boss labs' embedded hero copy (their first half) is an
+older scale-reference frozen at pre-Power-Through state. It is never extracted
+and carries NO drift guard on purpose — hero canon lives in `hero-battle.html`
+alone.

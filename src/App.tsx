@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { CATS } from "./content";
+import type { BattleAction, BattleState } from "./battle/engine";
 import { Station } from "./components/Station";
 import { Atmosphere } from "./components/Atmosphere";
 import { CaseStudyPage, type PageRef } from "./components/CaseStudyPage";
@@ -24,14 +25,38 @@ const MOBILE_BREAKPOINT = 760;
  * Path↔phase and per-phase input rules live in the M3 plan
  * (docs/superpowers/specs/2026-07-28-m3-split-plan.md, M3c addendum).
  */
-type Phase = "intro" | "gate" | "play" | "browse";
+type Phase = "intro" | "gate" | "play" | "browse" | "battle";
 
 type Col = "root" | "sub";
+
+/** The battle chunk stays out of the landing bundle (spec: battle code lazy-loaded). */
+const BattleScene = lazy(() => import("./battle/BattleScene"));
+
+interface BattleBoot {
+  seed: number;
+  attempt: number;
+  actions?: BattleAction[];
+}
 
 interface BootState {
   phase: Phase;
   page: PageRef | null;
   freezeAt?: number;
+  battle?: BattleBoot;
+}
+
+/** Dev capture key `&actions=ct,debug:3,pt:0` → engine actions (targets are bat ids). */
+function parseActions(raw: string | null): BattleAction[] | undefined {
+  if (!raw) return undefined;
+  const out: BattleAction[] = [];
+  for (const tok of raw.split(",")) {
+    const [name, tgt] = tok.split(":");
+    const target = tgt !== undefined ? parseInt(tgt, 10) : NaN;
+    if (name === "ct") out.push({ type: "ct" });
+    else if ((name === "attack" || name === "pt" || name === "debug") && !Number.isNaN(target))
+      out.push({ type: name, target });
+  }
+  return out.length ? out : undefined;
 }
 
 /** Initial-load decision — every arm of the plan's path table, computed synchronously. */
@@ -64,6 +89,16 @@ function decideBoot(): BootState {
     const params = new URLSearchParams(loc.search);
     const p = params.get("phase");
     if (p === "gate" || p === "play" || p === "browse") return { phase: p, page: null };
+    if (p === "battle")
+      return {
+        phase: "battle",
+        page: null,
+        battle: {
+          seed: parseInt(params.get("seed") ?? "", 10) || 42,
+          attempt: parseInt(params.get("attempt") ?? "", 10) || 1,
+          actions: parseActions(params.get("actions")),
+        },
+      };
     const t = params.get("t");
     if (t !== null) return { phase: "intro", page: null, freezeAt: parseInt(t, 10) || 0 };
   }
@@ -121,6 +156,9 @@ export default function App() {
 
   const [phase, setPhase] = useState<Phase>(boot.current.phase);
   const [introOn, setIntroOn] = useState(boot.current.phase === "intro");
+  const [battleBoot, setBattleBoot] = useState<BattleBoot | null>(boot.current.battle ?? null);
+  // per-page-load run progress (M4 owns persistence and the unlock UI)
+  const [defeatedBosses, setDefeatedBosses] = useState<string[]>([]);
   // the dive has run this page load — later play-entries skip straight to the
   // menu, and the hero stands at the station only once he has actually dived
   const [hasDived, setHasDived] = useState(false);
@@ -172,11 +210,14 @@ export default function App() {
 
   // gate↔play↔browse transitions rewrite the current history entry (never push)
   // so the back button only ever walks pages — popstate to "/" can't replay the intro.
+  // A battle phase records "play" in history: a dead fight must never resurrect
+  // via Forward/bfcache (M5 plan path table).
   const goPhase = useCallback((p: Exclude<Phase, "intro">) => {
     setPhase(p);
+    const stored = p === "battle" ? "play" : p;
     const path = p === "browse" ? "/browse" : "/";
-    if (window.location.pathname !== path || (window.history.state?.phase ?? null) !== p) {
-      window.history.replaceState({ phase: p }, "", path);
+    if (window.location.pathname !== path || (window.history.state?.phase ?? null) !== stored) {
+      window.history.replaceState({ phase: stored }, "", path);
     }
   }, []);
 
@@ -290,8 +331,9 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = stateRef.current;
-      // intro and gate own their inputs entirely (DiveIntro / Gate listeners)
-      if (s.phase === "intro" || (s.phase === "gate" && !s.page)) return;
+      // intro, gate, and battle own their inputs entirely (their own listeners);
+      // without the battle arm, Enter here opens a case-study page over the fight
+      if (s.phase === "intro" || s.phase === "battle" || (s.phase === "gate" && !s.page)) return;
       const k = e.key;
       const handled = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", "Escape", "Backspace", " "];
       if (handled.includes(k)) e.preventDefault();
@@ -351,7 +393,10 @@ export default function App() {
         setPhase("browse");
       } else {
         setPage(null);
-        setPhase(statePhase && statePhase !== "intro" ? statePhase : "gate");
+        // battle/intro are never restorable phases — both map to safe ground
+        setPhase(
+          statePhase && statePhase !== "intro" && statePhase !== "battle" ? statePhase : "gate",
+        );
       }
     };
     window.addEventListener("popstate", onPop);
@@ -367,6 +412,30 @@ export default function App() {
     [goPhase],
   );
   const onIntroDone = useCallback(() => setIntroOn(false), []);
+
+  // ---- battle wiring (M5 PR-B: opt-in via FIGHT; the dive reroute is PR-C) ----
+  const enterFight = useCallback(() => {
+    snd.resume();
+    setBattleBoot({ seed: (Math.random() * 2147483646) | 0 || 1, attempt: 1 });
+    goPhase("battle");
+    snd.enter();
+  }, [snd, goPhase]);
+
+  const onBattleVictory = useCallback(
+    (final: BattleState) => {
+      setDefeatedBosses(final.defeatedBosses);
+      setBattleBoot(null);
+      setCol("root");
+      goPhase("play");
+    },
+    [goPhase],
+  );
+
+  const onBattleForfeit = useCallback(() => {
+    setBattleBoot(null);
+    goPhase("gate");
+    snd.back();
+  }, [goPhase, snd]);
 
   // ---- derived view values ----
   const isMobile = w < MOBILE_BREAKPOINT;
@@ -419,10 +488,37 @@ export default function App() {
     >
       <Atmosphere />
 
-      <Station scale={glassScale} opacity={ringOpacity} top={isMobile ? "31%" : "40%"} />
+      {/* the battle stage owns the visual in battle phase (M5 plan §Station handoff) */}
+      {phase !== "battle" && <Station scale={glassScale} opacity={ringOpacity} top={isMobile ? "31%" : "40%"} />}
 
       {/* the intro's end pose, alive in site space — at the gate, only once he has dived */}
-      {phase !== "intro" && hasDived && <HeroIdle vw={w} vh={h} visible={phase === "gate"} />}
+      {phase !== "intro" && phase !== "battle" && hasDived && <HeroIdle vw={w} vh={h} visible={phase === "gate"} />}
+
+      {phase === "battle" && battleBoot && (
+        <Suspense
+          fallback={
+            <div style={{ position: "absolute", inset: 0, zIndex: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(6,4,12,.6)", fontFamily: MONO, fontSize: "12px", letterSpacing: ".3em", color: "#c9a4ff" }}>
+              LOADING…
+            </div>
+          }
+        >
+          <BattleScene
+            key={battleBoot.seed}
+            seed={battleBoot.seed}
+            attempt={battleBoot.attempt}
+            replayActions={battleBoot.actions}
+            defeatedBosses={defeatedBosses}
+            onVictory={onBattleVictory}
+            onForfeit={onBattleForfeit}
+            vw={w}
+            vh={h}
+            isMobile={isMobile}
+            playMove={snd.move}
+            playEnter={snd.enter}
+            playBack={snd.back}
+          />
+        </Suspense>
+      )}
 
       {phase === "gate" && !page && (
         <Gate onPlay={enterPlay} onBrowse={enterBrowse} vw={w} vh={h} playMove={snd.move} playEnter={snd.enter} />
@@ -633,6 +729,35 @@ export default function App() {
               );
             })}
           </div>
+        </div>
+
+        {/* FIGHT — play-phase-only row OUTSIDE the owner-locked CATS roster (M5 plan, G6) */}
+        <div
+          role="button"
+          onClick={enterFight}
+          style={{
+            marginTop: "10px",
+            width: "236px",
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            cursor: "pointer",
+            borderRadius: "13px",
+            background: "linear-gradient(160deg, rgba(70,20,30,.78), rgba(30,8,18,.74))",
+            border: "1px solid rgba(255,130,110,.36)",
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,.05), 0 12px 36px -14px rgba(0,0,0,.7), 0 0 26px rgba(255,70,50,.14)",
+            fontFamily: "'Sora',sans-serif",
+            fontSize: "14px",
+            color: "#ffd9cf",
+            letterSpacing: ".04em",
+          }}
+        >
+          <span style={{ color: "#ff9d8a", textShadow: "0 0 8px #ff6a50" }}>⚔</span>
+          <span style={{ flex: 1 }}>Fight</span>
+          <span style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".18em", color: defeatedBosses.length ? "#e8c87a" : "#c98d80" }}>
+            {defeatedBosses.length ? "REMATCH" : "ALERT STORM"}
+          </span>
         </div>
 
         {/* submenu */}
@@ -878,6 +1003,33 @@ export default function App() {
             </div>
           );
         })}
+      </div>
+
+      {/* mobile FIGHT chip — same play-phase-only rule as the command bar */}
+      <div
+        data-ui
+        role="button"
+        onClick={enterFight}
+        style={{
+          position: "absolute",
+          right: "14px",
+          bottom: "calc(96px + env(safe-area-inset-bottom, 0px))",
+          zIndex: 24,
+          display: isMobile && booted && !page ? "flex" : "none",
+          alignItems: "center",
+          gap: "8px",
+          padding: "12px 18px",
+          borderRadius: "999px",
+          background: "linear-gradient(160deg, rgba(70,20,30,.86), rgba(30,8,18,.82))",
+          border: "1px solid rgba(255,130,110,.4)",
+          boxShadow: "0 10px 30px -10px rgba(0,0,0,.7), 0 0 22px rgba(255,70,50,.18)",
+          fontFamily: "'Sora',sans-serif",
+          fontSize: "14px",
+          color: "#ffd9cf",
+          cursor: "pointer",
+        }}
+      >
+        <span style={{ color: "#ff9d8a" }}>⚔</span> Fight
       </div>
 
       {/* toast */}
