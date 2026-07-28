@@ -110,8 +110,19 @@ game" is chosen.** Consequences applied:
   the same load go straight to the menu. A fresh visit dives again.
 - The skip-adjacent "portfolio only" control is removed — the visitor already
   chose the play path; browse stays one Esc away.
-- Deep links, `/browse`, the path table, and capture keys are unchanged
-  (`?t=`/`?motion=` still boot straight into the cinematic for captures).
+- Deep links, `/browse`, and the path table are unchanged; `?t=` still boots
+  straight into a frozen cinematic frame for captures.
+- **Reduced-motion exemption (owner ruling 2026-07-28, second same-day
+  addendum):** `prefers-reduced-motion` does NOT suppress this cinematic — it
+  is solicited motion (explicit "Enter the game" click, skip one keypress
+  away). The reduce flag still governs unsolicited/ambient site motion.
+  Context: Windows with "Animation effects" off reports reduce browser-wide
+  (empirically verified via `SPI_GETCLIENTAREAANIMATION` on the owner's own
+  machine), so honoring it here silently hid the cinematic from a large
+  technical audience. This narrows M2's "reduced-motion renders the end state
+  statically" rule to the era when the intro was unsolicited at entry. The
+  `?motion=` capture key is removed (its only purpose was bypassing reduce in
+  verification).
 
 ## Known risks
 

@@ -32,7 +32,6 @@ interface BootState {
   phase: Phase;
   page: PageRef | null;
   freezeAt?: number;
-  forceMotion?: boolean;
 }
 
 /** Initial-load decision — every arm of the plan's path table, computed synchronously. */
@@ -67,7 +66,6 @@ function decideBoot(): BootState {
     if (p === "gate" || p === "play" || p === "browse") return { phase: p, page: null };
     const t = params.get("t");
     if (t !== null) return { phase: "intro", page: null, freezeAt: parseInt(t, 10) || 0 };
-    if (params.has("motion")) return { phase: "intro", page: null, forceMotion: true };
   }
   return { phase: "gate", page: null };
 }
@@ -911,14 +909,7 @@ export default function App() {
 
       <CaseStudyPage page={page} isMobile={isMobile} onClose={closePage} />
 
-      {introOn && (
-        <DiveIntro
-          onHandoff={onIntroHandoff}
-          onDone={onIntroDone}
-          freezeAt={boot.current.freezeAt}
-          forceMotion={boot.current.forceMotion}
-        />
-      )}
+      {introOn && <DiveIntro onHandoff={onIntroHandoff} onDone={onIntroDone} freezeAt={boot.current.freezeAt} />}
     </div>
   );
 }

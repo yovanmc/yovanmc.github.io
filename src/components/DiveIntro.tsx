@@ -40,8 +40,6 @@ interface DiveIntroProps {
   onDone: () => void;
   /** Freeze the timeline at this ms and hold (capture tool; skip stays live). */
   freezeAt?: number;
-  /** Ignore prefers-reduced-motion (dev/capture only — verifying the animated path). */
-  forceMotion?: boolean;
 }
 
 /** Site hero geometry — must match App.tsx's Station placement exactly. */
@@ -208,7 +206,7 @@ export function HeroIdle({ vw, vh, visible }: { vw: number; vh: number; visible:
   );
 }
 
-export function DiveIntro({ onHandoff, onDone, freezeAt, forceMotion }: DiveIntroProps) {
+export function DiveIntro({ onHandoff, onDone, freezeAt }: DiveIntroProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const sh1Ref = useRef<HTMLDivElement>(null);
@@ -231,8 +229,6 @@ export function DiveIntro({ onHandoff, onDone, freezeAt, forceMotion }: DiveIntr
 
   const cbRef = useRef({ onHandoff, onDone });
   cbRef.current = { onHandoff, onDone };
-  const forceMotionRef = useRef(forceMotion);
-  forceMotionRef.current = forceMotion;
   const freezeRef = useRef(freezeAt);
   freezeRef.current = freezeAt;
 
@@ -395,17 +391,16 @@ export function DiveIntro({ onHandoff, onDone, freezeAt, forceMotion }: DiveIntr
     };
     window.addEventListener("resize", onResize);
 
-    const reduced =
-      !forceMotionRef.current &&
-      window.matchMedia &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
+    // prefers-reduced-motion does NOT suppress this cinematic (owner ruling
+    // 2026-07-28, M3c: the dive is solicited — it runs only on an explicit
+    // "Enter the game" click, with skip one keypress away). The reduce flag
+    // still governs unsolicited/ambient site motion. Notably, Windows with
+    // "Animation effects" off reports reduce browser-wide, which silently
+    // hid the cinematic from a large technical audience.
     if (freezeRef.current !== undefined) {
       const ft = freezeRef.current;
       applyState(computeState(ft));
       setStage(computeState(ft).shot, false, false);
-    } else if (reduced) {
-      finish("gate", true);
     } else {
       let lastShot: 1 | 2 = 1;
       setStage(1, false, false);
