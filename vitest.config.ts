@@ -7,9 +7,9 @@ export default defineConfig({
     include: ["src/battle/**/*.test.ts"],
     coverage: {
       provider: "v8",
-      include: ["src/battle/engine.ts"],
+      include: ["src/battle/**/*.ts"],
       thresholds: {
-        "src/battle/engine.ts": { branches: 95 },
+        "src/battle/**/*.ts": { branches: 95 },
       },
     },
   },
