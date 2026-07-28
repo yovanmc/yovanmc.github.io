@@ -7,7 +7,7 @@
 // text, and victory/defeat copy. Type-only file — no runtime code, so it
 // never appears in the coverage report.
 
-import type { Bat, BattleState } from "../engine";
+import type { BattleState, BossState } from "../engine";
 import type { Grid } from "../../generated/heroBattle";
 
 /** Renderer fx flags driving this frame's boss composition. Alert Storm uses
@@ -51,8 +51,14 @@ export interface BossSceneModule {
   id: string;
   /** Both flutter phases, built once. */
   arena: [Grid, Grid];
-  /** Compose the boss's on-stage grid for this frame from engine + fx state. */
-  composeBoss(bats: Bat[], screaming: boolean, flutter: number, fx: SceneFx): Grid;
+  /** Compose the boss's on-stage grid for this frame from engine + fx state.
+   * Takes the whole `BossState` (not e.g. `Bat[]`) — M6 PR-1b widened this
+   * from Alert-Storm-specific `bats: Bat[]` so a second boss (Cascade, whose
+   * per-frame composition needs `nodes`/`carrier`/`lastHop`, not bats) can
+   * implement the same interface. Each module narrows on `.kind` internally;
+   * `screaming` stays a plain boolean since it is meaningless outside Alert
+   * Storm (always `false` there — see BattleScene.tsx). */
+  composeBoss(boss: BossState, screaming: boolean, flutter: number, fx: SceneFx): Grid;
   plate: ScenePlate;
   /** "" when nothing to show this frame. */
   banner(state: BattleState): string;

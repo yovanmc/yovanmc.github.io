@@ -200,7 +200,7 @@ export default function BattleScene(props: Props) {
     const g = scene.arena[flutter].map((row) => row.slice());
     const screaming = isScreamTurn(shown) && shown.status === "active";
     if (!descend && shown.status !== "victory") {
-      const bossGrid = scene.composeBoss(alertBats(shown.boss), screaming, flutter, swarmFx);
+      const bossGrid = scene.composeBoss(shown.boss, screaming, flutter, swarmFx);
       stampGrid(g, bossGrid, BOSS_AT[0], BOSS_AT[1]);
     }
     const heroGrid =
