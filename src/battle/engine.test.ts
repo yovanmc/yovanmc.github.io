@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { battleReduce, initBattle, isScreamTurn } from "./engine";
+import {
+  battleReduce,
+  dealtDamage,
+  deriveKit,
+  IMPLEMENTED_BOSSES,
+  initBattle,
+  isScreamTurn,
+  RUSH_ORDER,
+  takenDamage,
+} from "./engine";
 import type { BattleState } from "./engine";
 
 /** Attack the real bat — never triggers a fake-hit reshuffle. */
@@ -346,13 +355,13 @@ describe("victory", () => {
     expect(s.defeatedBosses).toContain("alert-storm");
   });
 
-  it("rematch victory grants NO rider, forge, or unlock (defeatedBosses gates them)", () => {
+  it("rematch victory grants NO forge/rider/unlock EVENT (defeatedBosses gates them); maxHp stays the derived 110 the fight started at (M6 — carry-over is derived, not a second bump)", () => {
     const s = winBySeed(42, ["alert-storm"]);
     expect(s.status).toBe("victory");
     expect(s.events.some((e) => e.type === "forge")).toBe(false);
     expect(s.events.some((e) => e.type === "rider")).toBe(false);
     expect(s.events.some((e) => e.type === "unlock")).toBe(false);
-    expect(s.hero.maxHp).toBe(100);
+    expect(s.hero.maxHp).toBe(110);
   });
 
   it("a DoT tick that kills the real bat also wins", () => {
@@ -372,6 +381,81 @@ describe("victory", () => {
     const after = battleReduce(s, { type: "ct" });
     expect(after.events.some((e) => e.type === "invalid")).toBe(true);
     expect(after.status).toBe("victory");
+  });
+});
+
+describe("derived rider (M6 — carry-over is derived, not stored)", () => {
+  it("maxHp = 100 + 10·D, maxMp = 10 + 2·D where D = defeatedBosses.length; battles start full", () => {
+    const fresh = initBattle({ seed: 42 });
+    expect(fresh.hero).toEqual({ hp: 100, maxHp: 100, mp: 10, maxMp: 10 });
+
+    const oneDown = initBattle({ seed: 42, defeatedBosses: ["alert-storm"] });
+    expect(oneDown.hero).toEqual({ hp: 110, maxHp: 110, mp: 12, maxMp: 12 });
+  });
+
+  it("scales past one boss even though only alert-storm is implemented yet (rider math is boss-count-generic)", () => {
+    const twoDown = initBattle({
+      seed: 42,
+      defeatedBosses: ["alert-storm", "cascade"],
+    });
+    expect(twoDown.hero).toEqual({ hp: 120, maxHp: 120, mp: 14, maxMp: 14 });
+  });
+});
+
+describe("RUSH_ORDER / IMPLEMENTED_BOSSES (pinned constants)", () => {
+  it("rush order is the four bosses in fight order; alert-storm is the only implemented one this PR", () => {
+    expect(RUSH_ORDER).toEqual(["alert-storm", "cascade", "silent-failure", "imposter-syndrome"]);
+    expect(IMPLEMENTED_BOSSES).toEqual(["alert-storm"]);
+  });
+});
+
+describe("kit derivation", () => {
+  it("the base four abilities are always in kit, fresh or rematch (no unlocks land until task 4's Fan Out)", () => {
+    expect(deriveKit([])).toEqual(["attack", "ct", "pt", "debug"]);
+    expect(deriveKit(["alert-storm"])).toEqual(["attack", "ct", "pt", "debug"]);
+  });
+
+  it("ignores a defeated boss outside IMPLEMENTED_BOSSES (pass-2 G1 guard) — no crash, no phantom kit growth", () => {
+    expect(deriveKit(["cascade", "silent-failure"])).toEqual(["attack", "ct", "pt", "debug"]);
+  });
+
+  it("the reducer rejects an out-of-kit action type as invalid, without mutating turn/hero (forward-compat guard proven ahead of Fan Out landing)", () => {
+    const s0 = initBattle({ seed: 42 });
+    const s1 = battleReduce(s0, { type: "fo" } as unknown as Parameters<typeof battleReduce>[1]);
+    expect(s1.events).toEqual([{ type: "invalid", reason: "not in kit" }]);
+    expect(s1.turn).toBe(1);
+    expect(s1.hero).toEqual(s0.hero);
+  });
+});
+
+describe("Multiplier core (M6 §Multipliers — Conviction not castable in PR-1a, helpers tested directly)", () => {
+  it("dealt, PT under both CT and Conviction: 28 × 2 × 2 = 112 (Conviction REPLACES CT's dealt percentage, never stacks it)", () => {
+    expect(dealtDamage(28, true, true)).toBe(112);
+  });
+
+  it("taken, glitch-slash-sized hit under both CT and Conviction: 14 × 0.5 = 7 (Conviction REPLACES CT's taken percentage)", () => {
+    expect(takenDamage(14, true, true)).toBe(7);
+  });
+
+  it("CT alone (Conviction off) still uses the shipped M5 percentages: dealt ×1.5, taken ×0.75", () => {
+    expect(dealtDamage(28, true, false)).toBe(42);
+    expect(takenDamage(14, true, false)).toBe(11); // roundHalfUp(10.5)
+  });
+
+  it("Conviction alone, CT down: dealt still doubles, but taken reduces nothing (CT owns the taken side entirely)", () => {
+    expect(dealtDamage(28, false, true)).toBe(56);
+    expect(takenDamage(14, false, true)).toBe(14);
+  });
+
+  it("neither active: both multipliers are 1", () => {
+    expect(dealtDamage(28, false, false)).toBe(28);
+    expect(takenDamage(14, false, false)).toBe(14);
+  });
+
+  it("a rigged state with conviction:true feeds the same pinned math (Conviction is a state flag even though nothing can cast it yet)", () => {
+    const s = { ...initBattle({ seed: 1 }), ctTurns: 3, conviction: true };
+    expect(dealtDamage(28, s.ctTurns > 0, s.conviction)).toBe(112);
+    expect(takenDamage(14, s.ctTurns > 0, s.conviction)).toBe(7);
   });
 });
 
