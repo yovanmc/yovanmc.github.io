@@ -144,7 +144,7 @@ export function initBattle(opts: InitOptions): BattleState {
 const ATTACK_DMG = 12;
 const PT_DMG = 28;
 const DEBUG_DMG = 6;
-const FAN_OUT_DMG = 8; // Cascade-signed resolution (dissect F1) — addendum "~10"
+export const FAN_OUT_DMG = 8; // Cascade-signed resolution (dissect F1) — addendum "~10"; shared by every boss's Fan Out (bosses/cascade.ts imports this rather than redefining it)
 const DOT_TICK = 4;
 const DOT_TICKS = 3;
 const CT_DURATION = 3;
