@@ -10,13 +10,17 @@ describe("parseBoss (`boss=` capture key — whitelist = IMPLEMENTED_BOSSES, def
     expect(parseBoss("")).toBe("alert-storm");
   });
 
-  it("accepts alert-storm (the only implemented boss this PR)", () => {
+  it("accepts alert-storm", () => {
     expect(parseBoss("alert-storm")).toBe("alert-storm");
   });
 
+  it("accepts cascade (implemented as of PR-1b)", () => {
+    expect(parseBoss("cascade")).toBe("cascade");
+  });
+
   it("rejects a boss id that is not yet implemented, falling back to alert-storm (pass-2 G1 live-crash guard)", () => {
-    expect(parseBoss("cascade")).toBe("alert-storm");
     expect(parseBoss("silent-failure")).toBe("alert-storm");
+    expect(parseBoss("imposter-syndrome")).toBe("alert-storm");
   });
 
   it("rejects garbage input, falling back to alert-storm", () => {

@@ -13,12 +13,13 @@
 // docs/superpowers/specs/2026-07-28-m6-bosses-2-4-plan.md, PR-1a task 5.
 
 export const ALERT_STORM_ID = "alert-storm";
+export const CASCADE_ID = "cascade";
 
 /** Pinned boss-rush order (M6 plan §Cross-boss architecture). Fixed forever —
  * later PRs only ever read this, never reorder it. */
 export const RUSH_ORDER: readonly string[] = [
   ALERT_STORM_ID,
-  "cascade",
+  CASCADE_ID,
   "silent-failure",
   "imposter-syndrome",
 ];
@@ -27,5 +28,6 @@ export const RUSH_ORDER: readonly string[] = [
  * live-crash guard). Kit derivation, FIGHT's next-boss row, and the `boss=`
  * capture-key whitelist all intersect with this so a boss beaten ahead of its
  * own PR never grants a kit entry / route with no module behind it. Extend
- * this array, never remove from it, as each subsequent PR ships a boss. */
-export const IMPLEMENTED_BOSSES: readonly string[] = [ALERT_STORM_ID];
+ * this array, never remove from it, as each subsequent PR ships a boss.
+ * M6 PR-1b task 3 grows it to include Cascade. */
+export const IMPLEMENTED_BOSSES: readonly string[] = [ALERT_STORM_ID, CASCADE_ID];

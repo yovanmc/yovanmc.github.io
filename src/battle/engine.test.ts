@@ -9,11 +9,22 @@ import {
   RUSH_ORDER,
   takenDamage,
 } from "./engine";
-import type { BattleState } from "./engine";
+import type { BattleState, Bat } from "./engine";
+import type { AlertStormBoss } from "./bosses/alertStorm";
+
+/** `BattleState.boss` is a discriminated union as of M6 PR-1b (Cascade joined
+ * Alert Storm) — this file is the pre-M6 Alert Storm suite, so every state it
+ * builds is alert-storm-shaped; this narrows for the type checker without
+ * changing any runtime behavior (mechanical accessor-path carve, same class
+ * as PR-1a task 2's `s.bats` -> new-location moves). */
+function bats(s: BattleState): Bat[] {
+  if (s.boss.kind !== "alert-storm") throw new Error("expected alert-storm boss");
+  return s.boss.bats;
+}
 
 /** Attack the real bat — never triggers a fake-hit reshuffle. */
 function attackReal(s: BattleState): BattleState {
-  const real = s.boss.bats.find((b) => b.real)!;
+  const real = bats(s).find((b) => b.real)!;
   return battleReduce(s, { type: "attack", target: real.id });
 }
 
@@ -28,15 +39,15 @@ describe("initBattle", () => {
 
   it("spawns ten bats: one real at 60 HP, nine fakes at 8 HP, all alive and unmarked", () => {
     const s = initBattle({ seed: 42 });
-    expect(s.boss.bats).toHaveLength(10);
-    const real = s.boss.bats.filter((b) => b.real);
-    const fakes = s.boss.bats.filter((b) => !b.real);
+    expect(bats(s)).toHaveLength(10);
+    const real = bats(s).filter((b) => b.real);
+    const fakes = bats(s).filter((b) => !b.real);
     expect(real).toHaveLength(1);
     expect(real[0].hp).toBe(60);
     expect(real[0].maxHp).toBe(60);
     expect(fakes).toHaveLength(9);
     for (const f of fakes) expect(f.hp).toBe(8);
-    for (const b of s.boss.bats) {
+    for (const b of bats(s)) {
       expect(b.alive).toBe(true);
       expect(b.marked).toBe(false);
     }
@@ -44,9 +55,9 @@ describe("initBattle", () => {
 
   it("gives every bat a distinct id 0..9 and a distinct formation position 0..9", () => {
     const s = initBattle({ seed: 42 });
-    expect(new Set(s.boss.bats.map((b) => b.id)).size).toBe(10);
-    expect(new Set(s.boss.bats.map((b) => b.pos)).size).toBe(10);
-    for (const b of s.boss.bats) {
+    expect(new Set(bats(s).map((b) => b.id)).size).toBe(10);
+    expect(new Set(bats(s).map((b) => b.pos)).size).toBe(10);
+    for (const b of bats(s)) {
       expect(b.id).toBeGreaterThanOrEqual(0);
       expect(b.id).toBeLessThan(10);
       expect(b.pos).toBeGreaterThanOrEqual(0);
@@ -61,13 +72,13 @@ describe("initBattle", () => {
   it("survives the degenerate seed that folds to a zero rng stream", () => {
     // 1640531525 + 1×0x9e3779b9 ≡ 0 (mod 2147483647) — the stream must not stall
     const s = initBattle({ seed: 1640531525 });
-    expect(s.boss.bats.filter((b) => b.real)).toHaveLength(1);
+    expect(bats(s).filter((b) => b.real)).toHaveLength(1);
     expect(s.rngState).not.toBe(0);
   });
 
   it("re-rolls the real bat across attempts for at least one seed (retry must not be a solved puzzle)", () => {
     const realId = (seed: number, attempt: number) =>
-      initBattle({ seed, attempt }).boss.bats.find((b) => b.real)!.id;
+      bats(initBattle({ seed, attempt })).find((b) => b.real)!.id;
     const anyDiffers = [1, 2, 3, 4, 5].some(
       (seed) => realId(seed, 1) !== realId(seed, 2),
     );
@@ -104,9 +115,9 @@ describe("scream schedule", () => {
 describe("attack", () => {
   it("deals 12 to the target and the swarm answers with a 7-damage volley; the turn advances", () => {
     const s0 = initBattle({ seed: 42 });
-    const real = s0.boss.bats.find((b) => b.real)!;
+    const real = bats(s0).find((b) => b.real)!;
     const s1 = battleReduce(s0, { type: "attack", target: real.id });
-    expect(s1.boss.bats.find((b) => b.id === real.id)!.hp).toBe(48);
+    expect(bats(s1).find((b) => b.id === real.id)!.hp).toBe(48);
     expect(s1.hero.hp).toBe(93);
     expect(s1.turn).toBe(2);
     expect(s1.status).toBe("active");
@@ -119,21 +130,21 @@ describe("attack", () => {
 
   it("killing a fake (8 HP < 12) downs it and reshuffles living positions; identities travel", () => {
     const s0 = initBattle({ seed: 42 });
-    const fake = s0.boss.bats.find((b) => !b.real)!;
+    const fake = bats(s0).find((b) => !b.real)!;
     const s1 = battleReduce(s0, { type: "attack", target: fake.id });
-    const hit = s1.boss.bats.find((b) => b.id === fake.id)!;
+    const hit = bats(s1).find((b) => b.id === fake.id)!;
     expect(hit.alive).toBe(false);
     expect(hit.hp).toBe(0);
     expect(s1.events.some((e) => e.type === "batDown" && e.batId === fake.id)).toBe(true);
     expect(s1.events.some((e) => e.type === "reshuffle" && e.reason === "fakeHit")).toBe(true);
     // permutation: living bats occupy the same SET of positions, each keeps its identity/hp
-    const livingBefore = s0.boss.bats.filter((b) => b.id !== fake.id);
-    const livingAfter = s1.boss.bats.filter((b) => b.alive);
+    const livingBefore = bats(s0).filter((b) => b.id !== fake.id);
+    const livingAfter = bats(s1).filter((b) => b.alive);
     expect(new Set(livingAfter.map((b) => b.pos))).toEqual(
       new Set(livingBefore.map((b) => b.pos)),
     );
     for (const b of livingAfter) {
-      const before = s0.boss.bats.find((x) => x.id === b.id)!;
+      const before = bats(s0).find((x) => x.id === b.id)!;
       expect(b.real).toBe(before.real);
       expect(b.hp).toBe(before.hp);
     }
@@ -142,7 +153,7 @@ describe("attack", () => {
   it("hitting the real bat does not reshuffle", () => {
     const s1 = attackReal(initBattle({ seed: 42 }));
     expect(s1.events.some((e) => e.type === "reshuffle")).toBe(false);
-    expect(s1.boss.bats.map((b) => b.pos)).toEqual(initBattle({ seed: 42 }).boss.bats.map((b) => b.pos));
+    expect(bats(s1).map((b) => b.pos)).toEqual(bats(initBattle({ seed: 42 })).map((b) => b.pos));
   });
 
   it("positions reshuffle at the end of every scream turn (position memory expires)", () => {
@@ -155,7 +166,7 @@ describe("attack", () => {
 
   it("targeting a dead bat is invalid: an invalid event, no damage, no turn advance", () => {
     const s0 = initBattle({ seed: 42 });
-    const fake = s0.boss.bats.find((b) => !b.real)!;
+    const fake = bats(s0).find((b) => !b.real)!;
     const s1 = battleReduce(s0, { type: "attack", target: fake.id });
     const s2 = battleReduce(s1, { type: "attack", target: fake.id });
     expect(s2.events.some((e) => e.type === "invalid")).toBe(true);
@@ -165,7 +176,7 @@ describe("attack", () => {
 
   it("is deterministic: identical state + action produce identical results", () => {
     const s0 = initBattle({ seed: 42 });
-    const fake = s0.boss.bats.find((b) => !b.real)!;
+    const fake = bats(s0).find((b) => !b.real)!;
     expect(battleReduce(s0, { type: "attack", target: fake.id })).toEqual(
       battleReduce(s0, { type: "attack", target: fake.id }),
     );
@@ -189,14 +200,14 @@ describe("critical thinking", () => {
 
   it("boosts damage dealt by 50% while active (attack 12 → 18)", () => {
     const s1 = battleReduce(initBattle({ seed: 42 }), { type: "ct" });
-    const real = s1.boss.bats.find((b) => b.real)!;
+    const real = bats(s1).find((b) => b.real)!;
     const s2 = battleReduce(s1, { type: "attack", target: real.id });
-    expect(s2.boss.bats.find((b) => b.id === real.id)!.hp).toBe(42); // 60 − 18
+    expect(bats(s2).find((b) => b.id === real.id)!.hp).toBe(42); // 60 − 18
   });
 
   it("lasts 3 turns: attacks on turns 2 and 3 are buffed, turn 4 is not", () => {
     let s = battleReduce(initBattle({ seed: 42 }), { type: "ct" }); // turn 1
-    const real = () => s.boss.bats.find((b) => b.real)!;
+    const real = () => bats(s).find((b) => b.real)!;
     let hpBefore = real().hp;
     s = battleReduce(s, { type: "attack", target: real().id }); // turn 2
     expect(hpBefore - real().hp).toBe(18);
@@ -211,7 +222,7 @@ describe("critical thinking", () => {
   it("re-casting while active refreshes the timer (no stack): CT@1, CT@2 keeps turn 4 buffed", () => {
     let s = battleReduce(initBattle({ seed: 42 }), { type: "ct" }); // turn 1
     s = battleReduce(s, { type: "ct" }); // turn 2, refresh
-    const real = () => s.boss.bats.find((b) => b.real)!;
+    const real = () => bats(s).find((b) => b.real)!;
     let hpBefore = real().hp;
     s = battleReduce(s, { type: "attack", target: real().id }); // turn 3
     expect(hpBefore - real().hp).toBe(18);
@@ -233,22 +244,22 @@ describe("critical thinking", () => {
 describe("power through", () => {
   it("costs 3 MP and deals 28 (60 → 32 on the real bat)", () => {
     const s0 = initBattle({ seed: 42 });
-    const real = s0.boss.bats.find((b) => b.real)!;
+    const real = bats(s0).find((b) => b.real)!;
     const s1 = battleReduce(s0, { type: "pt", target: real.id });
-    expect(s1.boss.bats.find((b) => b.id === real.id)!.hp).toBe(32);
+    expect(bats(s1).find((b) => b.id === real.id)!.hp).toBe(32);
     expect(s1.hero.mp).toBe(8); // 10 − 3 + 1 regen; no on-hit MP (Attack only)
   });
 
   it("deals 42 under Critical Thinking (28 × 1.5)", () => {
     const s1 = battleReduce(initBattle({ seed: 42 }), { type: "ct" });
-    const real = s1.boss.bats.find((b) => b.real)!;
+    const real = bats(s1).find((b) => b.real)!;
     const s2 = battleReduce(s1, { type: "pt", target: real.id });
-    expect(real.hp - s2.boss.bats.find((b) => b.id === real.id)!.hp).toBe(42);
+    expect(real.hp - bats(s2).find((b) => b.id === real.id)!.hp).toBe(42);
   });
 
   it("is invalid without 3 MP", () => {
     const s0 = initBattle({ seed: 42 });
-    const real = s0.boss.bats.find((b) => b.real)!;
+    const real = bats(s0).find((b) => b.real)!;
     const broke = { ...s0, hero: { ...s0.hero, mp: 2 } };
     const s1 = battleReduce(broke, { type: "pt", target: real.id });
     expect(s1.events.some((e) => e.type === "invalid")).toBe(true);
@@ -259,9 +270,9 @@ describe("power through", () => {
 describe("debug", () => {
   it("costs 2 MP, deals 6 on cast, and marks the target permanently", () => {
     const s0 = initBattle({ seed: 42 });
-    const real = s0.boss.bats.find((b) => b.real)!;
+    const real = bats(s0).find((b) => b.real)!;
     const s1 = battleReduce(s0, { type: "debug", target: real.id });
-    const hit = s1.boss.bats.find((b) => b.id === real.id)!;
+    const hit = bats(s1).find((b) => b.id === real.id)!;
     expect(hit.hp).toBe(54);
     expect(hit.marked).toBe(true);
     expect(s1.hero.mp).toBe(9); // 10 − 2 + 1 regen
@@ -270,8 +281,8 @@ describe("debug", () => {
 
   it("ticks 4 damage on each of the next 3 turn advances, then stops — and CT never multiplies ticks", () => {
     const s0 = initBattle({ seed: 42 });
-    const realId = s0.boss.bats.find((b) => b.real)!.id;
-    const hp = (s: BattleState) => s.boss.bats.find((b) => b.id === realId)!.hp;
+    const realId = bats(s0).find((b) => b.real)!.id;
+    const hp = (s: BattleState) => bats(s).find((b) => b.id === realId)!.hp;
     let s = battleReduce(s0, { type: "debug", target: realId }); // turn 1: 60−6 = 54
     expect(hp(s)).toBe(54);
     s = battleReduce(s, { type: "ct" }); // turn 2: tick 4 (CT active, still 4)
@@ -286,20 +297,20 @@ describe("debug", () => {
 
   it("a mark placed on a fake survives the fake-hit reshuffle it triggers", () => {
     const s0 = initBattle({ seed: 42 });
-    const fake = s0.boss.bats.find((b) => !b.real)!;
+    const fake = bats(s0).find((b) => !b.real)!;
     const s1 = battleReduce(s0, { type: "debug", target: fake.id });
     expect(s1.events.some((e) => e.type === "reshuffle" && e.reason === "fakeHit")).toBe(true);
-    const marked = s1.boss.bats.find((b) => b.id === fake.id)!;
+    const marked = bats(s1).find((b) => b.id === fake.id)!;
     expect(marked.marked).toBe(true);
     expect(marked.hp).toBe(2); // 8 − 6, still alive
   });
 
   it("a DoT tick can down a fake (batDown) but a tick is not a hit — no reshuffle from the tick", () => {
     const s0 = initBattle({ seed: 42 });
-    const fake = s0.boss.bats.find((b) => !b.real)!;
+    const fake = bats(s0).find((b) => !b.real)!;
     const s1 = battleReduce(s0, { type: "debug", target: fake.id }); // fake at 2 HP
     const s2 = battleReduce(s1, { type: "ct" }); // turn 2: tick 4 downs it
-    const downed = s2.boss.bats.find((b) => b.id === fake.id)!;
+    const downed = bats(s2).find((b) => b.id === fake.id)!;
     expect(downed.alive).toBe(false);
     expect(s2.events.some((e) => e.type === "batDown" && e.batId === fake.id)).toBe(true);
     expect(s2.events.some((e) => e.type === "reshuffle" && e.reason === "fakeHit")).toBe(false);
@@ -315,15 +326,15 @@ describe("debug", () => {
   it("two debugs run independent DoTs and both marks persist", () => {
     const s0 = initBattle({ seed: 42 });
     const [realId, otherId] = [
-      s0.boss.bats.find((b) => b.real)!.id,
-      s0.boss.bats.filter((b) => b.real === false)[0].id,
+      bats(s0).find((b) => b.real)!.id,
+      bats(s0).filter((b) => b.real === false)[0].id,
     ];
     let s = battleReduce(s0, { type: "debug", target: realId }); // turn 1
     s = battleReduce(s, { type: "debug", target: otherId }); // turn 2 (real ticks 4 → 50)
-    const real = s.boss.bats.find((b) => b.id === realId)!;
+    const real = bats(s).find((b) => b.id === realId)!;
     expect(real.hp).toBe(50); // 60 − 6 − 4
     expect(real.marked).toBe(true);
-    expect(s.boss.bats.find((b) => b.id === otherId)!.marked).toBe(true);
+    expect(bats(s).find((b) => b.id === otherId)!.marked).toBe(true);
   });
 });
 
@@ -331,7 +342,7 @@ describe("victory", () => {
   /** PT, PT, attack kills the real bat on turn 3 (60 → 32 → 4 → 0). */
   function winBySeed(seed: number, defeatedBosses: string[] = []) {
     const s0 = initBattle({ seed, defeatedBosses });
-    const realId = s0.boss.bats.find((b) => b.real)!.id;
+    const realId = bats(s0).find((b) => b.real)!.id;
     let s = battleReduce(s0, { type: "pt", target: realId });
     s = battleReduce(s, { type: "pt", target: realId });
     return battleReduce(s, { type: "attack", target: realId });
@@ -341,7 +352,7 @@ describe("victory", () => {
     const s = winBySeed(42);
     expect(s.status).toBe("victory");
     expect(s.events.some((e) => e.type === "victory")).toBe(true);
-    expect(s.boss.bats.filter((b) => !b.real && b.alive).length).toBe(9);
+    expect(bats(s).filter((b) => !b.real && b.alive).length).toBe(9);
     expect(s.hero.hp).toBe(96); // 100 − 7 − 7 volleys, then +10 rider; none on the kill turn
   });
 
@@ -366,10 +377,10 @@ describe("victory", () => {
 
   it("a DoT tick that kills the real bat also wins", () => {
     const s0 = initBattle({ seed: 42 });
-    const realId = s0.boss.bats.find((b) => b.real)!.id;
+    const realId = bats(s0).find((b) => b.real)!.id;
     const rigged = {
       ...s0,
-      boss: { ...s0.boss, bats: s0.boss.bats.map((b) => (b.id === realId ? { ...b, hp: 4 } : b)) },
+      boss: { ...(s0.boss as AlertStormBoss), bats: bats(s0).map((b) => (b.id === realId ? { ...b, hp: 4 } : b)) },
       dots: [{ batId: realId, ticksLeft: 1 }],
     };
     const s = battleReduce(rigged, { type: "ct" });
@@ -403,9 +414,9 @@ describe("derived rider (M6 — carry-over is derived, not stored)", () => {
 });
 
 describe("RUSH_ORDER / IMPLEMENTED_BOSSES (pinned constants)", () => {
-  it("rush order is the four bosses in fight order; alert-storm is the only implemented one this PR", () => {
+  it("rush order is the four bosses in fight order; Alert Storm and Cascade are implemented as of PR-1b", () => {
     expect(RUSH_ORDER).toEqual(["alert-storm", "cascade", "silent-failure", "imposter-syndrome"]);
-    expect(IMPLEMENTED_BOSSES).toEqual(["alert-storm"]);
+    expect(IMPLEMENTED_BOSSES).toEqual(["alert-storm", "cascade"]);
   });
 });
 
@@ -470,13 +481,13 @@ describe("Fan Out (M6 — base 8, hits all living targets, single reshuffle)", (
 
   it("is castable in the Alert Storm rematch (kit-derived): costs 3 MP and deals 8 to every living bat, one hit per target", () => {
     const s0 = initBattle({ seed: 42, defeatedBosses: ["alert-storm"] });
-    const realId = s0.boss.bats.find((b) => b.real)!.id;
+    const realId = bats(s0).find((b) => b.real)!.id;
     const s1 = battleReduce(s0, { type: "fo" });
     expect(s1.events.some((e) => e.type === "invalid")).toBe(false);
     expect(s1.hero.mp).toBe(10); // 12 − 3 + 1 regen
-    expect(s1.boss.bats.find((b) => b.id === realId)!.hp).toBe(52); // 60 − 8
-    for (const fake of s0.boss.bats.filter((b) => !b.real)) {
-      expect(s1.boss.bats.find((b) => b.id === fake.id)!.alive).toBe(false); // 8 HP fakes die to 8 dmg
+    expect(bats(s1).find((b) => b.id === realId)!.hp).toBe(52); // 60 − 8
+    for (const fake of bats(s0).filter((b) => !b.real)) {
+      expect(bats(s1).find((b) => b.id === fake.id)!.alive).toBe(false); // 8 HP fakes die to 8 dmg
     }
     expect(s1.events.filter((e) => e.type === "damage")).toHaveLength(10); // all 10 bats hit
   });
@@ -489,11 +500,11 @@ describe("Fan Out (M6 — base 8, hits all living targets, single reshuffle)", (
 
   it("deals 12 under Critical Thinking (8 × 1.5, round half up) to the real bat", () => {
     let s = initBattle({ seed: 42, defeatedBosses: ["alert-storm"] });
-    const realId = s.boss.bats.find((b) => b.real)!.id;
+    const realId = bats(s).find((b) => b.real)!.id;
     s = battleReduce(s, { type: "ct" }); // turn 1
-    const before = s.boss.bats.find((b) => b.id === realId)!.hp;
+    const before = bats(s).find((b) => b.id === realId)!.hp;
     s = battleReduce(s, { type: "fo" }); // turn 2, CT still active
-    expect(before - s.boss.bats.find((b) => b.id === realId)!.hp).toBe(12);
+    expect(before - bats(s).find((b) => b.id === realId)!.hp).toBe(12);
   });
 
   it("emits a firstCast event the first time it is cast", () => {
@@ -506,7 +517,7 @@ describe("Fan Out (M6 — base 8, hits all living targets, single reshuffle)", (
     const s0 = initBattle({ seed: 42, defeatedBosses: ["alert-storm"] });
     const rigged = {
       ...s0,
-      boss: { ...s0.boss, bats: s0.boss.bats.map((b) => (b.real ? b : { ...b, hp: 0, alive: false })) },
+      boss: { ...(s0.boss as AlertStormBoss), bats: bats(s0).map((b) => (b.real ? b : { ...b, hp: 0, alive: false })) },
     };
     const s1 = battleReduce(rigged, { type: "fo" });
     expect(s1.events.some((e) => e.type === "reshuffle")).toBe(false);
@@ -533,7 +544,7 @@ describe("defeat and swarm decay", () => {
 
   it("volley decays by 1 per 3 dead fakes (7 → 6 after the third kill)", () => {
     const s0 = initBattle({ seed: 42 });
-    const fakes = s0.boss.bats.filter((b) => !b.real).map((b) => b.id);
+    const fakes = bats(s0).filter((b) => !b.real).map((b) => b.id);
     let s = battleReduce(s0, { type: "attack", target: fakes[0] });
     s = battleReduce(s, { type: "attack", target: fakes[1] });
     s = battleReduce(s, { type: "attack", target: fakes[2] });
@@ -544,7 +555,7 @@ describe("defeat and swarm decay", () => {
     const s0 = initBattle({ seed: 42 });
     const rigged = {
       ...s0,
-      boss: { ...s0.boss, bats: s0.boss.bats.map((b) => (b.real ? b : { ...b, hp: 0, alive: false })) },
+      boss: { ...(s0.boss as AlertStormBoss), bats: bats(s0).map((b) => (b.real ? b : { ...b, hp: 0, alive: false })) },
     };
     const s = attackReal(rigged);
     expect(s.hero.hp).toBe(96); // 100 − 4
@@ -554,17 +565,204 @@ describe("defeat and swarm decay", () => {
 describe("the streamlined line (plan verification item 6, pinned end-to-end)", () => {
   it("CT@1 → CT@2 → Debug@3 → PT@4 → PT@5 wins on turn 5 at 90 HP after the rider", () => {
     let s = initBattle({ seed: 42 });
-    const realId = s.boss.bats.find((b) => b.real)!.id;
+    const realId = bats(s).find((b) => b.real)!.id;
     s = battleReduce(s, { type: "ct" }); // t1: volley 5, hero 95
     s = battleReduce(s, { type: "ct" }); // t2: refresh, hero 90
     s = battleReduce(s, { type: "debug", target: realId }); // t3 scream: −9 (6×1.5) → 51, hero 85
     s = battleReduce(s, { type: "pt", target: realId }); // t4 ext. scream: −42 −4 tick → 5, hero 80
-    expect(s.boss.bats.find((b) => b.id === realId)!.hp).toBe(5);
+    expect(bats(s).find((b) => b.id === realId)!.hp).toBe(5);
     expect(s.hero.hp).toBe(80);
     s = battleReduce(s, { type: "pt", target: realId }); // t5 (CT expired): 28 ≥ 5 — kill
     expect(s.status).toBe("victory");
     expect(s.turn).toBe(5);
     expect(s.hero.hp).toBe(90); // 80 + 10 rider
     expect(s.hero.maxHp).toBe(110);
+  });
+});
+
+describe("Cascade boot + dispatch (M6 PR-1b task 3)", () => {
+  it("initBattle boots boss: \"cascade\" on request, six nodes at 25/25, carrier at node 0", () => {
+    const s = initBattle({ seed: 42, boss: "cascade" });
+    expect(s.boss.kind).toBe("cascade");
+    if (s.boss.kind !== "cascade") throw new Error("unreachable");
+    expect(s.boss.nodes).toHaveLength(6);
+    expect(s.boss.nodes.every((n) => n.hp === 25 && n.alive)).toBe(true);
+    expect(s.boss.carrier).toBe(0);
+  });
+
+  it("falls back to alert-storm for an unimplemented/garbage boss id (never a crash path)", () => {
+    expect(initBattle({ seed: 42, boss: "silent-failure" }).boss.kind).toBe("alert-storm");
+    expect(initBattle({ seed: 42, boss: "not-a-real-boss" }).boss.kind).toBe("alert-storm");
+    expect(initBattle({ seed: 42 }).boss.kind).toBe("alert-storm");
+  });
+
+  it("the reducer rejects an out-of-kit action against a cascade boss the same way it does for alert-storm", () => {
+    const s0 = initBattle({ seed: 42, boss: "cascade" });
+    const s1 = battleReduce(s0, { type: "fo" });
+    expect(s1.events).toEqual([{ type: "invalid", reason: "not in kit" }]);
+  });
+
+  it("targets a living node; a dead or unknown node id is invalid", () => {
+    const s0 = initBattle({ seed: 42, boss: "cascade", defeatedBosses: ["alert-storm"] });
+    const s1 = battleReduce(s0, { type: "attack", target: 99 });
+    expect(s1.events.some((e) => e.type === "invalid")).toBe(true);
+  });
+
+  it("Debug against the carrier marks it, deals 6 halved by the carrier shield (25 - floor(6/2) = 22), and starts a DoT", () => {
+    const s = battleReduce(initBattle({ seed: 42, boss: "cascade" }), { type: "debug", target: 0 });
+    if (s.boss.kind !== "cascade") throw new Error("unreachable");
+    expect(s.boss.nodes.find((n) => n.id === 0)!.hp).toBe(22);
+    expect(s.boss.nodes.find((n) => n.id === 0)!.marked).toBe(true);
+    expect(s.events.some((e) => e.type === "mark" && e.batId === 0)).toBe(true);
+    expect(s.dots).toEqual([{ batId: 0, ticksLeft: 3 }]);
+  });
+
+  it("DoT ticks on the carrier are halved by the shield too (the carrier shield applies from every source, not just direct hits)", () => {
+    const s0 = initBattle({ seed: 42, boss: "cascade" });
+    if (s0.boss.kind !== "cascade") throw new Error("unreachable");
+    const rigged: BattleState = {
+      ...s0,
+      boss: { ...s0.boss, nodes: s0.boss.nodes.map((n) => (n.id === 0 ? { ...n, hp: 22, marked: true } : n)) },
+      dots: [{ batId: 0, ticksLeft: 3 }],
+    };
+    const s = battleReduce(rigged, { type: "ct" }); // node 0 is still the (rigged, untouched) carrier
+    if (s.boss.kind !== "cascade") throw new Error("unreachable");
+    const node0 = s.boss.nodes.find((n) => n.id === 0)!;
+    expect(node0.hp).toBe(20); // 22 - floor(4/2)
+    expect(s.events.some((e) => e.type === "dot" && e.batId === 0 && e.amount === 2)).toBe(true);
+  });
+
+  it("a DoT tick that kills a node fires batDown and drops it from s.dots", () => {
+    const s0 = initBattle({ seed: 42, boss: "cascade" });
+    if (s0.boss.kind !== "cascade") throw new Error("unreachable");
+    // rig node 1 (never the carrier at node 0) down to 3 HP with a live DoT
+    const rigged: BattleState = {
+      ...s0,
+      boss: { ...s0.boss, nodes: s0.boss.nodes.map((n) => (n.id === 1 ? { ...n, hp: 3 } : n)) },
+      dots: [{ batId: 1, ticksLeft: 1 }],
+    };
+    const s = battleReduce(rigged, { type: "ct" }); // DoT ticks 4 >= 3, node 1 dies
+    if (s.boss.kind !== "cascade") throw new Error("unreachable");
+    const node1 = s.boss.nodes.find((n) => n.id === 1)!;
+    expect(node1.alive).toBe(false);
+    expect(node1.hp).toBe(0);
+    expect(s.events.some((e) => e.type === "batDown" && e.batId === 1)).toBe(true);
+    expect(s.dots).toEqual([]); // exhausted AND the dead node drops it
+  });
+
+  it("a cascade boss turn that empties hero HP defeats: status, event, HP floored at 0", () => {
+    const s0 = initBattle({ seed: 42, boss: "cascade" });
+    const rigged: BattleState = { ...s0, hero: { ...s0.hero, hp: 5 } }; // any jolt/storm exceeds 5
+    const s = battleReduce(rigged, { type: "ct" }); // jolt 9 -> taken 7 under CT, still > 5
+    expect(s.status).toBe("defeat");
+    expect(s.hero.hp).toBe(0);
+    expect(s.events.some((e) => e.type === "defeat")).toBe(true);
+  });
+
+  describe("the engine-generated win line (regenerated from an actual battleReduce run, plan §Boss 2 signed table)", () => {
+    // CT@1, FO@2, FO@3, FO@4, Attack(carrier)@5 — booted at the rematch-style
+    // 110/12 start (defeatedBosses: ["alert-storm"]) per the plan's own note
+    // that the derivation assumed Fan Out already in kit.
+    function winLine() {
+      let s = initBattle({ seed: 42, boss: "cascade", defeatedBosses: ["alert-storm"] });
+      s = battleReduce(s, { type: "ct" }); // t1
+      s = battleReduce(s, { type: "fo" }); // t2
+      s = battleReduce(s, { type: "fo" }); // t3
+      s = battleReduce(s, { type: "fo" }); // t4
+      return s;
+    }
+    function nodes(s: BattleState) {
+      if (s.boss.kind !== "cascade") throw new Error("unreachable");
+      return s.boss.nodes;
+    }
+    function carrier(s: BattleState) {
+      if (s.boss.kind !== "cascade") throw new Error("unreachable");
+      return s.boss.carrier;
+    }
+
+    it("starts the rematch at 110/12 with Fan Out in kit", () => {
+      const s0 = initBattle({ seed: 42, boss: "cascade", defeatedBosses: ["alert-storm"] });
+      expect(s0.hero).toEqual({ hp: 110, maxHp: 110, mp: 12, maxMp: 12 });
+      expect(deriveKit(s0.defeatedBosses)).toContain("fo");
+    });
+
+    it("T1 CT: jolt 9 taken-down to 7 (CT active), pulse lands on node 3, hero 103", () => {
+      let s = initBattle({ seed: 42, boss: "cascade", defeatedBosses: ["alert-storm"] });
+      s = battleReduce(s, { type: "ct" });
+      expect(s.events.some((e) => e.type === "heroDamage" && e.amount === 7)).toBe(true);
+      expect(s.hero.hp).toBe(103);
+      expect(carrier(s)).toBe(3);
+      expect(nodes(s).every((n) => n.hp === 25)).toBe(true); // no node damage yet
+    });
+
+    it("T2 first FO (still CT'd): 12 to every node (6 to the carrier), then the pulse WRAPS — a storm (19, CT'd) instead of a jolt, resets to head", () => {
+      let s = initBattle({ seed: 42, boss: "cascade", defeatedBosses: ["alert-storm"] });
+      s = battleReduce(s, { type: "ct" });
+      s = battleReduce(s, { type: "fo" });
+      expect(nodes(s).map((n) => n.hp)).toEqual([13, 13, 13, 19, 13, 13]); // node 3 was carrier: 25-6
+      expect(s.events.some((e) => e.type === "heroDamage" && e.amount === 19)).toBe(true);
+      expect(s.hero.hp).toBe(84);
+      expect(carrier(s)).toBe(0); // storm resets the pulse to head
+    });
+
+    it("T3 second FO (last buffed turn): 12 to every node (6 to carrier 0), jolt 9 taken-down to 7, pulse lands on node 3", () => {
+      let s = initBattle({ seed: 42, boss: "cascade", defeatedBosses: ["alert-storm"] });
+      s = battleReduce(s, { type: "ct" });
+      s = battleReduce(s, { type: "fo" });
+      s = battleReduce(s, { type: "fo" });
+      expect(nodes(s).map((n) => n.hp)).toEqual([7, 1, 1, 7, 1, 1]);
+      expect(s.events.some((e) => e.type === "heroDamage" && e.amount === 7)).toBe(true);
+      expect(s.hero.hp).toBe(77);
+      expect(carrier(s)).toBe(3);
+    });
+
+    it("T4 third FO (CT expired, uncT'd 8): five nodes die, only the carrier survives at 3 HP (4 dmg after the shield); the lone-node ring wraps every turn — storm 25 (no CT), hero to 52", () => {
+      const s = winLine();
+      const living = nodes(s).filter((n) => n.alive);
+      expect(living).toHaveLength(1);
+      expect(living[0].id).toBe(3);
+      expect(living[0].hp).toBe(3);
+      expect(s.events.some((e) => e.type === "heroDamage" && e.amount === 25)).toBe(true);
+      expect(s.hero.hp).toBe(52);
+      expect(s.status).toBe("active");
+    });
+
+    it("T5 Attack on the carrier finishes the fight: victory, forge=rollback, unlock=cascade, rider applied on top of the 52 HP the fight arrived at", () => {
+      let s = winLine();
+      s = battleReduce(s, { type: "attack", target: carrier(s) });
+      expect(s.status).toBe("victory");
+      expect(s.turn).toBe(5);
+      expect(nodes(s).every((n) => !n.alive)).toBe(true);
+      expect(s.events.some((e) => e.type === "victory")).toBe(true);
+      expect(s.events.some((e) => e.type === "forge" && e.ability === "rollback")).toBe(true);
+      expect(s.events.some((e) => e.type === "rider" && e.maxHp === 10 && e.maxMp === 2)).toBe(true);
+      expect(s.events.some((e) => e.type === "unlock" && e.id === "cascade")).toBe(true);
+      expect(s.defeatedBosses).toEqual(["alert-storm", "cascade"]);
+      // 110 -> 52 HP over the fight (the signed table's trajectory), +10 rider on this first cascade win
+      expect(s.hero.hp).toBe(62);
+      expect(s.hero.maxHp).toBe(120);
+    });
+  });
+
+  it("rematch victory (cascade already defeated) grants no forge/rider/unlock event", () => {
+    // Rigged, same style as the existing "a DoT tick that kills the real bat
+    // also wins" test: only node 0 survives, at 1 HP, so a single attack ends
+    // it immediately (victory short-circuits before any boss turn, so hero
+    // HP/MP starting values don't matter here).
+    const s0 = initBattle({ seed: 1, boss: "cascade", defeatedBosses: ["alert-storm", "cascade"] });
+    if (s0.boss.kind !== "cascade") throw new Error("unreachable");
+    const rigged: BattleState = {
+      ...s0,
+      boss: {
+        ...s0.boss,
+        nodes: s0.boss.nodes.map((n) => (n.id === 0 ? { ...n, hp: 1 } : { ...n, hp: 0, alive: false })),
+      },
+    };
+    const s = battleReduce(rigged, { type: "attack", target: 0 });
+    expect(s.status).toBe("victory");
+    expect(s.events.some((e) => e.type === "forge")).toBe(false);
+    expect(s.events.some((e) => e.type === "rider")).toBe(false);
+    expect(s.events.some((e) => e.type === "unlock")).toBe(false);
+    expect(s.hero.maxHp).toBe(s0.hero.maxHp); // no second bump
   });
 });

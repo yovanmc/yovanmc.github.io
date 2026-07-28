@@ -5,8 +5,10 @@ import {
   initBattle,
   isScreamTurn,
   type AbilityId,
+  type Bat,
   type BattleAction,
   type BattleState,
+  type BossState,
 } from "./engine";
 import { commandsForKit } from "./abilities";
 import { sceneFor } from "./scenes";
@@ -19,6 +21,21 @@ import {
 import type { Grid } from "../generated/heroBattle";
 import { SWARM } from "../generated/bossAlertStorm";
 import { SR, SC, BOSS_AT, HERO_AT } from "../generated/battlefieldScene";
+
+/**
+ * M6 PR-1b: `BattleState.boss` is a discriminated union as of the engine's
+ * multi-boss dispatch (Cascade joined Alert Storm). This component's
+ * targeting cursor, plate reveal, and swarm-position math below are still
+ * Alert-Storm-specific — generalizing them to any boss is out of PR-1b's
+ * scope (the Cascade scene module lands behind `scenes/cascade.ts`;
+ * BattleScene's own shell/targeting UI is a later task). Today App.tsx never
+ * requests a non-alert-storm boss, so this narrows for the type checker
+ * without changing any runtime behavior — the same accessor-path carve as
+ * bosses/alertStorm.ts's own `bats()` helper.
+ */
+function alertBats(boss: BossState): Bat[] {
+  return boss.kind === "alert-storm" ? boss.bats : [];
+}
 
 const MONO = "'JetBrains Mono',monospace";
 const SERIF = "'Marcellus',serif";
@@ -183,7 +200,7 @@ export default function BattleScene(props: Props) {
     const g = scene.arena[flutter].map((row) => row.slice());
     const screaming = isScreamTurn(shown) && shown.status === "active";
     if (!descend && shown.status !== "victory") {
-      const bossGrid = scene.composeBoss(shown.boss.bats, screaming, flutter, swarmFx);
+      const bossGrid = scene.composeBoss(alertBats(shown.boss), screaming, flutter, swarmFx);
       stampGrid(g, bossGrid, BOSS_AT[0], BOSS_AT[1]);
     }
     const heroGrid =
@@ -214,7 +231,7 @@ export default function BattleScene(props: Props) {
   }, []);
 
   const batCell = useCallback((s: BattleState, batId: number): [number, number] => {
-    const bat = s.boss.bats.find((b) => b.id === batId)!;
+    const bat = alertBats(s.boss).find((b) => b.id === batId)!;
     const [r, c] = SWARM[bat.pos];
     return [BOSS_AT[0] + r, BOSS_AT[1] + c + 7];
   }, []);
@@ -326,7 +343,7 @@ export default function BattleScene(props: Props) {
   );
 
   const livingByColumn = useCallback((s: BattleState) => {
-    return s.boss.bats
+    return alertBats(s.boss)
       .filter((b) => b.alive)
       .sort((a, b) => SWARM[a.pos][1] - SWARM[b.pos][1]);
   }, []);
@@ -435,10 +452,10 @@ export default function BattleScene(props: Props) {
   }, [commit, cycleTarget, onForfeit, onVictory, props, retry, startTarget]);
 
   // ---- derived UI values ----
-  const real = state.boss.bats.find((b) => b.real)!;
+  const real = alertBats(state.boss).find((b) => b.real)!;
   const revealBoss = real.marked || !real.alive;
-  const livingCount = state.boss.bats.filter((b) => b.alive).length;
-  const cursor = cursorBat !== null ? state.boss.bats.find((b) => b.id === cursorBat) : null;
+  const livingCount = alertBats(state.boss).filter((b) => b.alive).length;
+  const cursor = cursorBat !== null ? alertBats(state.boss).find((b) => b.id === cursorBat) : null;
   const cursorRead = cursor
     ? cursor.marked || !cursor.alive
       ? `${cursor.hp}/${cursor.maxHp}`

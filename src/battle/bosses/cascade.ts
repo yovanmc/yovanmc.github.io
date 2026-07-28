@@ -19,6 +19,11 @@
 // `resolveCascadeBossTurn`.
 import { dealtDamage, FAN_OUT_DMG, takenDamage } from "../engine";
 
+/** Canonical definition lives in ../rushOrder (same pattern as alertStorm.ts's
+ * ALERT_STORM_ID re-export — bootParams.ts needs it without pulling the
+ * engine.ts<->cascade.ts cycle into the eagerly loaded landing bundle). */
+export { CASCADE_ID } from "../rushOrder";
+
 export interface CascadeNode {
   id: number;
   hp: number;
