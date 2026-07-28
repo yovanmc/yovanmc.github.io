@@ -11,6 +11,7 @@ import {
 import { PAL } from "../generated/diveTimeline";
 import {
   IDLE, ATK, ATK_MS, BUFF, BUFF_MS, CAST, CAST_MS, PWR, PWR_MS,
+  FAN, FAN_MS,
   HIT, HIT_MS, KO, KO_MS,
 } from "../generated/heroBattle";
 import type { Grid } from "../generated/heroBattle";
@@ -288,6 +289,7 @@ export default function BattleScene(props: Props) {
         ct: { frames: BUFF, ms: BUFF_MS },
         pt: { frames: PWR, ms: PWR_MS },
         debug: { frames: CAST, ms: CAST_MS },
+        fo: { frames: FAN, ms: FAN_MS },
       };
       setHeroFrame(0);
       setHeroReel(reel[action.type]);

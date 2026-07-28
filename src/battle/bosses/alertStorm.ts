@@ -75,7 +75,11 @@ export function reshuffle(s: BattleState, reason: "fakeHit" | "screamEnd"): void
   s.events.push({ type: "reshuffle", reason });
 }
 
-export function damageBat(s: BattleState, batId: number, amount: number): void {
+/** Applies damage + damage/batDown events only — no reshuffle. Shared by the
+ * single-target `damageBat` (which reshuffles per its own fake-hit rule) and
+ * `fanOutHit` (which resolves every hit first, then fires at most one
+ * reshuffle for the whole volley of hits — M6 plan §Cross-boss architecture). */
+function applyDamage(s: BattleState, batId: number, amount: number): void {
   const bat = s.boss.bats.find((b) => b.id === batId)!;
   bat.hp = Math.max(0, bat.hp - amount);
   s.events.push({ type: "damage", batId, amount });
@@ -83,7 +87,28 @@ export function damageBat(s: BattleState, batId: number, amount: number): void {
     bat.alive = false;
     s.events.push({ type: "batDown", batId });
   }
+}
+
+export function damageBat(s: BattleState, batId: number, amount: number): void {
+  applyDamage(s, batId, amount);
+  const bat = s.boss.bats.find((b) => b.id === batId)!;
   if (!bat.real) reshuffle(s, "fakeHit");
+}
+
+/** Fan Out's AoE hit resolution: every LIVING bat takes `amount`, resolved
+ * before any reshuffle fires. Nine chained fake-hit reshuffles (one per fake
+ * in the swarm) would be noise and burn nine rng draws for nothing, so this
+ * fires at most ONE reshuffle afterward — iff at least one hit landed on a
+ * fake (dead or alive after the hit; matches `damageBat`'s own rule, which
+ * doesn't distinguish either). */
+export function fanOutHit(s: BattleState, amount: number): void {
+  const targets = s.boss.bats.filter((b) => b.alive);
+  let hitFake = false;
+  for (const bat of targets) {
+    applyDamage(s, bat.id, amount);
+    if (!bat.real) hitFake = true;
+  }
+  if (hitFake) reshuffle(s, "fakeHit");
 }
 
 /** Volley damage before CT/rounding (both stay core — applied by the caller). */

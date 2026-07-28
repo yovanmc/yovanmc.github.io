@@ -11,6 +11,7 @@ import type { AlertStormBoss, Bat } from "./bosses/alertStorm";
 import {
   ALERT_STORM_ID,
   damageBat,
+  fanOutHit,
   isBossDefeated,
   isScreamTurn,
   rawVolley,
@@ -63,13 +64,14 @@ export type BattleEvent =
   | { type: "firstCast"; ability: AbilityId }
   | { type: "invalid"; reason: string };
 
-export type AbilityId = "attack" | "ct" | "pt" | "debug";
+export type AbilityId = "attack" | "ct" | "pt" | "debug" | "fo";
 
 export type BattleAction =
   | { type: "attack"; target: number }
   | { type: "ct" }
   | { type: "pt"; target: number }
-  | { type: "debug"; target: number };
+  | { type: "debug"; target: number }
+  | { type: "fo" };
 
 export interface BattleState {
   seed: number;
@@ -157,10 +159,11 @@ export function initBattle(opts: InitOptions): BattleState {
 const ATTACK_DMG = 12;
 const PT_DMG = 28;
 const DEBUG_DMG = 6;
+const FAN_OUT_DMG = 8; // Cascade-signed resolution (dissect F1) — addendum "~10"
 const DOT_TICK = 4;
 const DOT_TICKS = 3;
 const CT_DURATION = 3;
-const MP_COST: Record<AbilityId, number> = { attack: 0, ct: 2, pt: 3, debug: 2 };
+const MP_COST: Record<AbilityId, number> = { attack: 0, ct: 2, pt: 3, debug: 2, fo: 3 };
 const RIDER_HP = 10;
 const RIDER_MP = 2;
 const CT_DEALT_MULT = 1.5;
@@ -204,10 +207,12 @@ export function takenDamage(base: number, ct: boolean, conviction: boolean): num
 // ---- Kit derivation (M6 §Cross-boss architecture) --------------------------
 const BASE_KIT: readonly AbilityId[] = ["attack", "ct", "pt", "debug"];
 
-/** Boss-defeat → ability unlock map, gated to shipped modules. Empty this PR
- * (Fan Out's `"fo"` entry lands in PR-1a task 4 once `AbilityId` grows); later
- * PRs extend this map, never `deriveKit`'s body. */
-const KIT_UNLOCKS: Partial<Record<string, AbilityId>> = {};
+/** Boss-defeat → ability unlock map, gated to shipped modules. Later PRs
+ * extend this map (Rollback on cascade, Root Cause on silent-failure), never
+ * `deriveKit`'s body. */
+const KIT_UNLOCKS: Partial<Record<string, AbilityId>> = {
+  [ALERT_STORM_ID]: "fo",
+};
 
 /** Rush-order cumulative unlocks, intersected with `IMPLEMENTED_BOSSES` (a
  * boss beaten ahead of its own PR must never grant a kit entry with no
@@ -277,6 +282,13 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
       bat.marked = true; // permanent — this is the memory tool
       s.events.push({ type: "mark", batId: action.target });
       s.dots.push({ batId: action.target, ticksLeft: DOT_TICKS });
+      break;
+    }
+    case "fo": {
+      // AoE — hits every living target; resolves all hits, then at most one
+      // reshuffle (fanOutHit owns that rule). Uses the Conviction-aware
+      // helper directly since Fan Out ships after the multiplier core.
+      fanOutHit(s, dealtDamage(FAN_OUT_DMG, s.ctTurns > 0, s.conviction));
       break;
     }
   }

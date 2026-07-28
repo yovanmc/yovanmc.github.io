@@ -410,9 +410,9 @@ describe("RUSH_ORDER / IMPLEMENTED_BOSSES (pinned constants)", () => {
 });
 
 describe("kit derivation", () => {
-  it("the base four abilities are always in kit, fresh or rematch (no unlocks land until task 4's Fan Out)", () => {
+  it("the base four abilities are always in kit, fresh or rematch; Fan Out joins only once alert-storm is defeated", () => {
     expect(deriveKit([])).toEqual(["attack", "ct", "pt", "debug"]);
-    expect(deriveKit(["alert-storm"])).toEqual(["attack", "ct", "pt", "debug"]);
+    expect(deriveKit(["alert-storm"])).toEqual(["attack", "ct", "pt", "debug", "fo"]);
   });
 
   it("ignores a defeated boss outside IMPLEMENTED_BOSSES (pass-2 G1 guard) — no crash, no phantom kit growth", () => {
@@ -456,6 +456,68 @@ describe("Multiplier core (M6 §Multipliers — Conviction not castable in PR-1a
     const s = { ...initBattle({ seed: 1 }), ctTurns: 3, conviction: true };
     expect(dealtDamage(28, s.ctTurns > 0, s.conviction)).toBe(112);
     expect(takenDamage(14, s.ctTurns > 0, s.conviction)).toBe(7);
+  });
+});
+
+describe("Fan Out (M6 — base 8, hits all living targets, single reshuffle)", () => {
+  it("is out-of-kit and rejected as invalid in a fresh fight (Fan Out unlocks only once alert-storm is beaten)", () => {
+    const s0 = initBattle({ seed: 42 });
+    const s1 = battleReduce(s0, { type: "fo" });
+    expect(s1.events).toEqual([{ type: "invalid", reason: "not in kit" }]);
+    expect(s1.turn).toBe(1);
+    expect(s1.hero).toEqual(s0.hero);
+  });
+
+  it("is castable in the Alert Storm rematch (kit-derived): costs 3 MP and deals 8 to every living bat, one hit per target", () => {
+    const s0 = initBattle({ seed: 42, defeatedBosses: ["alert-storm"] });
+    const realId = s0.boss.bats.find((b) => b.real)!.id;
+    const s1 = battleReduce(s0, { type: "fo" });
+    expect(s1.events.some((e) => e.type === "invalid")).toBe(false);
+    expect(s1.hero.mp).toBe(10); // 12 − 3 + 1 regen
+    expect(s1.boss.bats.find((b) => b.id === realId)!.hp).toBe(52); // 60 − 8
+    for (const fake of s0.boss.bats.filter((b) => !b.real)) {
+      expect(s1.boss.bats.find((b) => b.id === fake.id)!.alive).toBe(false); // 8 HP fakes die to 8 dmg
+    }
+    expect(s1.events.filter((e) => e.type === "damage")).toHaveLength(10); // all 10 bats hit
+  });
+
+  it("resolves ALL hits before firing AT MOST ONE reshuffle — never nine chained fake-hit reshuffles", () => {
+    const s0 = initBattle({ seed: 42, defeatedBosses: ["alert-storm"] });
+    const s1 = battleReduce(s0, { type: "fo" });
+    expect(s1.events.filter((e) => e.type === "reshuffle")).toHaveLength(1);
+  });
+
+  it("deals 12 under Critical Thinking (8 × 1.5, round half up) to the real bat", () => {
+    let s = initBattle({ seed: 42, defeatedBosses: ["alert-storm"] });
+    const realId = s.boss.bats.find((b) => b.real)!.id;
+    s = battleReduce(s, { type: "ct" }); // turn 1
+    const before = s.boss.bats.find((b) => b.id === realId)!.hp;
+    s = battleReduce(s, { type: "fo" }); // turn 2, CT still active
+    expect(before - s.boss.bats.find((b) => b.id === realId)!.hp).toBe(12);
+  });
+
+  it("emits a firstCast event the first time it is cast", () => {
+    const s0 = initBattle({ seed: 42, defeatedBosses: ["alert-storm"] });
+    const s1 = battleReduce(s0, { type: "fo" });
+    expect(s1.events.some((e) => e.type === "firstCast" && e.ability === "fo")).toBe(true);
+  });
+
+  it("hitting only the real bat (all fakes already dead) fires no reshuffle", () => {
+    const s0 = initBattle({ seed: 42, defeatedBosses: ["alert-storm"] });
+    const rigged = {
+      ...s0,
+      boss: { ...s0.boss, bats: s0.boss.bats.map((b) => (b.real ? b : { ...b, hp: 0, alive: false })) },
+    };
+    const s1 = battleReduce(rigged, { type: "fo" });
+    expect(s1.events.some((e) => e.type === "reshuffle")).toBe(false);
+  });
+
+  it("is invalid without 3 MP", () => {
+    const s0 = initBattle({ seed: 42, defeatedBosses: ["alert-storm"] });
+    const broke = { ...s0, hero: { ...s0.hero, mp: 2 } };
+    const s1 = battleReduce(broke, { type: "fo" });
+    expect(s1.events.some((e) => e.type === "invalid")).toBe(true);
+    expect(s1.turn).toBe(1);
   });
 });
 
