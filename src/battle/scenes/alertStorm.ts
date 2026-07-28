@@ -4,7 +4,7 @@
 // JSX copy literals; no rendering behavior changed, only relocated behind
 // the `BossSceneModule` interface (./types) so a future Cascade/Silent
 // Failure/Imposter module can sit alongside it (./index is the registry).
-import type { Bat, BattleState } from "../engine";
+import type { Bat, BattleState, BossState } from "../engine";
 import { isScreamTurn } from "../engine";
 import {
   SWARM, JIT, batFinal, batFinalPost, eOutline, eDitherAll, eOverlay,
@@ -37,8 +37,15 @@ export function plotMarkChevron(out: Grid, mr: number, mc: number): void {
  * marks, then dither (if any), then the scream ripple overlay (if any) —
  * moving the ripple application inside this function only changes WHERE the
  * step runs, not its order relative to dither.
+ *
+ * Takes the whole `BossState` (M6 PR-1b widened `BossSceneModule.composeBoss`
+ * so Cascade's module can implement the same interface) and narrows to
+ * `.bats` itself — this module is never invoked with a non-alert-storm
+ * `boss` (BattleScene.tsx selects the scene module by `boss.kind`), so the
+ * empty-array fallback is defensive only, never exercised in practice.
  */
-function composeBoss(bats: Bat[], screaming: boolean, flutter: number, fx: SceneFx): Grid {
+function composeBoss(boss: BossState, screaming: boolean, flutter: number, fx: SceneFx): Grid {
+  const bats: Bat[] = boss.kind === ALERT_STORM_ID ? boss.bats : [];
   const g = newG();
   const living = bats.filter((b) => b.alive);
   const mouthOf = (b: Bat) => (screaming ? (b.real ? "red" : "hollow") : "stitched");

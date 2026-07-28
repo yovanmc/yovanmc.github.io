@@ -2,6 +2,7 @@
 // docs/superpowers/specs/2026-07-28-m6-bosses-2-4-plan.md
 import { describe, expect, it } from "vitest";
 import { alertStormScene } from "./alertStorm";
+import { cascadeScene } from "./cascade";
 import { SCENE_MODULES, sceneFor } from "./index";
 
 describe("scene-module registry", () => {
@@ -9,12 +10,17 @@ describe("scene-module registry", () => {
     expect(SCENE_MODULES["alert-storm"]).toBe(alertStormScene);
   });
 
+  it("registers Cascade under its own id (M6 PR-1b task 4)", () => {
+    expect(SCENE_MODULES["cascade"]).toBe(cascadeScene);
+  });
+
   it("sceneFor resolves a known boss id", () => {
     expect(sceneFor("alert-storm")).toBe(alertStormScene);
+    expect(sceneFor("cascade")).toBe(cascadeScene);
   });
 
   it("sceneFor falls back to Alert Storm for an unimplemented/unknown id (never a crash path)", () => {
-    expect(sceneFor("cascade")).toBe(alertStormScene);
+    expect(sceneFor("silent-failure")).toBe(alertStormScene);
     expect(sceneFor("nonsense")).toBe(alertStormScene);
   });
 });

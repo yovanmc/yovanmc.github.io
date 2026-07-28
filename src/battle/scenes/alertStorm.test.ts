@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { initBattle } from "../engine";
 import type { Bat } from "../engine";
+import type { AlertStormBoss } from "../bosses/alertStorm";
 import { newG, EROWS, ECOLS } from "../../generated/bossAlertStorm";
 import { alertStormScene, plotMarkChevron } from "./alertStorm";
 
@@ -11,9 +12,15 @@ function makeBat(overrides: Partial<Bat> = {}): Bat {
   return { id: 0, hp: 60, maxHp: 60, real: true, marked: false, alive: true, pos: 0, ...overrides };
 }
 
+/** `composeBoss` takes the whole `BossState` as of M6 PR-1b — wraps a bare
+ * bats array the same way `alertStormScene`'s own callers do. */
+function bossOf(bats: Bat[]): AlertStormBoss {
+  return { kind: "alert-storm", bats };
+}
+
 describe("alertStormScene.composeBoss", () => {
   it("returns an EROWS x ECOLS grid for an empty swarm", () => {
-    const g = alertStormScene.composeBoss([], false, 0, {});
+    const g = alertStormScene.composeBoss(bossOf([]), false, 0, {});
     expect(g.length).toBe(EROWS);
     expect(g[0].length).toBe(ECOLS);
   });
@@ -23,7 +30,7 @@ describe("alertStormScene.composeBoss", () => {
       makeBat({ id: 0, pos: 0, real: true, marked: false }),
       makeBat({ id: 1, pos: 1, real: false, marked: true }),
     ];
-    const g = alertStormScene.composeBoss(bats, true, 0, { jitter: true, fall: 0, dither: 0 });
+    const g = alertStormScene.composeBoss(bossOf(bats), true, 0, { jitter: true, fall: 0, dither: 0 });
     // pos 1 -> SWARM[1] = [4,30,1]; mark chevron at mr=4-2-2=0 (jr=JIT[1][0]=-2, dr=0), mc=30+1+6=37
     expect(g[0][37]).toBe("k");
     expect(g[1][38]).toBe("k");
@@ -32,17 +39,24 @@ describe("alertStormScene.composeBoss", () => {
 
   it("skips the mark chevron for an unmarked bat and stitches the mouth when not screaming", () => {
     const bats = [makeBat({ id: 0, pos: 0, real: true, marked: false })];
-    const withFallAndDither = alertStormScene.composeBoss(bats, false, 1, { jitter: false, fall: 5, dither: 2 });
-    const bare = alertStormScene.composeBoss(bats, false, 1, {});
+    const withFallAndDither = alertStormScene.composeBoss(bossOf(bats), false, 1, { jitter: false, fall: 5, dither: 2 });
+    const bare = alertStormScene.composeBoss(bossOf(bats), false, 1, {});
     expect(withFallAndDither.length).toBe(EROWS);
     // fall + dither changes the composed frame vs the bare call
     expect(JSON.stringify(withFallAndDither)).not.toBe(JSON.stringify(bare));
   });
 
   it("applies the scream ripple overlay on top of the composed frame", () => {
-    const withRipple = alertStormScene.composeBoss([], false, 0, { ripple: 1 });
-    const without = alertStormScene.composeBoss([], false, 0, {});
+    const withRipple = alertStormScene.composeBoss(bossOf([]), false, 0, { ripple: 1 });
+    const without = alertStormScene.composeBoss(bossOf([]), false, 0, {});
     expect(JSON.stringify(withRipple)).not.toBe(JSON.stringify(without));
+  });
+
+  it("falls back to an empty swarm if ever invoked with a non-alert-storm boss (defensive only — unreachable in practice)", () => {
+    const cascadeBoss = initBattle({ seed: 42, boss: "cascade" }).boss;
+    const g = alertStormScene.composeBoss(cascadeBoss, false, 0, {});
+    expect(g.length).toBe(EROWS);
+    expect(g.every((row) => row.every((c) => c === null || c === undefined))).toBe(true);
   });
 });
 

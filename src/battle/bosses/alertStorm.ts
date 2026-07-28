@@ -63,9 +63,18 @@ export function isScreamTurn(state: BattleState): boolean {
   return state.ctTurns > 0 && state.turn > 3 && state.turn % 3 === 1;
 }
 
+/** `BattleState.boss` is a discriminated union as of M6 PR-1b (Cascade joined
+ * Alert Storm). Every function below this point is Alert-Storm-specific and
+ * is only ever invoked by engine.ts's dispatch AFTER it has already branched
+ * on `boss.kind` — this narrows for the type checker without changing any
+ * runtime behavior (pure accessor, mirrors the PR-1a "accessor path" carve). */
+function bats(s: BattleState): Bat[] {
+  return (s.boss as AlertStormBoss).bats;
+}
+
 /** Seeded Fisher–Yates over LIVING bats' positions; identities travel. */
 export function reshuffle(s: BattleState, reason: "fakeHit" | "screamEnd"): void {
-  const living = s.boss.bats.filter((b) => b.alive);
+  const living = bats(s).filter((b) => b.alive);
   const positions = living.map((b) => b.pos);
   for (let i = positions.length - 1; i > 0; i--) {
     s.rngState = nextRng(s.rngState);
@@ -83,7 +92,7 @@ export function reshuffle(s: BattleState, reason: "fakeHit" | "screamEnd"): void
  * `fanOutHit` (which resolves every hit first, then fires at most one
  * reshuffle for the whole volley of hits — M6 plan §Cross-boss architecture). */
 function applyDamage(s: BattleState, batId: number, amount: number): void {
-  const bat = s.boss.bats.find((b) => b.id === batId)!;
+  const bat = bats(s).find((b) => b.id === batId)!;
   bat.hp = Math.max(0, bat.hp - amount);
   s.events.push({ type: "damage", batId, amount });
   if (bat.hp === 0) {
@@ -94,7 +103,7 @@ function applyDamage(s: BattleState, batId: number, amount: number): void {
 
 export function damageBat(s: BattleState, batId: number, amount: number): void {
   applyDamage(s, batId, amount);
-  const bat = s.boss.bats.find((b) => b.id === batId)!;
+  const bat = bats(s).find((b) => b.id === batId)!;
   if (!bat.real) reshuffle(s, "fakeHit");
 }
 
@@ -105,7 +114,7 @@ export function damageBat(s: BattleState, batId: number, amount: number): void {
  * fake (dead or alive after the hit; matches `damageBat`'s own rule, which
  * doesn't distinguish either). */
 export function fanOutHit(s: BattleState, amount: number): void {
-  const targets = s.boss.bats.filter((b) => b.alive);
+  const targets = bats(s).filter((b) => b.alive);
   let hitFake = false;
   for (const bat of targets) {
     applyDamage(s, bat.id, amount);

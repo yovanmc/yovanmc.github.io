@@ -154,11 +154,38 @@ The extractor also emits three battle modules, each a two-anchor verbatim slice:
   compose).
 
 **PAL ownership:** exactly one module exports `PAL` — `diveTimeline.js`; the
-hero/battlefield modules keep their verbatim local `const PAL` and re-export
-diveTimeline's. `verify:canon` asserts all four lab palettes stay
-value-identical (parsed + deep-equal, not text — quoting/layout differ).
+hero/battlefield/boss modules keep their verbatim local `const PAL` and
+re-export diveTimeline's (or, for the alert-storm/cascade boss modules, simply
+omit a `PAL` export — the renderer imports it from diveTimeline directly).
+`verify:canon` asserts every lab palette stays value-identical (parsed +
+deep-equal, not text — quoting/layout differ); this now covers five labs
+(dive-intro, hero, boss-alert-storm, battlefield, boss-cascade).
 
 **Frozen embed:** the boss labs' embedded hero copy (their first half) is an
 older scale-reference frozen at pre-Power-Through state. It is never extracted
 and carries NO drift guard on purpose — hero canon lives in `hero-battle.html`
 alone.
+
+**Free-identifier gate (standing M5 trap, now a named per-slice step):**
+before trusting any new slice, grep it for identifiers not defined within the
+slice itself — every hit must be a documented import (the Imposter slice's
+hero-symbol prepend is the one case that needs one) or the slice's anchors
+need to move. An empty result is also verified empirically: evaluating the
+generated module standalone in Node must not throw (a genuine free identifier
+referenced at module-eval time, e.g. inside an eagerly-computed reel constant,
+throws `ReferenceError` immediately). Recorded per-slice in the PR/commit
+description that lands the extraction.
+
+### M6 boss extractions (added 2026-07-28; plan `docs/superpowers/specs/2026-07-28-m6-bosses-2-4-plan.md`)
+
+- `src/generated/bossCascade.js` from `boss-cascade.html` (`const EROWS` →
+  before `function drawGrid`): per-node primitives (`cascadeFinal`/
+  `cascadeDark`/`cascadeOverload`/`cascadeJolt` + effect helpers + `NODES`)
+  are the renderer API — `cascadeFinal(f)` alone can't express an arbitrary
+  dead-node set, so `composeCascade` (PR-1b task 4) builds each frame
+  per-node from these primitives against engine state. The lab's own
+  `draftA`/`draftB`/`draftC` domino/wyrm reels ride along inertly, same
+  precedent as the alert-storm boss slice's `OPT_A/B/C`. Free-identifier
+  gate: empty — the slice references only its own `EROWS`/`ECOLS`/`NODES`/
+  `PATH` and local params, confirmed by a standalone Node eval of the
+  generated module (30 exports, no `ReferenceError`).

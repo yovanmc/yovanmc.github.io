@@ -2,6 +2,8 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSPrope
 import { CATS } from "./content";
 import type { BattleAction, BattleState } from "./battle/engine";
 import { parseActions, parseBoss, parseDefeatedBosses } from "./battle/bootParams";
+import { deriveFightChoice, type FightRow } from "./battle/fight";
+import { BOSS_NAMES } from "./battle/rushOrder";
 import { Station } from "./components/Station";
 import { Atmosphere } from "./components/Atmosphere";
 import { CaseStudyPage, type PageRef } from "./components/CaseStudyPage";
@@ -28,7 +30,7 @@ const MOBILE_BREAKPOINT = 760;
  */
 type Phase = "intro" | "gate" | "play" | "browse" | "battle";
 
-type Col = "root" | "sub";
+type Col = "root" | "sub" | "fight";
 
 /** The battle chunk stays out of the landing bundle (spec: battle code lazy-loaded). */
 const BattleScene = lazy(() => import("./battle/BattleScene"));
@@ -179,6 +181,11 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
   const [h, setH] = useState(typeof window !== "undefined" ? window.innerHeight : 800);
+  // FIGHT submenu (M6 plan §App wiring, PR-1b task 5): open only when
+  // deriveFightChoice(defeatedBosses) returns more than one option — a fresh
+  // visitor (Alert Storm only) never sees this, `enterFight` direct-launches.
+  const [fightChooserOpen, setFightChooserOpen] = useState(false);
+  const [fightChooserIdx, setFightChooserIdx] = useState(0);
 
   const snd = useBlips();
   const toastTimer = useRef<number | undefined>(undefined);
@@ -187,9 +194,12 @@ export default function App() {
 
   const booted = phase === "play";
 
+  const fightChoice = deriveFightChoice(defeatedBosses);
+  const fightRows: FightRow[] = fightChoice.mode === "chooser" ? fightChoice.rows : [];
+
   // live mirror of state so the keydown listener always reads current values
-  const stateRef = useRef({ phase, col, rootIdx, subIdx, page, hasDived });
-  stateRef.current = { phase, col, rootIdx, subIdx, page, hasDived };
+  const stateRef = useRef({ phase, col, rootIdx, subIdx, page, hasDived, fightChooserOpen, fightChooserIdx, fightRows });
+  stateRef.current = { phase, col, rootIdx, subIdx, page, hasDived, fightChooserOpen, fightChooserIdx, fightRows };
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -230,6 +240,42 @@ export default function App() {
       window.history.replaceState({ phase: stored }, "", path);
     }
   }, []);
+
+  // ---- battle wiring (M5 PR-B: opt-in via FIGHT; the dive reroute is PR-C).
+  // Declared here (ahead of the keyboard useEffect below, which references
+  // `enterFight`/`launchFight` from inside its `onKey` closure) rather than
+  // down by `onBattleVictory` — closures may reference a `const` declared
+  // later in the same function body as long as the reference only resolves
+  // when the closure actually RUNS (deferred to a later keydown event), but
+  // the effect's own dependency array is evaluated synchronously at this
+  // point in the render, so anything the keyboard arm depends on must already
+  // be initialized here (TDZ). ----
+  /** Boots the chosen boss straight into battle (M6 plan §App wiring, PR-1b
+   * task 5 — `battleBoot.boss` flows into `initBattle` via BattleScene's
+   * `boss` prop). Fresh seed every fight, same as before task 5. */
+  const launchFight = useCallback(
+    (bossId: string) => {
+      setBattleBoot({ seed: (Math.random() * 2147483646) | 0 || 1, attempt: 1, boss: bossId });
+      goPhase("battle");
+      snd.enter();
+    },
+    [goPhase, snd],
+  );
+
+  /** FIGHT row entry: direct-launches when `deriveFightChoice` has only one
+   * option (fresh visitor = Alert Storm direct); opens the chooser panel
+   * otherwise (next undefeated IMPLEMENTED boss on top, defeated bosses below
+   * as REMATCH rows). */
+  const enterFight = useCallback(() => {
+    snd.resume();
+    if (fightChoice.mode === "direct") {
+      launchFight(fightChoice.boss);
+    } else {
+      setFightChooserIdx(0);
+      setFightChooserOpen(true);
+      snd.enter();
+    }
+  }, [snd, fightChoice, launchFight]);
 
   const enterPlay = useCallback(() => {
     snd.resume();
@@ -287,12 +333,15 @@ export default function App() {
   const back = useCallback(() => {
     snd.resume();
     const s = stateRef.current;
-    if (s.page) {
+    if (s.fightChooserOpen) {
+      setFightChooserOpen(false);
+      snd.back();
+    } else if (s.page) {
       closePage();
     } else if (s.phase === "browse") {
       goPhase("gate");
       snd.back();
-    } else if (s.col === "sub") {
+    } else if (s.col === "sub" || s.col === "fight") {
       setCol("root");
       snd.back();
     } else if (s.phase === "play") {
@@ -350,6 +399,27 @@ export default function App() {
       const handled = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", "Escape", "Backspace", " "];
       if (handled.includes(k)) e.preventDefault();
       snd.resume();
+
+      // FIGHT chooser owns input fully while open (M6 plan §App wiring,
+      // PR-1b task 5): arrows cycle rows, Enter launches the highlighted
+      // boss, Esc/Backspace closes back to the FIGHT row.
+      if (s.fightChooserOpen) {
+        if (k === "ArrowUp" || k === "ArrowDown") {
+          const dir = k === "ArrowUp" ? -1 : 1;
+          const n = s.fightRows.length;
+          if (n > 0) setFightChooserIdx((i) => (i + dir + n) % n);
+          snd.move();
+        } else if (k === "ArrowRight" || k === "Enter" || k === " ") {
+          const row = s.fightRows[s.fightChooserIdx];
+          if (row) {
+            setFightChooserOpen(false);
+            launchFight(row.boss);
+          }
+        } else if (k === "ArrowLeft" || k === "Escape" || k === "Backspace") {
+          back();
+        }
+        return;
+      }
       if (s.page) {
         if (k === "Escape" || k === "ArrowLeft" || k === "Backspace") back();
         return;
@@ -361,15 +431,27 @@ export default function App() {
       const c = CATS[s.rootIdx];
       if (k === "ArrowUp" || k === "ArrowDown") {
         const dir = k === "ArrowUp" ? -1 : 1;
-        if (s.col === "root") {
-          const n = CATS.length;
-          setRoot((s.rootIdx + dir + n) % n);
-        } else {
+        if (s.col === "sub") {
           const n = c.items.length;
           setSub((s.subIdx + dir + n) % n);
+        } else if (s.col === "fight") {
+          // ahead-of-the-CATS-wrap (M5 plan G6 / M6 §App wiring): FIGHT sits
+          // as one extra row past either end of the root list, so a further
+          // press in the same direction continues on into CATS's own wrap.
+          setRoot(dir === 1 ? 0 : CATS.length - 1);
+        } else {
+          const atTop = s.rootIdx === 0;
+          const atBottom = s.rootIdx === CATS.length - 1;
+          if ((dir === -1 && atTop) || (dir === 1 && atBottom)) {
+            setCol("fight");
+            snd.move();
+          } else {
+            setRoot(s.rootIdx + dir);
+          }
         }
       } else if (k === "ArrowRight" || k === "Enter" || k === " ") {
-        if (s.col === "root") enter();
+        if (s.col === "fight") enterFight();
+        else if (s.col === "root") enter();
         else activate();
       } else if (k === "ArrowLeft" || k === "Escape" || k === "Backspace") {
         back();
@@ -385,7 +467,7 @@ export default function App() {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onResize);
     };
-  }, [snd, back, enter, activate, setRoot, setSub]);
+  }, [snd, back, enter, activate, setRoot, setSub, enterFight, launchFight]);
 
   // browser Back/Forward — the plan's popstate table; "/" NEVER resolves to intro here
   useEffect(() => {
@@ -427,14 +509,6 @@ export default function App() {
     [goPhase],
   );
   const onIntroDone = useCallback(() => setIntroOn(false), []);
-
-  // ---- battle wiring (M5 PR-B: opt-in via FIGHT; the dive reroute is PR-C) ----
-  const enterFight = useCallback(() => {
-    snd.resume();
-    setBattleBoot({ seed: (Math.random() * 2147483646) | 0 || 1, attempt: 1 });
-    goPhase("battle");
-    snd.enter();
-  }, [snd, goPhase]);
 
   const onBattleVictory = useCallback(
     (final: BattleState) => {
@@ -521,6 +595,7 @@ export default function App() {
             key={battleBoot.seed}
             seed={battleBoot.seed}
             attempt={battleBoot.attempt}
+            boss={battleBoot.boss}
             replayActions={battleBoot.actions}
             defeatedBosses={defeatedBosses}
             onVictory={onBattleVictory}
@@ -746,10 +821,15 @@ export default function App() {
           </div>
         </div>
 
-        {/* FIGHT — play-phase-only row OUTSIDE the owner-locked CATS roster (M5 plan, G6) */}
+        {/* FIGHT — play-phase-only row OUTSIDE the owner-locked CATS roster
+            (M5 plan, G6). M6 PR-1b task 5: highlights when the keyboard arm
+            focuses it (col === "fight", reached ahead of the CATS wrap) and
+            its tag reflects the actual FIGHT choice — the boss name for a
+            direct launch, or CHOOSE once a chooser exists. */}
         <div
           role="button"
           onClick={enterFight}
+          onMouseEnter={() => setCol("fight")}
           style={{
             marginTop: "10px",
             width: "236px",
@@ -759,9 +839,15 @@ export default function App() {
             gap: "10px",
             cursor: "pointer",
             borderRadius: "13px",
-            background: "linear-gradient(160deg, rgba(70,20,30,.78), rgba(30,8,18,.74))",
-            border: "1px solid rgba(255,130,110,.36)",
-            boxShadow: "inset 0 0 0 1px rgba(255,255,255,.05), 0 12px 36px -14px rgba(0,0,0,.7), 0 0 26px rgba(255,70,50,.14)",
+            background:
+              col === "fight"
+                ? "linear-gradient(160deg, rgba(120,32,46,.86), rgba(50,12,26,.82))"
+                : "linear-gradient(160deg, rgba(70,20,30,.78), rgba(30,8,18,.74))",
+            border: col === "fight" ? "1px solid rgba(255,165,145,.55)" : "1px solid rgba(255,130,110,.36)",
+            boxShadow:
+              col === "fight"
+                ? "inset 0 0 0 1px rgba(255,255,255,.06), 0 12px 36px -14px rgba(0,0,0,.7), 0 0 30px rgba(255,90,60,.24)"
+                : "inset 0 0 0 1px rgba(255,255,255,.05), 0 12px 36px -14px rgba(0,0,0,.7), 0 0 26px rgba(255,70,50,.14)",
             fontFamily: "'Sora',sans-serif",
             fontSize: "14px",
             color: "#ffd9cf",
@@ -771,7 +857,7 @@ export default function App() {
           <span style={{ color: "#ff9d8a", textShadow: "0 0 8px #ff6a50" }}>⚔</span>
           <span style={{ flex: 1 }}>Fight</span>
           <span style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".18em", color: defeatedBosses.length ? "#e8c87a" : "#c98d80" }}>
-            {defeatedBosses.length ? "REMATCH" : "ALERT STORM"}
+            {fightChoice.mode === "direct" ? BOSS_NAMES[fightChoice.boss].toUpperCase() : "CHOOSE"}
           </span>
         </div>
 
@@ -855,6 +941,76 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* FIGHT chooser (M6 plan §App wiring, PR-1b task 5) — same glassy
+          panel idiom as the FIGHT row itself. Own top-level element (not
+          nested in the desktop-only command-system container above) so the
+          mobile FIGHT chip opens the identical panel; positioning branches
+          on isMobile instead. Tap targets are 44 CSS px tall (minHeight
+          below) per the mobile ergonomics rule. */}
+      {fightChooserOpen && booted && !page && (
+        <div
+          data-ui
+          style={{
+            position: "absolute",
+            left: isMobile ? "50%" : "248px",
+            bottom: isMobile ? "calc(150px + env(safe-area-inset-bottom, 0px))" : "38px",
+            transform: isMobile ? "translateX(-50%)" : "none",
+            zIndex: 20,
+            width: isMobile ? "min(88vw, 280px)" : "246px",
+          }}
+        >
+          <div
+            style={{
+              background: "linear-gradient(160deg, rgba(70,20,30,.92), rgba(28,8,18,.9))",
+              backdropFilter: "blur(11px)",
+              WebkitBackdropFilter: "blur(11px)",
+              border: "1px solid rgba(255,150,130,.42)",
+              borderRadius: "13px",
+              overflow: "hidden",
+              boxShadow: "inset 0 0 0 1px rgba(255,255,255,.05), 0 18px 48px -14px rgba(0,0,0,.75), 0 0 36px rgba(255,70,50,.18)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "13px 16px",
+                borderBottom: "1px solid rgba(255,130,110,.22)",
+                background: "linear-gradient(90deg, rgba(255,90,70,.16), transparent)",
+              }}
+            >
+              <span style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".3em", color: "#ff9d8a" }}>CHOOSE A FIGHT</span>
+            </div>
+            <div style={{ padding: "8px" }}>
+              {fightRows.map((row, i) => {
+                const active = i === fightChooserIdx;
+                return (
+                  <div
+                    key={row.boss}
+                    role="button"
+                    onClick={() => {
+                      setFightChooserOpen(false);
+                      launchFight(row.boss);
+                    }}
+                    onMouseEnter={() => setFightChooserIdx(i)}
+                    style={{ ...rowStyle(active), minHeight: "44px" }}
+                  >
+                    <span style={cursorStyle(active, "#ff9d8a")}>▸</span>
+                    <span style={{ flex: 1 }}>{row.label}</span>
+                    {row.isRematch && (
+                      <span style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".18em", color: "#e8c87a" }}>
+                        REMATCH
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* mobile category sheet (play phase) */}
       <div

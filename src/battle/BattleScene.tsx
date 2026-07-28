@@ -5,11 +5,15 @@ import {
   initBattle,
   isScreamTurn,
   type AbilityId,
+  type Bat,
   type BattleAction,
   type BattleState,
+  type BossState,
 } from "./engine";
 import { commandsForKit } from "./abilities";
 import { sceneFor } from "./scenes";
+import { CASCADE_ID, type CascadeNode } from "./bosses/cascade";
+import { nodeBox } from "./scenes/cascadeCompose";
 import { PAL } from "../generated/diveTimeline";
 import {
   IDLE, ATK, ATK_MS, BUFF, BUFF_MS, CAST, CAST_MS, PWR, PWR_MS,
@@ -19,6 +23,25 @@ import {
 import type { Grid } from "../generated/heroBattle";
 import { SWARM } from "../generated/bossAlertStorm";
 import { SR, SC, BOSS_AT, HERO_AT } from "../generated/battlefieldScene";
+
+/**
+ * M6 PR-1b task 2/4: `BattleState.boss` is a discriminated union (Cascade
+ * joined Alert Storm). This narrows to Alert Storm's own bat list for the
+ * type checker without changing runtime behavior when the current fight
+ * isn't Alert Storm — the same accessor-path carve as bosses/alertStorm.ts's
+ * own `bats()` helper. Cascade's equivalent (`cascadeNodes` below) sits
+ * alongside it; every targeting/float/plate helper below branches on
+ * `boss.kind` rather than assuming Alert Storm (M6 PR-1b task 5 — the Cascade
+ * fight is now reachable through the FIGHT chooser, so this shell must not
+ * crash against it).
+ */
+function alertBats(boss: BossState): Bat[] {
+  return boss.kind === "alert-storm" ? boss.bats : [];
+}
+
+function cascadeNodes(boss: BossState): CascadeNode[] {
+  return boss.kind === CASCADE_ID ? boss.nodes : [];
+}
 
 const MONO = "'JetBrains Mono',monospace";
 const SERIF = "'Marcellus',serif";
@@ -46,6 +69,10 @@ type UiMode = "menu" | "target" | "anim" | "pause" | "victory" | "defeat";
 interface Props {
   seed: number;
   attempt?: number;
+  /** `boss=` capture key / FIGHT selection, forwarded straight to
+   * `initBattle` (M6 PR-1b task 5 — `App.tsx`'s `battleBoot.boss` flows in
+   * here). Undefined falls back to Alert Storm, same as `initBattle` itself. */
+  boss?: string;
   /** dev capture key: actions replayed through the engine before first render */
   replayActions?: BattleAction[];
   defeatedBosses: string[];
@@ -82,10 +109,10 @@ interface Step {
 let floatSeq = 1;
 
 export default function BattleScene(props: Props) {
-  const { seed, attempt = 1, replayActions, defeatedBosses, onVictory, onForfeit, vw, vh, isMobile } = props;
+  const { seed, attempt = 1, boss, replayActions, defeatedBosses, onVictory, onForfeit, vw, vh, isMobile } = props;
 
   const [state, setState] = useState<BattleState>(() => {
-    let s = initBattle({ seed, attempt, defeatedBosses });
+    let s = initBattle({ seed, attempt, defeatedBosses, boss });
     for (const a of replayActions ?? []) s = battleReduce(s, a);
     return s;
   });
@@ -183,7 +210,7 @@ export default function BattleScene(props: Props) {
     const g = scene.arena[flutter].map((row) => row.slice());
     const screaming = isScreamTurn(shown) && shown.status === "active";
     if (!descend && shown.status !== "victory") {
-      const bossGrid = scene.composeBoss(shown.boss.bats, screaming, flutter, swarmFx);
+      const bossGrid = scene.composeBoss(shown.boss, screaming, flutter, swarmFx);
       stampGrid(g, bossGrid, BOSS_AT[0], BOSS_AT[1]);
     }
     const heroGrid =
@@ -213,10 +240,38 @@ export default function BattleScene(props: Props) {
     setFloats((fs) => [...fs, { id: floatSeq++, text, color, r, c, born: performance.now() }]);
   }, []);
 
-  const batCell = useCallback((s: BattleState, batId: number): [number, number] => {
-    const bat = s.boss.bats.find((b) => b.id === batId)!;
+  /** Float-position (damage/dot/mark numbers) and target-cursor anchor for a
+   * given target id. Cascade arm (M6 PR-1b task 5): NODES coordinates come
+   * from the generated bossCascade.js NODES export, same BOSS_AT anchor the
+   * swarm uses; `nodeBox` (scenes/cascadeCompose.ts) gives the node's actual
+   * on-stage footprint so the number lands centered above the node box
+   * regardless of which node it is (node 0's box is taller/wider — the "big"
+   * head node). Bob is irrelevant here (a float/cursor position, not a
+   * render pass), so this always reads the bob-0 box. */
+  const batCell = useCallback((s: BattleState, targetId: number): [number, number] => {
+    if (s.boss.kind === CASCADE_ID) {
+      const box = nodeBox(targetId, 0);
+      const midC = Math.floor((box.c + box.c2) / 2);
+      return [BOSS_AT[0] + box.rr, BOSS_AT[1] + midC];
+    }
+    const bat = alertBats(s.boss).find((b) => b.id === targetId)!;
     const [r, c] = SWARM[bat.pos];
     return [BOSS_AT[0] + r, BOSS_AT[1] + c + 7];
+  }, []);
+
+  /** Target-cursor arrow anchor — a separate offset from `batCell`'s float
+   * placement (the arrow sits closer above the sprite than the damage
+   * number). Alert Storm's formula is byte-identical to what shipped before
+   * task 5; the Cascade arm mirrors it against `nodeBox`. */
+  const cursorCell = useCallback((s: BattleState, targetId: number): [number, number] => {
+    if (s.boss.kind === CASCADE_ID) {
+      const box = nodeBox(targetId, 0);
+      const midC = Math.floor((box.c + box.c2) / 2);
+      return [BOSS_AT[0] + box.rr - 5, BOSS_AT[1] + midC - 2];
+    }
+    const bat = alertBats(s.boss).find((b) => b.id === targetId)!;
+    const [r, c] = SWARM[bat.pos];
+    return [BOSS_AT[0] + r - 5, BOSS_AT[1] + c + 5];
   }, []);
 
   const commit = useCallback(
@@ -325,8 +380,15 @@ export default function BattleScene(props: Props) {
     [batCell, props, pushFloat, schedule],
   );
 
-  const livingByColumn = useCallback((s: BattleState) => {
-    return s.boss.bats
+  /** Living targets in cycle order. Alert Storm cycles left-to-right by swarm
+   * column; Cascade has no columns to sort by, so cycling by node id order is
+   * the ring order the pulse itself travels (M6 PR-1b task 5). Only `.id` is
+   * read by any caller below, so the two boss kinds share this return shape. */
+  const livingByColumn = useCallback((s: BattleState): { id: number }[] => {
+    if (s.boss.kind === CASCADE_ID) {
+      return cascadeNodes(s.boss).filter((n) => n.alive);
+    }
+    return alertBats(s.boss)
       .filter((b) => b.alive)
       .sort((a, b) => SWARM[a.pos][1] - SWARM[b.pos][1]);
   }, []);
@@ -353,7 +415,7 @@ export default function BattleScene(props: Props) {
 
   const retry = useCallback(() => {
     const nextAttempt = stateRef.current.state.attempt + 1;
-    let s = initBattle({ seed, attempt: nextAttempt, defeatedBosses });
+    let s = initBattle({ seed, attempt: nextAttempt, defeatedBosses, boss });
     setState(s);
     setShown(s);
     setFloats([]);
@@ -363,7 +425,7 @@ export default function BattleScene(props: Props) {
     setMode("menu");
     setCmdIdx(0);
     props.playEnter();
-  }, [seed, defeatedBosses, props]);
+  }, [seed, defeatedBosses, boss, props]);
 
   // ---- boss banner (scene-owned copy) ----
   useEffect(() => {
@@ -435,15 +497,34 @@ export default function BattleScene(props: Props) {
   }, [commit, cycleTarget, onForfeit, onVictory, props, retry, startTarget]);
 
   // ---- derived UI values ----
-  const real = state.boss.bats.find((b) => b.real)!;
-  const revealBoss = real.marked || !real.alive;
-  const livingCount = state.boss.bats.filter((b) => b.alive).length;
-  const cursor = cursorBat !== null ? state.boss.bats.find((b) => b.id === cursorBat) : null;
-  const cursorRead = cursor
-    ? cursor.marked || !cursor.alive
-      ? `${cursor.hp}/${cursor.maxHp}`
+  // M6 PR-1b task 5: Cascade has no single "real" boss entity to mask/reveal
+  // (six independent nodes, no fake/real identity) — the plate bar sums the
+  // living chain's HP/maxHp in place of Alert Storm's reveal-on-mark rule,
+  // and it never masks (plan §Boss 2 "Targeting": nodes show real HP always).
+  const isCascadeFight = state.boss.kind === CASCADE_ID;
+  const real = !isCascadeFight ? alertBats(state.boss).find((b) => b.real)! : null;
+  const revealBoss = isCascadeFight ? true : real!.marked || !real!.alive;
+  const livingCount = isCascadeFight
+    ? cascadeNodes(state.boss).filter((n) => n.alive).length
+    : alertBats(state.boss).filter((b) => b.alive).length;
+  const plateHp = isCascadeFight
+    ? cascadeNodes(state.boss).reduce(
+        (acc, n) => ({ hp: acc.hp + n.hp, maxHp: acc.maxHp + n.maxHp }),
+        { hp: 0, maxHp: 0 },
+      )
+    : { hp: real!.hp, maxHp: real!.maxHp };
+  const cursorBatObj =
+    !isCascadeFight && cursorBat !== null ? alertBats(state.boss).find((b) => b.id === cursorBat) : null;
+  const cursorNodeObj =
+    isCascadeFight && cursorBat !== null ? cascadeNodes(state.boss).find((n) => n.id === cursorBat) : null;
+  const cursorTargetId = cursorBatObj ? cursorBatObj.id : cursorNodeObj ? cursorNodeObj.id : null;
+  const cursorRead = cursorBatObj
+    ? cursorBatObj.marked || !cursorBatObj.alive
+      ? `${cursorBatObj.hp}/${cursorBatObj.maxHp}`
       : "??/??"
-    : "";
+    : cursorNodeObj
+      ? `${cursorNodeObj.hp}/${cursorNodeObj.maxHp}` // no masking (plan §Boss 2 "Targeting")
+      : "";
   const cellPx = (r: number, c: number) => ({
     left: stageLeft + c * scale,
     top: stageTop + r * scale,
@@ -524,11 +605,11 @@ export default function BattleScene(props: Props) {
       })}
 
       {/* target cursor */}
-      {mode === "target" && cursor && (
+      {mode === "target" && cursorTargetId !== null && (
         <div
           style={{
             position: "absolute",
-            ...cellPx(BOSS_AT[0] + SWARM[cursor.pos][0] - 5, BOSS_AT[1] + SWARM[cursor.pos][1] + 5),
+            ...cellPx(...cursorCell(state, cursorTargetId)),
             zIndex: 12,
             textAlign: "center",
             pointerEvents: "none",
@@ -566,7 +647,7 @@ export default function BattleScene(props: Props) {
         <div style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".28em", color: "#ff9d8a" }}>{scene.plate.label}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
           {revealBoss ? (
-            bar(real.hp, real.maxHp, "linear-gradient(90deg,#e04838,#bd2421)", isMobile ? 110 : 150)
+            bar(plateHp.hp, plateHp.maxHp, "linear-gradient(90deg,#e04838,#bd2421)", isMobile ? 110 : 150)
           ) : (
             <div style={{ fontFamily: MONO, fontSize: "12px", color: "#c9a4ff", letterSpacing: ".2em" }}>{scene.plate.hiddenLabel}</div>
           )}

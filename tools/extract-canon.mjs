@@ -32,11 +32,13 @@ const DIVE_LAB = resolve(root, "docs/battle-prototypes/dive-intro.html");
 const HERO_LAB = resolve(root, "docs/battle-prototypes/hero-battle.html");
 const BOSS_LAB = resolve(root, "docs/battle-prototypes/boss-alert-storm.html");
 const BF_LAB = resolve(root, "docs/battle-prototypes/battlefield.html");
+const CASCADE_LAB = resolve(root, "docs/battle-prototypes/boss-cascade.html");
 const OUT_JS = resolve(root, "src/generated/stationCanon.js");
 const OUT_TIMELINE = resolve(root, "src/generated/diveTimeline.js");
 const OUT_HERO = resolve(root, "src/generated/heroBattle.js");
 const OUT_BOSS = resolve(root, "src/generated/bossAlertStorm.js");
 const OUT_BF = resolve(root, "src/generated/battlefieldScene.js");
+const OUT_CASCADE = resolve(root, "src/generated/bossCascade.js");
 
 // Every symbol the dive lab's pure block declares — all exported, no cherry-picking.
 const TIMELINE_EXPORTS = [
@@ -154,6 +156,21 @@ const BF_EXPORTS = [
   "varAS", "varCC", "varSF", "corruptGlass", "glitchScene", "varIS", "erosionStage",
 ];
 
+// Cascade slice (M6 PR-1b task 1): start `const EROWS`, end before `function
+// drawGrid` — the lab's own draft reels (draftA/B/C, DR_*, PATH, NODES) ride
+// along inertly (never carved out of a verbatim slice), same as the alert-
+// storm boss slice's OPT_A/B/C. Every top-level declaration in the slice is
+// exported, no cherry-picking (same policy as TIMELINE_EXPORTS/HERO_EXPORTS).
+const CASCADE_EXPORTS = [
+  "EROWS", "ECOLS", "newG", "eP", "eR", "eCarve", "eOutline",
+  "PATH", "draftA", "NODES", "draftB", "draftC", "DR_A", "DR_B", "DR_C",
+  "cascadeFinal", "CASCADE", "CASCADE_MS",
+  "eOverlay", "eFlashOf", "eDitherAll",
+  "cascadeOverload", "BOLTS1", "BOLTS2", "CAS_ATK",
+  "cascadeJolt", "CAS_HIT",
+  "cascadeDark", "cascadeAshes", "CAS_DIE",
+];
+
 // Two-anchor slice; the cut lands at the START of the line holding endAnchor.
 function sliceBetween(html, startAnchor, endAnchor, name) {
   const a = html.indexOf(startAnchor);
@@ -195,6 +212,12 @@ function buildBfModule(body) {
     'export { PAL } from "./diveTimeline.js";\n';
 }
 
+function buildCascadeModule(body) {
+  return battleHeader("boss-cascade.html", "Per-node primitives (cascadeFinal/cascadeDark) are the API; the lab's draftA/B/C serpent reels ride along inertly. No PAL here — import it from diveTimeline.") +
+    body + "\n" +
+    "export { " + CASCADE_EXPORTS.join(", ") + " };\n";
+}
+
 // PAL-equality guard (pass-1 F13 / pass-2 n1): parse each lab's PAL literal and
 // deep-compare VALUES (text differs legitimately: quoting/layout).
 function parsePal(html, name) {
@@ -228,6 +251,7 @@ const generatedTimeline = buildTimelineModule(timelineBody);
 const heroHtml = readLf(HERO_LAB);
 const bossHtml = readLf(BOSS_LAB);
 const bfHtml = readLf(BF_LAB);
+const cascadeHtml = readLf(CASCADE_LAB);
 const generatedHero = buildHeroModule(
   sliceBetween(heroHtml, "const PAL", "document.getElementById('staticRow')", "hero-battle.html"),
 );
@@ -236,6 +260,9 @@ const generatedBoss = buildBossModule(
 );
 const generatedBf = buildBfModule(
   sliceBetween(bfHtml, "const PAL", "const BUILDERS", "battlefield.html"),
+);
+const generatedCascade = buildCascadeModule(
+  sliceBetween(cascadeHtml, "const EROWS", "function drawGrid", "boss-cascade.html"),
 );
 
 // Drift guard first — the lab's embedded copy must match canon regardless of mode.
@@ -251,6 +278,7 @@ for (const [html, name] of [
   [heroHtml, "hero-battle.html"],
   [bossHtml, "boss-alert-storm.html"],
   [bfHtml, "battlefield.html"],
+  [cascadeHtml, "boss-cascade.html"],
 ]) {
   if (canonicalJson(parsePal(html, name)) !== palRef) {
     fail("DRIFT: PAL in " + name + " no longer value-matches dive-intro.html's palette");
@@ -264,6 +292,7 @@ if (process.argv.includes("--verify")) {
     [OUT_HERO, generatedHero, "heroBattle.js"],
     [OUT_BOSS, generatedBoss, "bossAlertStorm.js"],
     [OUT_BF, generatedBf, "battlefieldScene.js"],
+    [OUT_CASCADE, generatedCascade, "bossCascade.js"],
   ];
   for (const [path, fresh, name] of targets) {
     let committed;
@@ -274,7 +303,7 @@ if (process.argv.includes("--verify")) {
     }
     if (committed !== fresh) fail("DRIFT: committed " + name + " differs from a fresh extraction");
   }
-  console.log("verify:canon OK — station/timeline/hero/boss/battlefield modules match canon; lab station copy + PAL values match");
+  console.log("verify:canon OK — station/timeline/hero/boss/battlefield/cascade modules match canon; lab station copy + PAL values match");
 } else {
   mkdirSync(dirname(OUT_JS), { recursive: true });
   writeFileSync(OUT_JS, generated);
@@ -282,9 +311,10 @@ if (process.argv.includes("--verify")) {
   writeFileSync(OUT_HERO, generatedHero);
   writeFileSync(OUT_BOSS, generatedBoss);
   writeFileSync(OUT_BF, generatedBf);
+  writeFileSync(OUT_CASCADE, generatedCascade);
   console.log(
     "extract-canon: wrote stationCanon.js (" + generated.length + " b) + diveTimeline.js (" + generatedTimeline.length +
     " b) + heroBattle.js (" + generatedHero.length + " b) + bossAlertStorm.js (" + generatedBoss.length +
-    " b) + battlefieldScene.js (" + generatedBf.length + " b)",
+    " b) + battlefieldScene.js (" + generatedBf.length + " b) + bossCascade.js (" + generatedCascade.length + " b)",
   );
 }
