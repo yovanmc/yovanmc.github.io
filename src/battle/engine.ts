@@ -2,18 +2,33 @@
 // Rules source: docs/superpowers/specs/2026-07-25-battle-gameplay-addendum.md
 // plus the plan-originated numbers table in 2026-07-28-be1-battle-engine-plan.md.
 // No DOM, no Date, no Math.random: all randomness flows from state.rngState.
+//
+// Core (this file): hero economy, MP costs, CT/DoT timers, rounding, rng,
+// event log. Per-boss mechanics live behind bosses/<boss>.ts (M6 PR-1a task 2
+// split out Alert Storm first; docs/superpowers/specs/2026-07-28-m6-bosses-2-4-plan.md).
 
-export interface Bat {
-  /** Stable identity 0..9 — HP, realness, and marks travel with it. */
-  id: number;
-  hp: number;
-  maxHp: number;
-  real: boolean;
-  marked: boolean;
-  alive: boolean;
-  /** Formation slot 0..9 — reshuffles permute this, never `id`. */
-  pos: number;
-}
+import type { AlertStormBoss, Bat } from "./bosses/alertStorm";
+import {
+  ALERT_STORM_ID,
+  damageBat,
+  fanOutHit,
+  isBossDefeated,
+  isScreamTurn,
+  rawVolley,
+  reshuffle,
+  spawnAlertStorm,
+} from "./bosses/alertStorm";
+import { IMPLEMENTED_BOSSES, RUSH_ORDER } from "./rushOrder";
+export type { Bat };
+export { isScreamTurn };
+// Re-exported for every existing import site (`from "./engine"`) — canonical
+// definitions live in ./rushOrder so bootParams.ts can import them without
+// pulling this module's engine<->alertStorm cycle into the eagerly loaded
+// landing bundle (measured regression + fix: see rushOrder.ts).
+export { IMPLEMENTED_BOSSES, RUSH_ORDER };
+
+/** Grows into a discriminated union as PR-1b+ add Cascade/Silent Failure/Imposter. */
+export type BossState = AlertStormBoss;
 
 export interface Hero {
   hp: number;
@@ -39,13 +54,14 @@ export type BattleEvent =
   | { type: "firstCast"; ability: AbilityId }
   | { type: "invalid"; reason: string };
 
-export type AbilityId = "attack" | "ct" | "pt" | "debug";
+export type AbilityId = "attack" | "ct" | "pt" | "debug" | "fo";
 
 export type BattleAction =
   | { type: "attack"; target: number }
   | { type: "ct" }
   | { type: "pt"; target: number }
-  | { type: "debug"; target: number };
+  | { type: "debug"; target: number }
+  | { type: "fo" };
 
 export interface BattleState {
   seed: number;
@@ -53,9 +69,14 @@ export interface BattleState {
   /** Hero turn counter, 1-based. Turn order is hero → boss. */
   turn: number;
   hero: Hero;
-  bats: Bat[];
+  boss: BossState;
   /** Critical Thinking turns remaining (0 = inactive). */
   ctTurns: number;
+  /** Conviction's persist-once-active flag (M6 §Multipliers). Not castable in
+   * PR-1a — always false — but the field lands now so the multiplier core
+   * below is exercised by real state shape, not just bare booleans. Imposter
+   * (PR-3) is the only caster. */
+  conviction: boolean;
   /** Debug DoTs: batId → ticks remaining. */
   dots: { batId: number; ticksLeft: number }[];
   status: BattleStatus;
@@ -76,8 +97,9 @@ export interface InitOptions {
 
 const MOD = 2147483647; // Park–Miller modulus, same family as src/lib/rng.ts
 
-/** Advance the Park–Miller stream; returns the new state (also the draw). */
-function nextRng(state: number): number {
+/** Advance the Park–Miller stream; returns the new state (also the draw).
+ * Exported for bosses/alertStorm.ts (spawn + reshuffle draws). */
+export function nextRng(state: number): number {
   return (state * 16807) % MOD;
 }
 
@@ -93,31 +115,28 @@ function seedStream(seed: number, attempt: number): number {
 
 export function initBattle(opts: InitOptions): BattleState {
   const attempt = opts.attempt ?? 1;
-  let rng = seedStream(opts.seed, attempt);
-  rng = nextRng(rng);
-  const realId = rng % 10;
-  const bats: Bat[] = Array.from({ length: 10 }, (_, i) => ({
-    id: i,
-    hp: i === realId ? 60 : 8,
-    maxHp: i === realId ? 60 : 8,
-    real: i === realId,
-    marked: false,
-    alive: true,
-    pos: i,
-  }));
+  const seeded = seedStream(opts.seed, attempt);
+  const { boss, rng } = spawnAlertStorm(seeded, nextRng);
+  const defeatedBosses = opts.defeatedBosses ?? [];
+  // Derived, not stored (owner ruling, M6 plan): rider carry-over recomputes
+  // from defeatedBosses.length every init, so a rematch of an earlier boss
+  // starts at the hero's current post-rider stats. Battles always start full.
+  const maxHp = 100 + RIDER_HP * defeatedBosses.length;
+  const maxMp = 10 + RIDER_MP * defeatedBosses.length;
   return {
     seed: opts.seed,
     attempt,
     turn: 1,
-    hero: { hp: 100, maxHp: 100, mp: 10, maxMp: 10 },
-    bats,
+    hero: { hp: maxHp, maxHp, mp: maxMp, maxMp },
+    boss,
     ctTurns: 0,
+    conviction: false,
     dots: [],
     status: "active",
     events: [],
     rngState: rng,
     cast: [],
-    defeatedBosses: opts.defeatedBosses ?? [],
+    defeatedBosses,
   };
 }
 
@@ -125,13 +144,11 @@ export function initBattle(opts: InitOptions): BattleState {
 const ATTACK_DMG = 12;
 const PT_DMG = 28;
 const DEBUG_DMG = 6;
+const FAN_OUT_DMG = 8; // Cascade-signed resolution (dissect F1) — addendum "~10"
 const DOT_TICK = 4;
 const DOT_TICKS = 3;
 const CT_DURATION = 3;
-const MP_COST: Record<AbilityId, number> = { attack: 0, ct: 2, pt: 3, debug: 2 };
-const VOLLEY_BASE = 7;
-const VOLLEY_FLOOR = 4;
-const BOSS_ID = "alert-storm";
+const MP_COST: Record<AbilityId, number> = { attack: 0, ct: 2, pt: 3, debug: 2, fo: 3 };
 const RIDER_HP = 10;
 const RIDER_MP = 2;
 const CT_DEALT_MULT = 1.5;
@@ -142,61 +159,83 @@ function roundHalfUp(x: number): number {
   return Math.floor(x + 0.5);
 }
 
-/** True when mouths are open during the hero's targeting this turn. */
-export function isScreamTurn(state: BattleState): boolean {
-  if (state.turn % 3 === 0) return true;
-  // CT stretches a scream into the following turn — never invents one on turn 1.
-  return state.ctTurns > 0 && state.turn > 3 && state.turn % 3 === 1;
+// ---- Multiplier core (M6 §Multipliers — dissect F2, ONE rule) -------------
+// Conviction REPLACES CT's percentage; it never stacks a second CT factor.
+// Not castable in PR-1a — `conviction` is always false on every real state —
+// but the helpers below are the pinned contract, tested directly against the
+// two owner-signed worked examples (PT→112, glitch-slash-taken→7).
+const CONVICTION_DEALT_MULT = 2;
+const CT_CONVICTION_DEALT_MULT = 2.0;
+const CT_CONVICTION_TAKEN_MULT = 0.5;
+
+/** `round(base × (conv ? 2 : 1) × (ct ? (conv ? 2.0 : 1.5) : 1))`. */
+export function dealtMultiplier(ct: boolean, conviction: boolean): number {
+  const convMult = conviction ? CONVICTION_DEALT_MULT : 1;
+  const ctMult = ct ? (conviction ? CT_CONVICTION_DEALT_MULT : CT_DEALT_MULT) : 1;
+  return convMult * ctMult;
+}
+
+/** `round(base × (ct ? (conv ? 0.5 : 0.75) : 1))` — with CT down, Conviction
+ * alone reduces nothing (it only ever replaces CT's percentage). */
+export function takenMultiplier(ct: boolean, conviction: boolean): number {
+  return ct ? (conviction ? CT_CONVICTION_TAKEN_MULT : CT_TAKEN_MULT) : 1;
+}
+
+export function dealtDamage(base: number, ct: boolean, conviction: boolean): number {
+  return roundHalfUp(base * dealtMultiplier(ct, conviction));
+}
+
+export function takenDamage(base: number, ct: boolean, conviction: boolean): number {
+  return roundHalfUp(base * takenMultiplier(ct, conviction));
+}
+
+// ---- Kit derivation (M6 §Cross-boss architecture) --------------------------
+const BASE_KIT: readonly AbilityId[] = ["attack", "ct", "pt", "debug"];
+
+/** Boss-defeat → ability unlock map, gated to shipped modules. Later PRs
+ * extend this map (Rollback on cascade, Root Cause on silent-failure), never
+ * `deriveKit`'s body. */
+const KIT_UNLOCKS: Partial<Record<string, AbilityId>> = {
+  [ALERT_STORM_ID]: "fo",
+};
+
+/** Rush-order cumulative unlocks, intersected with `IMPLEMENTED_BOSSES` (a
+ * boss beaten ahead of its own PR must never grant a kit entry with no
+ * ability behind it). The reducer rejects any action outside this kit. */
+export function deriveKit(defeatedBosses: string[]): AbilityId[] {
+  const kit: AbilityId[] = [...BASE_KIT];
+  for (const bossId of defeatedBosses) {
+    if (!IMPLEMENTED_BOSSES.includes(bossId)) continue;
+    const unlock = KIT_UNLOCKS[bossId];
+    if (unlock && !kit.includes(unlock)) kit.push(unlock);
+  }
+  return kit;
 }
 
 function invalid(state: BattleState, reason: string): BattleState {
   return { ...state, events: [{ type: "invalid", reason }] };
 }
 
-/** Seeded Fisher–Yates over LIVING bats' positions; identities travel. */
-function reshuffle(
-  s: BattleState,
-  reason: "fakeHit" | "screamEnd",
-): void {
-  const living = s.bats.filter((b) => b.alive);
-  const positions = living.map((b) => b.pos);
-  for (let i = positions.length - 1; i > 0; i--) {
-    s.rngState = nextRng(s.rngState);
-    const j = s.rngState % (i + 1);
-    [positions[i], positions[j]] = [positions[j], positions[i]];
-  }
-  living.forEach((b, k) => {
-    b.pos = positions[k];
-  });
-  s.events.push({ type: "reshuffle", reason });
-}
-
-function damageBat(s: BattleState, batId: number, amount: number): void {
-  const bat = s.bats.find((b) => b.id === batId)!;
-  bat.hp = Math.max(0, bat.hp - amount);
-  s.events.push({ type: "damage", batId, amount });
-  if (bat.hp === 0) {
-    bat.alive = false;
-    s.events.push({ type: "batDown", batId });
-  }
-  if (!bat.real) reshuffle(s, "fakeHit");
-}
-
 export function battleReduce(state: BattleState, action: BattleAction): BattleState {
   if (state.status !== "active") return invalid(state, "battle over");
 
+  if (!deriveKit(state.defeatedBosses).includes(action.type)) {
+    return invalid(state, "not in kit");
+  }
+
   // validate before cloning
   if (action.type === "attack" || action.type === "pt" || action.type === "debug") {
-    const target = state.bats.find((b) => b.id === action.target);
+    const target = state.boss.bats.find((b) => b.id === action.target);
     if (!target || !target.alive) return invalid(state, "invalid target");
   }
   const mpCost = MP_COST[action.type];
   if (state.hero.mp < mpCost) return invalid(state, "not enough MP");
 
+  const bossBats = state.boss.bats.map((b) => ({ ...b }));
   const s: BattleState = {
     ...state,
     hero: { ...state.hero },
-    bats: state.bats.map((b) => ({ ...b })),
+    boss: { ...state.boss, bats: bossBats },
     dots: state.dots.map((d) => ({ ...d })),
     cast: [...state.cast],
     defeatedBosses: [...state.defeatedBosses],
@@ -223,10 +262,17 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
     }
     case "debug": {
       damageBat(s, action.target, roundHalfUp(DEBUG_DMG * dealtMult));
-      const bat = s.bats.find((b) => b.id === action.target)!;
+      const bat = s.boss.bats.find((b) => b.id === action.target)!;
       bat.marked = true; // permanent — this is the memory tool
       s.events.push({ type: "mark", batId: action.target });
       s.dots.push({ batId: action.target, ticksLeft: DOT_TICKS });
+      break;
+    }
+    case "fo": {
+      // AoE — hits every living target; resolves all hits, then at most one
+      // reshuffle (fanOutHit owns that rule). Uses the Conviction-aware
+      // helper directly since Fan Out ships after the multiplier core.
+      fanOutHit(s, dealtDamage(FAN_OUT_DMG, s.ctTurns > 0, s.conviction));
       break;
     }
   }
@@ -239,7 +285,7 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
   if (s.status === "active") {
     for (let i = 0; i < preexistingDots; i++) {
       const d = s.dots[i];
-      const bat = s.bats.find((b) => b.id === d.batId)!;
+      const bat = s.boss.bats.find((b) => b.id === d.batId)!;
       if (bat.alive) {
         bat.hp = Math.max(0, bat.hp - DOT_TICK);
         s.events.push({ type: "dot", batId: d.batId, amount: DOT_TICK });
@@ -251,25 +297,24 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
       d.ticksLeft -= 1;
     }
     s.dots = s.dots.filter(
-      (d) => d.ticksLeft > 0 && s.bats.find((b) => b.id === d.batId)!.alive,
+      (d) => d.ticksLeft > 0 && s.boss.bats.find((b) => b.id === d.batId)!.alive,
     );
   }
 
   // victory: the real bat down ends the fight immediately — survivors scatter,
   // no volley lands. Rider/forge/unlocks are first-victory only (rematch = lap).
-  const real = s.bats.find((b) => b.real)!;
-  if (!real.alive) {
+  if (isBossDefeated(s.boss)) {
     s.status = "victory";
     s.events.push({ type: "victory" });
-    if (!s.defeatedBosses.includes(BOSS_ID)) {
-      s.defeatedBosses.push(BOSS_ID);
+    if (!s.defeatedBosses.includes(ALERT_STORM_ID)) {
+      s.defeatedBosses.push(ALERT_STORM_ID);
       s.events.push({ type: "forge", ability: "fan-out" });
       s.hero.maxHp += RIDER_HP;
       s.hero.hp = Math.min(s.hero.maxHp, s.hero.hp + RIDER_HP);
       s.hero.maxMp += RIDER_MP;
       s.hero.mp = Math.min(s.hero.maxMp, s.hero.mp + RIDER_MP);
       s.events.push({ type: "rider", maxHp: RIDER_HP, maxMp: RIDER_MP });
-      s.events.push({ type: "unlock", id: BOSS_ID });
+      s.events.push({ type: "unlock", id: ALERT_STORM_ID });
     }
     return s;
   }
@@ -279,9 +324,7 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
 
   // boss volley
   if (s.status === "active") {
-    const deadFakes = s.bats.filter((b) => !b.real && !b.alive).length;
-    const volley = Math.max(VOLLEY_FLOOR, VOLLEY_BASE - Math.floor(deadFakes / 3));
-    const taken = roundHalfUp(volley * (s.ctTurns > 0 ? CT_TAKEN_MULT : 1));
+    const taken = roundHalfUp(rawVolley(s.boss.bats) * (s.ctTurns > 0 ? CT_TAKEN_MULT : 1));
     s.hero.hp = Math.max(0, s.hero.hp - taken);
     s.events.push({ type: "heroDamage", amount: taken });
     if (s.hero.hp === 0) {

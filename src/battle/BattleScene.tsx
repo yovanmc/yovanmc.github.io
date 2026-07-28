@@ -1,24 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   battleReduce,
+  deriveKit,
   initBattle,
   isScreamTurn,
   type AbilityId,
   type BattleAction,
   type BattleState,
-  type Bat,
 } from "./engine";
+import { commandsForKit } from "./abilities";
+import { sceneFor } from "./scenes";
 import { PAL } from "../generated/diveTimeline";
 import {
   IDLE, ATK, ATK_MS, BUFF, BUFF_MS, CAST, CAST_MS, PWR, PWR_MS,
+  FAN, FAN_MS,
   HIT, HIT_MS, KO, KO_MS,
 } from "../generated/heroBattle";
 import type { Grid } from "../generated/heroBattle";
-import {
-  SWARM, JIT, batFinal, batFinalPost, eOutline, eDitherAll, eOverlay,
-  newG, screamRipple, EROWS, ECOLS,
-} from "../generated/bossAlertStorm";
-import { varAS, SR, SC, BOSS_AT, HERO_AT } from "../generated/battlefieldScene";
+import { SWARM } from "../generated/bossAlertStorm";
+import { SR, SC, BOSS_AT, HERO_AT } from "../generated/battlefieldScene";
 
 const MONO = "'JetBrains Mono',monospace";
 const SERIF = "'Marcellus',serif";
@@ -59,13 +59,6 @@ interface Props {
   playBack: () => void;
 }
 
-const COMMANDS: { id: AbilityId; label: string; mp: number; needsTarget: boolean; desc: string }[] = [
-  { id: "attack", label: "Attack", mp: 0, needsTarget: true, desc: "12 dmg · +1 MP on hit" },
-  { id: "ct", label: "Critical Thinking", mp: 2, needsTarget: false, desc: "3 turns · +50% dealt · −25% taken · screams linger" },
-  { id: "pt", label: "Power Through", mp: 3, needsTarget: true, desc: "28 dmg" },
-  { id: "debug", label: "Debug", mp: 2, needsTarget: true, desc: "6 dmg · 4×3 DoT · marks the target" },
-];
-
 /** Stamp a (string|null)[][] grid onto the scene, skipping nulls (lab stamp() is for packed strings). */
 function stampGrid(g: Grid, art: Grid, r0: number, c0: number): void {
   for (let r = 0; r < art.length; r++) {
@@ -78,50 +71,6 @@ function stampGrid(g: Grid, art: Grid, r0: number, c0: number): void {
       if (rr >= 0 && rr < SR && cc >= 0 && cc < SC) g[rr][cc] = k;
     }
   }
-}
-
-/**
- * Compose the swarm grid from per-bat primitives against engine state
- * (the lab's monolithic reels cannot express per-bat death/marks — plan F7).
- */
-function composeSwarm(
-  bats: Bat[],
-  screaming: boolean,
-  f: number,
-  jitter: boolean,
-  fallDr: number,
-  ditherMod: number,
-): Grid {
-  const g = newG();
-  const living = bats.filter((b) => b.alive);
-  const mouthOf = (b: Bat) => (screaming ? (b.real ? "red" : "hollow") : "stitched");
-  for (const b of living) {
-    const [r, c, ph] = SWARM[b.pos];
-    const jr = jitter ? JIT[b.pos][0] : 0;
-    const jc = jitter ? JIT[b.pos][1] : 0;
-    const dr = fallDr > 0 ? fallDr + (b.pos % 3) * 2 : 0;
-    batFinal(g, r + jr + dr, c + jc, (f + ph) % 2, mouthOf(b));
-  }
-  let out = eOutline(g);
-  for (const b of living) {
-    const [r, c, ph] = SWARM[b.pos];
-    const jr = jitter ? JIT[b.pos][0] : 0;
-    const jc = jitter ? JIT[b.pos][1] : 0;
-    const dr = fallDr > 0 ? fallDr + (b.pos % 3) * 2 : 0;
-    batFinalPost(out, r + jr + dr, c + jc, (f + ph) % 2, mouthOf(b));
-    if (b.marked) {
-      // purple mark chevron above the bat — the memory tool made visible
-      const mr = r + jr + dr - 2;
-      const mc = c + jc + 6;
-      for (const [pr, pc] of [[0, 0], [1, 1], [0, 2]] as const) {
-        const rr = mr + pr;
-        const cc = mc + pc;
-        if (rr >= 0 && rr < EROWS && cc >= 0 && cc < ECOLS) out[rr][cc] = "k";
-      }
-    }
-  }
-  if (ditherMod > 0) out = eDitherAll(out, ditherMod);
-  return out;
 }
 
 /** Timeline step: at +ms from action start, do fn. */
@@ -155,11 +104,18 @@ export default function BattleScene(props: Props) {
   const [banner, setBanner] = useState("");
   const [descend, setDescend] = useState(true);
 
+  // ---- boss scene module + kit-derived command menu (M6 §Scene generalization) ----
+  const scene = sceneFor(state.boss.kind);
+  const commands = useMemo(
+    () => commandsForKit(deriveKit(state.defeatedBosses)),
+    [state.defeatedBosses],
+  );
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offRef = useRef<HTMLCanvasElement | null>(null);
   const timers = useRef<number[]>([]);
-  const stateRef = useRef({ mode, cmdIdx, cursorBat, state, shown });
-  stateRef.current = { mode, cmdIdx, cursorBat, state, shown };
+  const stateRef = useRef({ mode, cmdIdx, cursorBat, state, shown, commands });
+  stateRef.current = { mode, cmdIdx, cursorBat, state, shown, commands };
 
   // ---- geometry: contain-fit desktop, width-fit mobile (plan §Architecture 3) ----
   const scale = useMemo(() => {
@@ -170,9 +126,6 @@ export default function BattleScene(props: Props) {
   const stageH = SR * scale;
   const stageLeft = (vw - stageW) / 2;
   const stageTop = isMobile ? Math.max(12, (vh - stageH) * 0.32) : Math.max(8, (vh * 0.86 - stageH) / 2);
-
-  // arena backgrounds, both flutter phases, built once
-  const arena = useMemo(() => [varAS(0), varAS(1)], []);
 
   // ---- descend beat: swarm fades in, inputs unlock after ----
   const descendRef = useRef(true);
@@ -227,15 +180,11 @@ export default function BattleScene(props: Props) {
     const off = offRef.current;
     const octx = off.getContext("2d")!;
 
-    const g = arena[flutter].map((row) => row.slice());
+    const g = scene.arena[flutter].map((row) => row.slice());
     const screaming = isScreamTurn(shown) && shown.status === "active";
     if (!descend && shown.status !== "victory") {
-      let swarm = composeSwarm(
-        shown.bats, screaming, flutter,
-        !!swarmFx.jitter, swarmFx.fall ?? 0, swarmFx.dither ?? 0,
-      );
-      if (swarmFx.ripple) swarm = eOverlay(swarm, screamRipple(swarmFx.ripple));
-      stampGrid(g, swarm, BOSS_AT[0], BOSS_AT[1]);
+      const bossGrid = scene.composeBoss(shown.boss.bats, screaming, flutter, swarmFx);
+      stampGrid(g, bossGrid, BOSS_AT[0], BOSS_AT[1]);
     }
     const heroGrid =
       heroReel ? heroReel.frames[Math.min(heroFrame, heroReel.frames.length - 1)] : IDLE[flutter];
@@ -253,7 +202,7 @@ export default function BattleScene(props: Props) {
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.drawImage(off, 0, 0, cv.width, cv.height);
-  }, [shown, flutter, swarmFx, heroReel, heroFrame, arena, descend, scale]);
+  }, [shown, flutter, swarmFx, heroReel, heroFrame, scene, descend, scale]);
 
   // ---- action sequencing ----
   const schedule = useCallback((steps: Step[]) => {
@@ -265,7 +214,7 @@ export default function BattleScene(props: Props) {
   }, []);
 
   const batCell = useCallback((s: BattleState, batId: number): [number, number] => {
-    const bat = s.bats.find((b) => b.id === batId)!;
+    const bat = s.boss.bats.find((b) => b.id === batId)!;
     const [r, c] = SWARM[bat.pos];
     return [BOSS_AT[0] + r, BOSS_AT[1] + c + 7];
   }, []);
@@ -288,6 +237,7 @@ export default function BattleScene(props: Props) {
         ct: { frames: BUFF, ms: BUFF_MS },
         pt: { frames: PWR, ms: PWR_MS },
         debug: { frames: CAST, ms: CAST_MS },
+        fo: { frames: FAN, ms: FAN_MS },
       };
       setHeroFrame(0);
       setHeroReel(reel[action.type]);
@@ -376,7 +326,7 @@ export default function BattleScene(props: Props) {
   );
 
   const livingByColumn = useCallback((s: BattleState) => {
-    return s.bats
+    return s.boss.bats
       .filter((b) => b.alive)
       .sort((a, b) => SWARM[a.pos][1] - SWARM[b.pos][1]);
   }, []);
@@ -415,14 +365,14 @@ export default function BattleScene(props: Props) {
     props.playEnter();
   }, [seed, defeatedBosses, props]);
 
-  // ---- scream banner ----
+  // ---- boss banner (scene-owned copy) ----
   useEffect(() => {
-    if (shown.status !== "active" || descend) {
+    if (descend) {
       setBanner("");
       return;
     }
-    setBanner(isScreamTurn(shown) ? "THE SWARM SCREAMS · ONE VOICE RUNS RED" : "");
-  }, [shown, descend]);
+    setBanner(scene.banner(shown));
+  }, [shown, descend, scene]);
 
   // ---- input (BattleScene owns keys while mounted; App early-returns on battle) ----
   useEffect(() => {
@@ -437,16 +387,17 @@ export default function BattleScene(props: Props) {
       if (m === "menu") {
         if (k === "ArrowUp" || k === "ArrowDown") {
           const dir = k === "ArrowUp" ? -1 : 1;
-          setCmdIdx((i) => (i + dir + COMMANDS.length) % COMMANDS.length);
+          const len = stateRef.current.commands.length;
+          setCmdIdx((i) => (i + dir + len) % len);
           props.playMove();
         } else if (k === "Enter" || k === " " || k === "ArrowRight") {
-          const cmd = COMMANDS[stateRef.current.cmdIdx];
+          const cmd = stateRef.current.commands[stateRef.current.cmdIdx];
           if (stateRef.current.state.hero.mp < cmd.mp) {
             props.playBack();
             return;
           }
           if (cmd.needsTarget) startTarget();
-          else commit({ type: "ct" });
+          else commit({ type: cmd.id } as BattleAction);
         } else if (k === "Escape" || k === "Backspace") {
           setMode("pause");
           props.playBack();
@@ -455,7 +406,7 @@ export default function BattleScene(props: Props) {
         if (k === "ArrowLeft" || k === "ArrowUp") cycleTarget(-1);
         else if (k === "ArrowRight" || k === "ArrowDown") cycleTarget(1);
         else if (k === "Enter" || k === " ") {
-          const cmd = COMMANDS[stateRef.current.cmdIdx];
+          const cmd = stateRef.current.commands[stateRef.current.cmdIdx];
           const target = stateRef.current.cursorBat;
           if (target !== null)
             commit({ type: cmd.id, target } as BattleAction);
@@ -484,10 +435,10 @@ export default function BattleScene(props: Props) {
   }, [commit, cycleTarget, onForfeit, onVictory, props, retry, startTarget]);
 
   // ---- derived UI values ----
-  const real = state.bats.find((b) => b.real)!;
+  const real = state.boss.bats.find((b) => b.real)!;
   const revealBoss = real.marked || !real.alive;
-  const livingCount = state.bats.filter((b) => b.alive).length;
-  const cursor = cursorBat !== null ? state.bats.find((b) => b.id === cursorBat) : null;
+  const livingCount = state.boss.bats.filter((b) => b.alive).length;
+  const cursor = cursorBat !== null ? state.boss.bats.find((b) => b.id === cursorBat) : null;
   const cursorRead = cursor
     ? cursor.marked || !cursor.alive
       ? `${cursor.hp}/${cursor.maxHp}`
@@ -610,18 +561,18 @@ export default function BattleScene(props: Props) {
         </div>
       )}
 
-      {/* boss plate */}
+      {/* boss plate (scene-owned label/hidden-copy/footer) */}
       <div style={{ ...panel, position: "absolute", right: isMobile ? 10 : 30, top: isMobile ? 10 : 26, padding: "10px 14px", zIndex: 11 }}>
-        <div style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".28em", color: "#ff9d8a" }}>ALERT STORM</div>
+        <div style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".28em", color: "#ff9d8a" }}>{scene.plate.label}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
           {revealBoss ? (
             bar(real.hp, real.maxHp, "linear-gradient(90deg,#e04838,#bd2421)", isMobile ? 110 : 150)
           ) : (
-            <div style={{ fontFamily: MONO, fontSize: "12px", color: "#c9a4ff", letterSpacing: ".2em" }}>?? · DEBUG THE SCREAMER</div>
+            <div style={{ fontFamily: MONO, fontSize: "12px", color: "#c9a4ff", letterSpacing: ".2em" }}>{scene.plate.hiddenLabel}</div>
           )}
         </div>
         <div style={{ fontFamily: MONO, fontSize: "10px", color: "#b9a8d8", marginTop: 5, letterSpacing: ".12em" }}>
-          {livingCount}/10 SIGNALS
+          {scene.plate.footer(livingCount)}
         </div>
       </div>
 
@@ -655,7 +606,7 @@ export default function BattleScene(props: Props) {
                 {isMobile ? "Tap the swarm to cycle · " : "←→ cycle · "}⏎ confirm · ESC back
               </div>
             ) : (
-              COMMANDS.map((c, i) => {
+              commands.map((c, i) => {
                 const active = i === cmdIdx;
                 const afford = state.hero.mp >= c.mp;
                 return (
@@ -670,7 +621,7 @@ export default function BattleScene(props: Props) {
                         return;
                       }
                       if (c.needsTarget) startTarget();
-                      else commit({ type: "ct" });
+                      else commit({ type: c.id } as BattleAction);
                     }}
                     onMouseEnter={() => setCmdIdx(i)}
                     style={{
@@ -698,7 +649,7 @@ export default function BattleScene(props: Props) {
             )}
             {mode === "menu" && (
               <div style={{ padding: "7px 12px 3px", fontFamily: MONO, fontSize: "10px", color: "#8a7ba8", letterSpacing: ".08em", borderTop: "1px solid rgba(190,140,255,.14)", marginTop: 4 }}>
-                {COMMANDS[cmdIdx].desc}
+                {commands[cmdIdx].desc}
               </div>
             )}
           </div>
@@ -720,7 +671,7 @@ export default function BattleScene(props: Props) {
           role="button"
           onClick={(e) => {
             e.stopPropagation();
-            const cmd = COMMANDS[stateRef.current.cmdIdx];
+            const cmd = stateRef.current.commands[stateRef.current.cmdIdx];
             const target = stateRef.current.cursorBat;
             if (target !== null) commit({ type: cmd.id, target } as BattleAction);
           }}
@@ -757,47 +708,49 @@ export default function BattleScene(props: Props) {
         </div>
       )}
 
-      {/* victory overlay */}
+      {/* victory overlay (scene-owned copy) */}
       {mode === "victory" && (
         <div style={{ position: "absolute", inset: 0, zIndex: 14, background: "radial-gradient(ellipse at 50% 40%, rgba(30,20,10,.5), rgba(6,4,12,.88))", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ ...panel, border: "1px solid rgba(255,215,120,.45)", boxShadow: "0 0 60px rgba(255,190,80,.2), inset 0 0 0 1px rgba(255,255,255,.06)", padding: "30px 40px", textAlign: "center", maxWidth: 420 }}>
-            <div style={{ fontFamily: MONO, fontSize: "11px", letterSpacing: ".34em", color: "#ffd97a" }}>SIGNAL FOUND</div>
-            <div style={{ fontFamily: SERIF, fontSize: "26px", color: "#fdf6e3", margin: "12px 0 4px" }}>The Alert Storm breaks</div>
-            {state.events.some((e) => e.type === "forge") || state.defeatedBosses.includes("alert-storm") ? (
+            <div style={{ fontFamily: MONO, fontSize: "11px", letterSpacing: ".34em", color: "#ffd97a" }}>{scene.victoryCopy.eyebrow}</div>
+            <div style={{ fontFamily: SERIF, fontSize: "26px", color: "#fdf6e3", margin: "12px 0 4px" }}>{scene.victoryCopy.title}</div>
+            {state.events.some((e) => e.type === "forge") || state.defeatedBosses.includes(scene.id) ? (
               <div style={{ fontFamily: MONO, fontSize: "12px", color: "#ffe9b0", letterSpacing: ".12em", marginTop: 10, lineHeight: 2 }}>
                 {state.events.some((e) => e.type === "forge") ? (
                   <>
-                    ⚔ FAN OUT · FORGED
-                    <br />
-                    +10 MAX HP · +2 MAX MP
-                    <br />
+                    {scene.victoryCopy.forgeLines.map((line, i) => (
+                      <span key={i}>
+                        {line}
+                        <br />
+                      </span>
+                    ))}
                   </>
                 ) : (
-                  <>A VICTORY LAP · THE STORM REMEMBERS<br /></>
+                  <>{scene.victoryCopy.rematchLine}<br /></>
                 )}
               </div>
             ) : null}
             <div style={{ fontFamily: "'Sora',sans-serif", fontSize: "13px", color: "#b9a8d8", marginTop: 14 }}>
-              Three more wait in the dark. More coming.
+              {scene.victoryCopy.footer}
             </div>
             <div role="button" onClick={() => onVictory(stateRef.current.state)} style={{ cursor: "pointer", marginTop: 18, padding: "10px 18px", color: "#f2ecff", fontFamily: MONO, fontSize: "12px", letterSpacing: ".22em" }}>
-              CONTINUE ⏎
+              {scene.victoryCopy.cta}
             </div>
           </div>
         </div>
       )}
 
-      {/* defeat overlay */}
+      {/* defeat overlay (scene-owned copy) */}
       {mode === "defeat" && (
         <div style={{ position: "absolute", inset: 0, zIndex: 14, background: "rgba(6,4,12,.8)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ ...panel, padding: "28px 38px", textAlign: "center", maxWidth: 400 }}>
-            <div style={{ fontFamily: MONO, fontSize: "11px", letterSpacing: ".3em", color: "#ff9d8a" }}>DROWNED OUT</div>
-            <div style={{ fontFamily: SERIF, fontSize: "22px", color: "#eee6f6", margin: "10px 0 4px" }}>The storm takes the sky</div>
+            <div style={{ fontFamily: MONO, fontSize: "11px", letterSpacing: ".3em", color: "#ff9d8a" }}>{scene.defeatCopy.eyebrow}</div>
+            <div style={{ fontFamily: SERIF, fontSize: "22px", color: "#eee6f6", margin: "10px 0 4px" }}>{scene.defeatCopy.title}</div>
             <div role="button" onClick={retry} style={{ cursor: "pointer", marginTop: 16, padding: "10px 18px", color: "#f2ecff", fontFamily: MONO, fontSize: "12px", letterSpacing: ".2em" }}>
-              RETRY ⏎
+              {scene.defeatCopy.retryCta}
             </div>
             <div role="button" onClick={onForfeit} style={{ cursor: "pointer", padding: "8px 18px", color: "#b9a8d8", fontFamily: "'Sora',sans-serif", fontSize: "13px" }}>
-              Leave · back to the gate
+              {scene.defeatCopy.leaveCta}
             </div>
           </div>
         </div>
