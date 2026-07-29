@@ -9,7 +9,7 @@ import {
   RUSH_ORDER,
   takenDamage,
 } from "./engine";
-import type { BattleState, Bat } from "./engine";
+import type { BattleState, Bat, BattleAction } from "./engine";
 import type { AlertStormBoss } from "./bosses/alertStorm";
 import { SF_TARGET_ID, spawnSilentFailure } from "./bosses/silentFailure";
 import type { SilentFailureBoss } from "./bosses/silentFailure";
@@ -593,7 +593,10 @@ describe("Cascade boot + dispatch (M6 PR-1b task 3)", () => {
   });
 
   it("falls back to alert-storm for an unimplemented/garbage boss id (never a crash path)", () => {
-    expect(initBattle({ seed: 42, boss: "silent-failure" }).boss.kind).toBe("alert-storm");
+    // M6 PR-2 task 5 reconciliation (authorized table): re-pointed from
+    // "silent-failure" to "imposter-syndrome" now that silent-failure boots
+    // for real below; "not-a-real-boss" (the G1 guard, D1) stays untouched.
+    expect(initBattle({ seed: 42, boss: "imposter-syndrome" }).boss.kind).toBe("alert-storm");
     expect(initBattle({ seed: 42, boss: "not-a-real-boss" }).boss.kind).toBe("alert-storm");
     expect(initBattle({ seed: 42 }).boss.kind).toBe("alert-storm");
   });
@@ -989,6 +992,83 @@ describe("Silent Failure engine wiring (M6 PR-2 task 4)", () => {
       const s1 = battleReduce(s0, { type: "pt", target: SF_TARGET_ID });
       if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
       expect(s1.boss.forceBodyForDeath).toBe(false);
+    });
+  });
+});
+
+// ---- M6 PR-2 task 5: Silent Failure bootable + engine-generated win line --
+describe("Silent Failure boot + engine-generated win line (M6 PR-2 task 5)", () => {
+  it('initBattle boots boss: "silent-failure" on request: 140/140, embodied, 2 turns left, unmarked, no extension used, body forced off', () => {
+    const s = initBattle({ seed: 42, boss: "silent-failure", defeatedBosses: ["alert-storm", "cascade"] });
+    expect(s.boss.kind).toBe("silent-failure");
+    if (s.boss.kind !== "silent-failure") throw new Error("unreachable");
+    expect(s.boss.hp).toBe(140);
+    expect(s.boss.maxHp).toBe(140);
+    expect(s.boss.phase).toBe("embodied");
+    expect(s.boss.phaseTurnsLeft).toBe(2);
+    expect(s.boss.marked).toBe(false);
+    expect(s.boss.extendedThisWindow).toBe(false);
+    expect(s.boss.forceBodyForDeath).toBe(false);
+  });
+
+  it("hero arrives at the signed 120/14 with Rollback in kit (defeatedBosses: alert-storm + cascade)", () => {
+    const s = initBattle({ seed: 42, boss: "silent-failure", defeatedBosses: ["alert-storm", "cascade"] });
+    expect(s.hero).toEqual({ hp: 120, maxHp: 120, mp: 14, maxMp: 14 });
+    expect(deriveKit(s.defeatedBosses)).toContain("rb");
+  });
+
+  describe("the engine-generated win line (fastest legal line from the signed table: PT, PT, whiff, CT, PT, PT — 28+28+42+42 = exactly 140)", () => {
+    // Not a hand-pinned literal sequence (standing F1 rule): this runs the
+    // signed line through the real reducer and reads OBSERVED facts off the
+    // resulting states — phases actually entered, whether an ambush turn was
+    // survived, and where the run actually lands relative to the signed 6-11
+    // hero-turn band — rather than typing in numbers computed by hand.
+    const ACTIONS: BattleAction[] = [
+      { type: "pt", target: SF_TARGET_ID }, // T1 embodied
+      { type: "pt", target: SF_TARGET_ID }, // T2 embodied -> flips to vanished
+      { type: "attack", target: SF_TARGET_ID }, // T3 vanished whiff
+      { type: "ct" }, // T4 vanished (CT active same turn) -> flips to embodied
+      { type: "pt", target: SF_TARGET_ID }, // T5 embodied, CT'd
+      { type: "pt", target: SF_TARGET_ID }, // T6 embodied, CT'd, lethal
+    ];
+
+    function winLine() {
+      let s = initBattle({ seed: 42, boss: "silent-failure", defeatedBosses: ["alert-storm", "cascade"] });
+      const phasesSeen = new Set<string>();
+      const ambushDamageSurvived: number[] = [];
+      if (s.boss.kind === "silent-failure") phasesSeen.add(s.boss.phase);
+      for (const action of ACTIONS) {
+        if (s.status !== "active") break;
+        const prePhase = s.boss.kind === "silent-failure" ? s.boss.phase : undefined;
+        s = battleReduce(s, action);
+        if (s.boss.kind === "silent-failure") phasesSeen.add(s.boss.phase);
+        const dmg = s.events.find((e) => e.type === "heroDamage");
+        if (dmg && dmg.type === "heroDamage" && prePhase === "vanished" && s.status !== "defeat") {
+          ambushDamageSurvived.push(dmg.amount);
+        }
+      }
+      return { s, phasesSeen, ambushDamageSurvived };
+    }
+
+    it("reaches victory within the signed 6-11 hero-turn band, entering both phases, surviving at least one ambush, hero HP > 0", () => {
+      const { s, phasesSeen, ambushDamageSurvived } = winLine();
+      expect(s.status).toBe("victory");
+      expect(s.turn).toBeGreaterThanOrEqual(6);
+      expect(s.turn).toBeLessThanOrEqual(11);
+      expect(phasesSeen.has("embodied")).toBe(true);
+      expect(phasesSeen.has("vanished")).toBe(true);
+      expect(ambushDamageSurvived.length).toBeGreaterThanOrEqual(1);
+      expect(s.hero.hp).toBeGreaterThan(0);
+    });
+
+    it("emits victory + forge=root-cause + unlock=silent-failure, rider applied on top of the fight's ending HP", () => {
+      const { s } = winLine();
+      expect(s.events.some((e) => e.type === "victory")).toBe(true);
+      expect(s.events.some((e) => e.type === "forge" && e.ability === "root-cause")).toBe(true);
+      expect(s.events.some((e) => e.type === "unlock" && e.id === "silent-failure")).toBe(true);
+      expect(s.defeatedBosses).toEqual(["alert-storm", "cascade", "silent-failure"]);
+      // no rc ability/KIT_UNLOCKS entry ships this PR (G1 — PR-3 adds the arm)
+      expect(deriveKit(s.defeatedBosses)).not.toContain("rc");
     });
   });
 });

@@ -38,6 +38,7 @@ import {
   resolveSilentFailureBossTurn,
   SF_TARGET_ID,
   SILENT_FAILURE_ID,
+  spawnSilentFailure,
 } from "./bosses/silentFailure";
 import { IMPLEMENTED_BOSSES, RUSH_ORDER } from "./rushOrder";
 export type { Bat };
@@ -162,7 +163,15 @@ export function initBattle(opts: InitOptions): BattleState {
   if (requestedBoss === CASCADE_ID) {
     boss = spawnCascade(); // no rng draw — the pulse always starts on node 0
     rng = seeded;
+  } else if (requestedBoss === SILENT_FAILURE_ID) {
+    boss = spawnSilentFailure(); // no rng draw — the boss starts embodied, deterministic
+    rng = seeded;
   } else {
+    // G1 anti-crash fallback (D1, pass-2 J2): dispatches on a `string`, so
+    // never-narrowing is impossible here; this trailing else stays even after
+    // every real boss id is added, and it is what engine.test.ts's
+    // "not-a-real-boss" case asserts. A new boss id is added as an `else if`
+    // ahead of it, never by removing it.
     ({ boss, rng } = spawnAlertStorm(seeded, nextRng));
   }
   const defeatedBosses = opts.defeatedBosses ?? [];

@@ -63,6 +63,7 @@ export function parseActions(raw: string | null): BattleAction[] | undefined {
     const [name, tgt] = tok.split(":");
     if (name === "ct") out.push({ type: "ct" });
     else if (name === "fo") out.push({ type: "fo" });
+    else if (name === "rb") out.push({ type: "rb" });
     else if (name === "attack" || name === "pt" || name === "debug") {
       const target = tgt !== undefined ? parseInt(tgt, 10) : NaN;
       if (!Number.isNaN(target)) out.push({ type: name, target });

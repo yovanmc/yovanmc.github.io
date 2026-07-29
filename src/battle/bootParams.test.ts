@@ -105,6 +105,10 @@ describe("parseActions (`actions=` capture key — extends the M5 grammar with `
     expect(parseActions("fo")).toEqual([{ type: "fo" }]);
   });
 
+  it("parses a bare rb token (Rollback is untargeted, M6 PR-2 task 5 — the grammar was specified in PR-1a task 5 but rb was not a valid AbilityId until PR-2 task 4)", () => {
+    expect(parseActions("rb")).toEqual([{ type: "rb" }]);
+  });
+
   it("parses targeted tokens (attack/pt/debug carry a bat id)", () => {
     expect(parseActions("attack:3")).toEqual([{ type: "attack", target: 3 }]);
     expect(parseActions("debug:5,pt:2")).toEqual([
