@@ -284,16 +284,20 @@ function invalid(state: BattleState, reason: string): BattleState {
 function cloneBoss(boss: BossState): BossState {
   if (boss.kind === CASCADE_ID) return { ...boss, nodes: boss.nodes.map((n) => ({ ...n })) };
   if (boss.kind === ALERT_STORM_ID) return { ...boss, bats: boss.bats.map((b) => ({ ...b })) };
-  /* v8 ignore next */
-  if (boss.kind === SILENT_FAILURE_ID) return { ...boss };
+  if (boss.kind === SILENT_FAILURE_ID) {
+    return { ...boss };
+    /* v8 ignore next */
+  }
   return assertNever(boss);
 }
 
 function findTarget(boss: BossState, id: number): { alive: boolean } | undefined {
   if (boss.kind === CASCADE_ID) return boss.nodes.find((n) => n.id === id);
   if (boss.kind === ALERT_STORM_ID) return boss.bats.find((b) => b.id === id);
-  /* v8 ignore next */
-  if (boss.kind === SILENT_FAILURE_ID) return id === SF_TARGET_ID ? { alive: boss.hp > 0 } : undefined;
+  if (boss.kind === SILENT_FAILURE_ID) {
+    return id === SF_TARGET_ID ? { alive: boss.hp > 0 } : undefined;
+    /* v8 ignore next */
+  }
   return assertNever(boss);
 }
 
@@ -305,8 +309,10 @@ function findTarget(boss: BossState, id: number): { alive: boolean } | undefined
 function isBossTargetable(boss: BossState): boolean {
   if (boss.kind === SILENT_FAILURE_ID) return isTargetable(boss);
   if (boss.kind === CASCADE_ID) return true;
-  /* v8 ignore next */
-  if (boss.kind === ALERT_STORM_ID) return true;
+  if (boss.kind === ALERT_STORM_ID) {
+    return true;
+    /* v8 ignore next */
+  }
   return assertNever(boss);
 }
 
@@ -544,9 +550,12 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
   let bossDefeated: boolean;
   if (s.boss.kind === CASCADE_ID) bossDefeated = isCascadeDefeated(s.boss);
   else if (s.boss.kind === ALERT_STORM_ID) bossDefeated = isBossDefeated(s.boss);
-  /* v8 ignore next */
-  else if (s.boss.kind === SILENT_FAILURE_ID) bossDefeated = isSilentFailureDefeated(s.boss);
-  else bossDefeated = assertNever(s.boss);
+  else if (s.boss.kind === SILENT_FAILURE_ID) {
+    bossDefeated = isSilentFailureDefeated(s.boss);
+    /* v8 ignore next 2 */
+  } else {
+    bossDefeated = assertNever(s.boss);
+  }
   if (bossDefeated) {
     s.status = "victory";
     s.events.push({ type: "victory" });
@@ -554,9 +563,12 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
     let forgeAbility: "fan-out" | "rollback" | "root-cause";
     if (s.boss.kind === CASCADE_ID) forgeAbility = "rollback";
     else if (s.boss.kind === ALERT_STORM_ID) forgeAbility = "fan-out";
-    /* v8 ignore next */
-    else if (s.boss.kind === SILENT_FAILURE_ID) forgeAbility = "root-cause";
-    else forgeAbility = assertNever(s.boss);
+    else if (s.boss.kind === SILENT_FAILURE_ID) {
+      forgeAbility = "root-cause";
+      /* v8 ignore next 2 */
+    } else {
+      forgeAbility = assertNever(s.boss);
+    }
     if (!s.defeatedBosses.includes(bossId)) {
       s.defeatedBosses.push(bossId);
       s.events.push({ type: "forge", ability: forgeAbility });
