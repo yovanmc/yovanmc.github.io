@@ -65,6 +65,16 @@ extraction tooling (`tools/extract-canon.mjs`) and the `verify:canon` CI step th
 byte-compares committed generated modules against a fresh extraction. `og-station.png`
 regenerated. This is the pipeline every later boss extraction depends on.
 
+## M3c — Intro moved behind the play button (PRs #17, #18, merged)
+
+Entry became the gate; the cinematic plays on the first play-entry per page load and
+the hero appears post-dive. Owner ruling 2026-07-28 taken right after M3b, superseding
+M2's intro-every-visit behavior. PR #18 carried the reduced-motion exemption (the reduce
+flag governs unsolicited/ambient motion only — the opt-in dive cinematic plays regardless,
+skip one keypress away), which is recorded as a living constraint on the Art direction
+line in `ROADMAP.md`. Archived from the main table in the M4 hygiene pass (2026-07-29)
+once M4 shipped and the table exceeded the last-3-shipped cap.
+
 ## M3b — Game/portfolio separation + intro integration (PR #16, merged)
 
 Phase machine intro -> gate -> play | browse, the `/browse` path, and a path-preserving
