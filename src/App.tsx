@@ -5,6 +5,7 @@ import { parseActions, parseBoss, parseDefeatedBosses } from "./battle/bootParam
 import { deriveFightChoice, nextUndefeatedBoss, type FightRow } from "./battle/fight";
 import { BOSS_NAMES } from "./battle/rushOrder";
 import { clearProgress, readProgress, writeProgress, type ProgressStore } from "./progress/store";
+import { isGateable, unlockedSlugs } from "./progress/unlocks";
 import { Station } from "./components/Station";
 import { Atmosphere } from "./components/Atmosphere";
 import { CaseStudyPage, type PageRef } from "./components/CaseStudyPage";
@@ -16,6 +17,13 @@ import { pathForPage, pageForPath } from "./router";
 const MONO = "'JetBrains Mono',monospace";
 const SERIF = "'Marcellus',serif";
 const MOBILE_BREAKPOINT = 760;
+
+/** Locked-row player-facing copy (M4 task B2, owner sign-off item 3 — the
+ * builder proposes wording here, the owner may replace any of it verbatim).
+ * Punctuation rule: no em dashes, no en dashes, no semicolons. */
+const LOCKED_LABEL = "Locked";
+const LOCKED_HINT = "Beat a boss to unlock this project.";
+const LOCKED_BODY = "This project stays sealed until you defeat the boss guarding it.";
 
 /**
  * Top-level phase machine (milestone 3, revised M3c): gate → play | browse,
@@ -599,6 +607,15 @@ export default function App() {
   const isMobile = w < MOBILE_BREAKPOINT;
   const cat = CATS[rootIdx];
   const item = cat.items[subIdx] ?? cat.items[0];
+  // Gating (M4 task B2, D6/D7): the play-path command menu locks the 4
+  // project items not yet earned. `phase === "play"` guards this even
+  // though every render site below is already play-phase-only chrome — the
+  // browse path (BrowseIndex.tsx, untouched by this milestone) always shows
+  // all 11 items per owner ruling 1.
+  const unlockedSet = unlockedSlugs(defeatedBosses);
+  const isLocked = (catKey: string, slug: string | undefined) =>
+    phase === "play" && isGateable(catKey, slug) && !unlockedSet.has(slug!);
+  const itemLocked = isLocked(cat.key, item.slug);
   const ringOpacity = phase === "gate" || phase === "intro" ? 0.82 : 0.2;
   const glassScale = isMobile ? Math.max(0.44, Math.min(0.62, (w - 30) / 680)) : 1;
   const detailW = Math.max(330, Math.min(540, w - 612));
@@ -770,11 +787,13 @@ export default function App() {
         <div style={{ height: "1px", margin: "22px 0", background: "linear-gradient(90deg, rgba(140,185,255,.5), transparent)" }} />
 
         <div style={{ fontFamily: SERIF, fontSize: "42px", lineHeight: 1.05, color: "#f1f5fc", letterSpacing: ".01em", filter: "drop-shadow(0 0 22px rgba(90,150,255,.3))" }}>
-          {item.title}
+          {itemLocked ? LOCKED_LABEL : item.title}
         </div>
-        <div style={{ marginTop: "10px", fontFamily: MONO, fontSize: "12px", letterSpacing: ".14em", color: "#9fc0ec" }}>{item.meta}</div>
+        <div style={{ marginTop: "10px", fontFamily: MONO, fontSize: "12px", letterSpacing: ".14em", color: "#9fc0ec" }}>
+          {itemLocked ? LOCKED_HINT : item.meta}
+        </div>
 
-        {!!item.stat && (
+        {!itemLocked && !!item.stat && (
           <div
             style={{
               display: "inline-flex",
@@ -792,10 +811,12 @@ export default function App() {
           </div>
         )}
 
-        <div style={{ marginTop: "22px", color: "#b6c2d8", fontSize: "15.5px", lineHeight: 1.65, maxWidth: "430px" }}>{item.body}</div>
+        <div style={{ marginTop: "22px", color: "#b6c2d8", fontSize: "15.5px", lineHeight: 1.65, maxWidth: "430px" }}>
+          {itemLocked ? LOCKED_BODY : item.body}
+        </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "24px" }}>
-          {item.tags.map((t, i) => (
+          {!itemLocked && item.tags.map((t, i) => (
             <span
               key={i}
               style={{
@@ -813,7 +834,7 @@ export default function App() {
           ))}
         </div>
 
-        {!!item.linkLabel && (
+        {!itemLocked && !!item.linkLabel && (
           <div
             onClick={() => activate()}
             role="button"
@@ -1018,6 +1039,7 @@ export default function App() {
             <div data-scroll style={{ padding: "8px", maxHeight: "46vh", overflowY: "auto", overflowX: "hidden" }}>
               {cat.items.map((it, j) => {
                 const active = col === "sub" && j === subIdx;
+                const locked = isLocked(cat.key, it.slug);
                 return (
                   <div
                     key={j}
@@ -1027,10 +1049,24 @@ export default function App() {
                     }}
                     onMouseEnter={() => setSub(j)}
                     role="button"
+                    aria-disabled={locked || undefined}
                     style={rowStyle(active)}
                   >
                     <span style={cursorStyle(active)}>▸</span>
-                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.title}</span>
+                    <span
+                      style={{
+                        flex: 1,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        opacity: locked ? 0.55 : 1,
+                      }}
+                    >
+                      {locked ? LOCKED_LABEL : it.title}
+                    </span>
+                    {locked && (
+                      <span style={{ fontFamily: MONO, fontSize: "10px", color: "#5f7196" }}>🔒</span>
+                    )}
                   </div>
                 );
               })}
@@ -1225,53 +1261,60 @@ export default function App() {
           </div>
         </div>
         <div data-scroll style={{ flex: 1, overflowY: "auto", padding: "6px 16px 120px" }}>
-          {cat.items.map((it, j) => (
-            <div
-              key={j}
-              onClick={() => {
-                setSub(j);
-                activate(rootIdx, j);
-              }}
-              role="button"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "14px",
-                padding: "18px",
-                marginBottom: "11px",
-                borderRadius: "15px",
-                background: "linear-gradient(160deg, rgba(22,44,86,.62), rgba(12,22,46,.54))",
-                border: "1px solid rgba(140,185,255,.26)",
-                boxShadow: "0 10px 30px -12px rgba(0,0,0,.5)",
-              }}
-            >
-              <span style={{ color: "#7fb0ff", fontSize: "15px" }}>▸</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: SERIF, fontSize: "21px", color: "#eaf1ff", marginBottom: "4px" }}>{it.title}</div>
-                <div style={{ fontFamily: MONO, fontSize: "11px", letterSpacing: ".06em", color: "#9fb6d6", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {it.meta}
+          {cat.items.map((it, j) => {
+            const locked = isLocked(cat.key, it.slug);
+            return (
+              <div
+                key={j}
+                onClick={() => {
+                  setSub(j);
+                  activate(rootIdx, j);
+                }}
+                role="button"
+                aria-disabled={locked || undefined}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  padding: "18px",
+                  marginBottom: "11px",
+                  borderRadius: "15px",
+                  background: "linear-gradient(160deg, rgba(22,44,86,.62), rgba(12,22,46,.54))",
+                  border: "1px solid rgba(140,185,255,.26)",
+                  boxShadow: "0 10px 30px -12px rgba(0,0,0,.5)",
+                  opacity: locked ? 0.6 : 1,
+                }}
+              >
+                <span style={{ color: locked ? "#5f7196" : "#7fb0ff", fontSize: "15px" }}>{locked ? "🔒" : "▸"}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: SERIF, fontSize: "21px", color: "#eaf1ff", marginBottom: "4px" }}>
+                    {locked ? LOCKED_LABEL : it.title}
+                  </div>
+                  <div style={{ fontFamily: MONO, fontSize: "11px", letterSpacing: ".06em", color: "#9fb6d6", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {locked ? LOCKED_HINT : it.meta}
+                  </div>
                 </div>
+                {!locked && !!it.stat && (
+                  <span
+                    style={{
+                      fontFamily: MONO,
+                      fontSize: "10px",
+                      letterSpacing: ".04em",
+                      color: "#cfe0ff",
+                      padding: "6px 10px",
+                      borderRadius: "8px",
+                      background: "rgba(80,150,255,.14)",
+                      border: "1px solid rgba(140,185,255,.26)",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {it.stat}
+                  </span>
+                )}
               </div>
-              {!!it.stat && (
-                <span
-                  style={{
-                    fontFamily: MONO,
-                    fontSize: "10px",
-                    letterSpacing: ".04em",
-                    color: "#cfe0ff",
-                    padding: "6px 10px",
-                    borderRadius: "8px",
-                    background: "rgba(80,150,255,.14)",
-                    border: "1px solid rgba(140,185,255,.26)",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  {it.stat}
-                </span>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
