@@ -204,3 +204,27 @@ description that lands the extraction.
   (M6 PR-2 task 2, pass-2 J10 — the pinned method for this slice, since a
   naive text grep false-positives on a comment at lab line 562 naming the
   hero's `overlay()`).
+- `src/generated/bossImposter.js` from `boss-imposter-syndrome.html`
+  (`function remapOf` → before `function drawGrid`, lines 372-444, file 469
+  lines): THE EXCEPTION SLICE — the only boss module that is not
+  self-contained. `remapOf` recolors the HERO's own `IDLE`/`ATK` frames (the
+  "stolen technique" bit) rather than drawing independent enemy-grid
+  primitives, so the generated module prepends
+  `import { IDLE, ATK, overlay, flashOf, ROWS, COLS } from "./heroBattle.js"`
+  ahead of the verbatim body. Free-identifier gate: comments-stripped,
+  measured EXACTLY `{IDLE, ATK, overlay, ROWS, COLS, flashOf}` — the pinned
+  `IMPOSTER_HERO_IMPORTS` constant, re-derived by tokenizing the slice (object
+  literal keys and loop-local bindings excluded) rather than a raw grep, since
+  the slice's own palette-key object literals (`IMPOSTER_MAP`) collide with a
+  naive identifier scan. Empirically confirmed by importing the generated
+  module standalone in Node: it evaluates with no `ReferenceError` (a missing
+  or wrong hero import throws immediately, since `IMP_IDLE` etc. are
+  eagerly-computed at module-load time). New
+  `tools/audit-imposter-parity.mjs`, wired into `verify:canon`, deep-equals
+  every exported `IMP_*` reel/frame set (lab-computed off its own embedded
+  hero half vs the generated module importing REAL canon `heroBattle.js`) —
+  this doubles as the hero-embed drift guard the other boss labs deliberately
+  don't get (§Frozen embed above): unlike Cascade/Silent Failure, Imposter's
+  embedded hero half is a LIVE dependency, not an inert frozen reference, so
+  the audit also spot-checks `IDLE[0]`/`IDLE[1]`/`ATK`/`ROWS`/`COLS`
+  byte-identical, lab vs canon, directly.

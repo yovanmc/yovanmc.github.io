@@ -19,6 +19,14 @@ export const CASCADE_ID = "cascade";
  * it to task 4 would fail task 3's own `npx tsc -b` gate on an unresolved
  * export. Only the IMPLEMENTED_BOSSES append stays in task 4. */
 export const SILENT_FAILURE_ID = "silent-failure";
+/** M6 PR-3 task 3 (SILENT_FAILURE_ID precedent, pass-2 J5): landed here, not
+ * task 5, for the same reason — bosses/imposter.ts re-exports this the way
+ * bosses/silentFailure.ts re-exports SILENT_FAILURE_ID, so deferring it to
+ * task 5 would fail task 3's own `npx tsc -b` gate on an unresolved export.
+ * Only the IMPLEMENTED_BOSSES append stays in task 5. Ledger row 25's literal
+ * count for this boss id moves 2 -> 3 here (RUSH_ORDER + BOSS_NAMES + this
+ * declaration's own value below), expected. */
+export const IMPOSTER_ID = "imposter-syndrome";
 
 /** Pinned boss-rush order (M6 plan §Cross-boss architecture). Fixed forever —
  * later PRs only ever read this, never reorder it. */
@@ -35,7 +43,12 @@ export const RUSH_ORDER: readonly string[] = [
  * own PR never grants a kit entry / route with no module behind it. Extend
  * this array, never remove from it, as each subsequent PR ships a boss.
  * M6 PR-1b task 3 grows it to include Cascade. */
-export const IMPLEMENTED_BOSSES: readonly string[] = [ALERT_STORM_ID, CASCADE_ID, SILENT_FAILURE_ID];
+export const IMPLEMENTED_BOSSES: readonly string[] = [
+  ALERT_STORM_ID,
+  CASCADE_ID,
+  SILENT_FAILURE_ID,
+  IMPOSTER_ID,
+];
 
 /** Display names for the FIGHT submenu (M6 plan §App wiring, PR-1b task 5).
  * Pinned here rather than in src/battle/fight.ts so the chooser-row helper

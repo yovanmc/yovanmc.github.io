@@ -34,6 +34,7 @@ const BOSS_LAB = resolve(root, "docs/battle-prototypes/boss-alert-storm.html");
 const BF_LAB = resolve(root, "docs/battle-prototypes/battlefield.html");
 const CASCADE_LAB = resolve(root, "docs/battle-prototypes/boss-cascade.html");
 const SF_LAB = resolve(root, "docs/battle-prototypes/boss-silent-failure.html");
+const IMP_LAB = resolve(root, "docs/battle-prototypes/boss-imposter-syndrome.html");
 const OUT_JS = resolve(root, "src/generated/stationCanon.js");
 const OUT_TIMELINE = resolve(root, "src/generated/diveTimeline.js");
 const OUT_HERO = resolve(root, "src/generated/heroBattle.js");
@@ -41,6 +42,7 @@ const OUT_BOSS = resolve(root, "src/generated/bossAlertStorm.js");
 const OUT_BF = resolve(root, "src/generated/battlefieldScene.js");
 const OUT_CASCADE = resolve(root, "src/generated/bossCascade.js");
 const OUT_SF = resolve(root, "src/generated/bossSilentFailure.js");
+const OUT_IMP = resolve(root, "src/generated/bossImposter.js");
 
 // Every symbol the dive lab's pure block declares — all exported, no cherry-picking.
 const TIMELINE_EXPORTS = [
@@ -191,6 +193,30 @@ const SILENT_FAILURE_EXPORTS = [
   "PIECES", "pieceShift", "SEP_MOVES", "FALL_MOVES", "silentHeap", "SIL_DIE",
 ];
 
+// Imposter Syndrome slice (M6 PR-3 task 2): start `function remapOf`, end
+// before `function drawGrid` (docs/battle-prototypes/boss-imposter-syndrome.html,
+// anchors measured at lines 372/445, file 469 lines — verified against
+// today's checkout). THE EXCEPTION SLICE (BUILDING.md §9's standing note):
+// unlike every other boss slice, this one is not self-contained — remapOf
+// recolors the HERO's own IDLE/ATK frames (the "stolen technique" bit), so
+// the slice free-references six hero symbols instead of declaring its own
+// enemy-grid primitives. Every top-level declaration in the slice is
+// exported, no cherry-picking (same policy as CASCADE_EXPORTS/
+// SILENT_FAILURE_EXPORTS) — verified name-for-name against the slice before
+// use, per plan instruction.
+const IMPOSTER_EXPORTS = [
+  "remapOf", "IMPOSTER_MAP", "eyes", "IMP_IDLE", "IMP_SLASH", "glitchOf",
+  "GLITCH_A", "GLITCH_B", "IMP_REEL", "IMP_ATK", "IMP_HIT", "hDither", "VOID", "IMP_DIE",
+];
+
+// Pinned free-identifier set (plan F11): measured comments-stripped against
+// the slice above (2026-07-29, M6 PR-3 task 2) — the ONLY six identifiers
+// the slice references that it does not itself declare. Any other free
+// identifier, or a missing one, means the slice's anchors moved and this
+// list needs re-deriving, not silently padding out — importing more than
+// what's actually free just hides real drift.
+const IMPOSTER_HERO_IMPORTS = ["IDLE", "ATK", "overlay", "flashOf", "ROWS", "COLS"];
+
 // Two-anchor slice; the cut lands at the START of the line holding endAnchor.
 function sliceBetween(html, startAnchor, endAnchor, name) {
   const a = html.indexOf(startAnchor);
@@ -244,6 +270,13 @@ function buildSilentFailureModule(body) {
     "export { " + SILENT_FAILURE_EXPORTS.join(", ") + " };\n";
 }
 
+function buildImposterModule(body) {
+  return battleHeader("boss-imposter-syndrome.html", "THE EXCEPTION SLICE: not self-contained — imports " + IMPOSTER_HERO_IMPORTS.join("/") + " from heroBattle.js instead of declaring its own enemy-grid primitives (remapOf recolors the hero's own frames). remapOf/eyes/glitchOf/hDither are the transform primitives; IMP_IDLE/IMP_SLASH/IMP_ATK/IMP_HIT/IMP_DIE are the pre-baked frame sets the renderer drives from erosion stage + phase. No PAL export here either — import it from diveTimeline.") +
+    "import { " + IMPOSTER_HERO_IMPORTS.join(", ") + " } from \"./heroBattle.js\";\n" +
+    body + "\n" +
+    "export { " + IMPOSTER_EXPORTS.join(", ") + " };\n";
+}
+
 // PAL-equality guard (pass-1 F13 / pass-2 n1): parse each lab's PAL literal and
 // deep-compare VALUES (text differs legitimately: quoting/layout).
 function parsePal(html, name) {
@@ -279,6 +312,7 @@ const bossHtml = readLf(BOSS_LAB);
 const bfHtml = readLf(BF_LAB);
 const cascadeHtml = readLf(CASCADE_LAB);
 const sfHtml = readLf(SF_LAB);
+const impHtml = readLf(IMP_LAB);
 const generatedHero = buildHeroModule(
   sliceBetween(heroHtml, "const PAL", "document.getElementById('staticRow')", "hero-battle.html"),
 );
@@ -293,6 +327,9 @@ const generatedCascade = buildCascadeModule(
 );
 const generatedSf = buildSilentFailureModule(
   sliceBetween(sfHtml, "const EROWS", "function drawGrid", "boss-silent-failure.html"),
+);
+const generatedImp = buildImposterModule(
+  sliceBetween(impHtml, "function remapOf", "function drawGrid", "boss-imposter-syndrome.html"),
 );
 
 // Drift guard first — the lab's embedded copy must match canon regardless of mode.
@@ -310,6 +347,7 @@ for (const [html, name] of [
   [bfHtml, "battlefield.html"],
   [cascadeHtml, "boss-cascade.html"],
   [sfHtml, "boss-silent-failure.html"],
+  [impHtml, "boss-imposter-syndrome.html"],
 ]) {
   if (canonicalJson(parsePal(html, name)) !== palRef) {
     fail("DRIFT: PAL in " + name + " no longer value-matches dive-intro.html's palette");
@@ -325,6 +363,7 @@ if (process.argv.includes("--verify")) {
     [OUT_BF, generatedBf, "battlefieldScene.js"],
     [OUT_CASCADE, generatedCascade, "bossCascade.js"],
     [OUT_SF, generatedSf, "bossSilentFailure.js"],
+    [OUT_IMP, generatedImp, "bossImposter.js"],
   ];
   for (const [path, fresh, name] of targets) {
     let committed;
@@ -335,7 +374,7 @@ if (process.argv.includes("--verify")) {
     }
     if (committed !== fresh) fail("DRIFT: committed " + name + " differs from a fresh extraction");
   }
-  console.log("verify:canon OK — station/timeline/hero/boss/battlefield/cascade/silent-failure modules match canon; lab station copy + PAL values match");
+  console.log("verify:canon OK — station/timeline/hero/boss/battlefield/cascade/silent-failure/imposter modules match canon; lab station copy + PAL values match");
 } else {
   mkdirSync(dirname(OUT_JS), { recursive: true });
   writeFileSync(OUT_JS, generated);
@@ -345,10 +384,11 @@ if (process.argv.includes("--verify")) {
   writeFileSync(OUT_BF, generatedBf);
   writeFileSync(OUT_CASCADE, generatedCascade);
   writeFileSync(OUT_SF, generatedSf);
+  writeFileSync(OUT_IMP, generatedImp);
   console.log(
     "extract-canon: wrote stationCanon.js (" + generated.length + " b) + diveTimeline.js (" + generatedTimeline.length +
     " b) + heroBattle.js (" + generatedHero.length + " b) + bossAlertStorm.js (" + generatedBoss.length +
     " b) + battlefieldScene.js (" + generatedBf.length + " b) + bossCascade.js (" + generatedCascade.length +
-    " b) + bossSilentFailure.js (" + generatedSf.length + " b)",
+    " b) + bossSilentFailure.js (" + generatedSf.length + " b) + bossImposter.js (" + generatedImp.length + " b)",
   );
 }

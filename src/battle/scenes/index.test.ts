@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { alertStormScene } from "./alertStorm";
 import { cascadeScene } from "./cascade";
 import { silentFailureScene } from "./silentFailure";
+import { imposterScene } from "./imposter";
 import { SCENE_MODULES, sceneFor } from "./index";
 
 describe("scene-module registry", () => {
@@ -19,16 +20,21 @@ describe("scene-module registry", () => {
     expect(SCENE_MODULES["silent-failure"]).toBe(silentFailureScene);
   });
 
+  it("registers Imposter Syndrome under its own id (M6 PR-3 task 6)", () => {
+    expect(SCENE_MODULES["imposter-syndrome"]).toBe(imposterScene);
+  });
+
   it("sceneFor resolves a known boss id", () => {
     expect(sceneFor("alert-storm")).toBe(alertStormScene);
     expect(sceneFor("cascade")).toBe(cascadeScene);
     expect(sceneFor("silent-failure")).toBe(silentFailureScene);
+    expect(sceneFor("imposter-syndrome")).toBe(imposterScene);
   });
 
   it("sceneFor falls back to Alert Storm for an unimplemented/unknown id (never a crash path)", () => {
-    // M6 PR-2 task 6 reconciliation (authorized table): re-pointed from
-    // "silent-failure" (now registered above) to "imposter-syndrome".
-    expect(sceneFor("imposter-syndrome")).toBe(alertStormScene);
+    // M6 PR-3 task 6 reconciliation (authorized table, the E3/PR-2-task-6
+    // precedent): re-pointed from "imposter-syndrome" (now registered above,
+    // the roster is complete) to a literal fake id.
     expect(sceneFor("nonsense")).toBe(alertStormScene);
   });
 });

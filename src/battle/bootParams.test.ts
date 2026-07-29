@@ -22,8 +22,12 @@ describe("parseBoss (`boss=` capture key — whitelist = IMPLEMENTED_BOSSES, def
     expect(parseBoss("silent-failure")).toBe("silent-failure");
   });
 
-  it("rejects a boss id that is not yet implemented, falling back to alert-storm (pass-2 G1 live-crash guard)", () => {
-    expect(parseBoss("imposter-syndrome")).toBe("alert-storm");
+  it("accepts imposter-syndrome (implemented as of PR-3)", () => {
+    expect(parseBoss("imposter-syndrome")).toBe("imposter-syndrome");
+  });
+
+  it("falls back to alert-storm for a fake id (E3 reconciliation: the roster is now complete, so the G1 anti-crash fallback must outlive roster completion — probed with a literal fake id rather than a real-but-unimplemented one, since none remains)", () => {
+    expect(parseBoss("not-a-real-boss")).toBe("alert-storm");
   });
 
   it("rejects garbage input, falling back to alert-storm", () => {
@@ -109,12 +113,25 @@ describe("parseActions (`actions=` capture key — extends the M5 grammar with `
     expect(parseActions("rb")).toEqual([{ type: "rb" }]);
   });
 
-  it("parses targeted tokens (attack/pt/debug carry a bat id)", () => {
+  it("parses a bare conv token (Conviction is untargeted, M6 PR-3 task 5)", () => {
+    expect(parseActions("conv")).toEqual([{ type: "conv" }]);
+  });
+
+  it("parses a targeted rc token (Root Cause carries a target id, M6 PR-3 task 5)", () => {
+    expect(parseActions("rc:1")).toEqual([{ type: "rc", target: 1 }]);
+  });
+
+  it("parses targeted tokens (attack/pt/debug/rc carry a bat id)", () => {
     expect(parseActions("attack:3")).toEqual([{ type: "attack", target: 3 }]);
-    expect(parseActions("debug:5,pt:2")).toEqual([
+    expect(parseActions("debug:5,pt:2,rc:0")).toEqual([
       { type: "debug", target: 5 },
       { type: "pt", target: 2 },
+      { type: "rc", target: 0 },
     ]);
+  });
+
+  it("drops a targetless rc token (target id required, same rule as attack/pt/debug)", () => {
+    expect(parseActions("rc")).toBeUndefined();
   });
 
   it("silently drops unrecognized tokens (today's path), keeping the recognized ones", () => {

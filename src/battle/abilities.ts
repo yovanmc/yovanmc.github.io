@@ -16,7 +16,7 @@ export interface AbilityCommand {
 }
 
 /** Fixed menu order; `commandsForKit` filters this down to the kit. */
-const ABILITY_ORDER: readonly AbilityId[] = ["attack", "ct", "pt", "debug", "fo", "rb"];
+const ABILITY_ORDER: readonly AbilityId[] = ["attack", "ct", "pt", "debug", "fo", "rb", "rc", "conv"];
 
 const ABILITY_DEFS: Record<AbilityId, AbilityCommand> = {
   attack: { id: "attack", label: "Attack", mp: 0, needsTarget: true, desc: "12 dmg · +1 MP on hit" },
@@ -26,9 +26,18 @@ const ABILITY_DEFS: Record<AbilityId, AbilityCommand> = {
   // Fan Out — signed Cascade resolution (base 8, dissect F1); an AoE cast
   // like CT: no target step, commits straight from the menu.
   fo: { id: "fo", label: "Fan Out", mp: 3, needsTarget: false, desc: "8 dmg to all · one reshuffle" },
-  // Rollback — M6 PR-2 task 4; an untargeted heal like CT/Fan Out. Cleanse is
-  // inert this fight (no hero-side debuff state exists until the Imposter).
+  // Rollback — M6 PR-2 task 4; an untargeted heal like CT/Fan Out. Real
+  // cleanse since M6 PR-3 task 4 (hero-side mark + DoT from the Imposter's
+  // mirrored Debug).
   rb: { id: "rb", label: "Rollback", mp: 3, needsTarget: false, desc: "30 heal · cleanses mark + DoT" },
+  // Root Cause — M6 PR-3 task 4, unlocked on defeating the Silent Failure.
+  // 22 dmg generally; against the Imposter it also ignores stealth and rips
+  // a VANISH phase back early.
+  rc: { id: "rc", label: "Root Cause", mp: 4, needsTarget: true, desc: "22 dmg · 33 vs marked · ignores stealth" },
+  // Conviction — M6 PR-3 task 4. Untargeted like CT/Fan Out/Rollback; the
+  // low-HP rescue cast, gated separately (see the command menu's gate check,
+  // task 6) on top of appearing in the derived kit.
+  conv: { id: "conv", label: "Conviction", mp: 5, needsTarget: false, desc: "doubles every other ability · lasts the fight" },
 };
 
 /** Ordered command list for a derived kit (src/battle/engine.ts's `deriveKit`). */
