@@ -15,6 +15,18 @@ export type FightChoice =
   | { mode: "direct"; boss: string }
   | { mode: "chooser"; rows: FightRow[] };
 
+/** Next boss in rush order the player has not beaten, or undefined when the
+ * rush is complete (M4 D11). Shared by deriveFightChoice and the intro dive
+ * handoff (App.tsx onIntroHandoff) so the two can never disagree — before
+ * this extraction, the dive handoff had no way to ask "what's next" without
+ * re-deriving chooser logic this module's header forbids (dissect pass 2
+ * F4: deriveFightChoice itself returns no next-undefeated-boss field once a
+ * chooser exists, and returns nothing useful at all once every IMPLEMENTED
+ * boss is beaten). */
+export function nextUndefeatedBoss(defeatedBosses: string[]): string | undefined {
+  return IMPLEMENTED_BOSSES.find((id) => !defeatedBosses.includes(id));
+}
+
 /** Next undefeated IMPLEMENTED boss on top (labeled, not a rematch) + every
  * already-defeated IMPLEMENTED boss below as a REMATCH row, in rush order
  * (plan §Cross-boss table: "Kit, FIGHT next-boss, and `boss=` whitelist all
@@ -26,7 +38,7 @@ export type FightChoice =
  * defeated roster only — no "next" row, per the plan's "defeated-roster only
  * when the next boss is not yet shipped". */
 export function deriveFightChoice(defeatedBosses: string[]): FightChoice {
-  const nextBoss = IMPLEMENTED_BOSSES.find((id) => !defeatedBosses.includes(id));
+  const nextBoss = nextUndefeatedBoss(defeatedBosses);
   const rows: FightRow[] = [];
   if (nextBoss) rows.push({ boss: nextBoss, label: BOSS_NAMES[nextBoss], isRematch: false });
   for (const id of IMPLEMENTED_BOSSES) {

@@ -2,8 +2,9 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSPrope
 import { CATS } from "./content";
 import type { BattleAction, BattleState } from "./battle/engine";
 import { parseActions, parseBoss, parseDefeatedBosses } from "./battle/bootParams";
-import { deriveFightChoice, type FightRow } from "./battle/fight";
+import { deriveFightChoice, nextUndefeatedBoss, type FightRow } from "./battle/fight";
 import { BOSS_NAMES } from "./battle/rushOrder";
+import { clearProgress, readProgress, writeProgress, type ProgressStore } from "./progress/store";
 import { Station } from "./components/Station";
 import { Atmosphere } from "./components/Atmosphere";
 import { CaseStudyPage, type PageRef } from "./components/CaseStudyPage";
@@ -57,11 +58,34 @@ interface BootState {
   battle?: BattleBoot;
 }
 
+/** Yields a ProgressStore | null, wrapped so that even ACCESSING
+ * window.localStorage cannot throw (some privacy configurations throw on
+ * the property getter itself, not just on method calls) — M4 D4, same
+ * precedent as the sessionStorage try/catch below. */
+function progressStore(): ProgressStore | null {
+  try {
+    return window.localStorage;
+  } catch {
+    // localStorage unavailable (privacy mode / disabled) — progress does not persist.
+    return null;
+  }
+}
+
 /** Initial-load decision — every arm of the plan's path table, computed synchronously. */
 function decideBoot(): BootState {
   const loc = window.location;
   const dev = import.meta.env.DEV || loc.hostname === "localhost";
   let path = loc.pathname;
+
+  // Dev-only progress wipe (M4 A5 step 7, capture-harness determinism). Must
+  // run BEFORE the pageForPath early-returns below: decideBoot returns for
+  // any path pageForPath resolves, which happens before the `if (dev)`
+  // capture-key block further down runs. Placing the wipe there would make
+  // /work/curio/?resetProgress=1 silently do nothing (dissect pass 2 F8).
+  if (dev) {
+    const resetParams = new URLSearchParams(loc.search);
+    if (resetParams.get("resetProgress") === "1") clearProgress(progressStore());
+  }
 
   // 404.html stashes unknown deep-link paths (path-preserving fallback); a
   // restored deep link bypasses the intro, same as a direct one.
@@ -88,7 +112,8 @@ function decideBoot(): BootState {
     const p = params.get("phase");
     if (p === "gate" || p === "play" || p === "browse") return { phase: p, page: null };
     if (p === "battle") {
-      const defeated = parseDefeatedBosses(params.get("defeated"));
+      const rawDefeated = params.get("defeated");
+      const defeated = parseDefeatedBosses(rawDefeated);
       if (defeated.rejected) {
         console.warn(
           "[dev] ?defeated= must be a rush-order prefix of alert-storm,cascade,silent-failure,imposter-syndrome — falling back to []",
@@ -102,7 +127,13 @@ function decideBoot(): BootState {
           attempt: parseInt(params.get("attempt") ?? "", 10) || 1,
           actions: parseActions(params.get("actions")),
           boss: parseBoss(params.get("boss")),
-          defeatedBosses: defeated.value,
+          // D5: leave defeatedBosses undefined when the raw param is absent,
+          // distinct from [] when it's present but empty. `battle` would
+          // otherwise be truthy on EVERY ?phase=battle boot regardless of
+          // whether ?defeated= was supplied, making "param omitted" and
+          // "param explicitly empty" indistinguishable downstream — the
+          // exact bug dissect pass 1 (M4 finding) caught in an earlier draft.
+          ...(rawDefeated !== null ? { defeatedBosses: defeated.value } : {}),
         },
       };
     }
@@ -164,13 +195,19 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>(boot.current.phase);
   const [introOn, setIntroOn] = useState(boot.current.phase === "intro");
   const [battleBoot, setBattleBoot] = useState<BattleBoot | null>(boot.current.battle ?? null);
-  // per-page-load run progress (M4 owns persistence and the unlock UI).
-  // Seeded from the boot's capture-key `defeated=` (if any) so a
-  // `?phase=battle&defeated=alert-storm` boot reaches BattleScene with the
-  // matching rider/kit instead of starting fresh — single source of truth,
-  // this same state is what line ~519 passes to BattleScene and what the
-  // FIGHT row label below reads.
-  const [defeatedBosses, setDefeatedBosses] = useState<string[]>(boot.current.battle?.defeatedBosses ?? []);
+  // Progression (M4 owns persistence and the unlock UI). Seeded from the
+  // boot's capture-key `defeated=` when explicitly supplied (dev URL wins,
+  // D5) — a `?phase=battle&defeated=alert-storm` boot reaches BattleScene
+  // with the matching rider/kit instead of starting fresh. Otherwise falls
+  // back to stored progress (D5, D4). This is a LAZY useState initializer
+  // (the arrow form) on purpose: a non-lazy `useState(readProgress(...))`
+  // would re-read storage on every render of App, which happens on every
+  // toast, resize, and keydown. Single source of truth — this same state is
+  // what line ~519 passes to BattleScene and what the FIGHT row label reads.
+  const bootBattle = boot.current.battle;
+  const [defeatedBosses, setDefeatedBosses] = useState<string[]>(() =>
+    bootBattle?.defeatedBosses !== undefined ? bootBattle.defeatedBosses : readProgress(progressStore()),
+  );
   // the dive has run this page load — later play-entries skip straight to the
   // menu, and the hero stands at the station only once he has actually dived
   const [hasDived, setHasDived] = useState(false);
@@ -198,8 +235,8 @@ export default function App() {
   const fightRows: FightRow[] = fightChoice.mode === "chooser" ? fightChoice.rows : [];
 
   // live mirror of state so the keydown listener always reads current values
-  const stateRef = useRef({ phase, col, rootIdx, subIdx, page, hasDived, fightChooserOpen, fightChooserIdx, fightRows });
-  stateRef.current = { phase, col, rootIdx, subIdx, page, hasDived, fightChooserOpen, fightChooserIdx, fightRows };
+  const stateRef = useRef({ phase, col, rootIdx, subIdx, page, hasDived, fightChooserOpen, fightChooserIdx, fightRows, defeatedBosses });
+  stateRef.current = { phase, col, rootIdx, subIdx, page, hasDived, fightChooserOpen, fightChooserIdx, fightRows, defeatedBosses };
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -497,13 +534,29 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // M5 PR-C: the dive lands directly in battle — touchdown, the Alert Storm
-  // descends, fight (owner ruling 2026-07-28). Victory lands in the menu world;
-  // re-entries within the same page load (hasDived) go straight to the menu.
+  // M5 PR-C: the dive lands directly in battle — touchdown, the boss
+  // descends, fight (owner ruling 2026-07-28). Victory lands in the menu
+  // world; re-entries within the same page load (hasDived) go straight to
+  // the menu. M4 D11: a RETURNING visitor with saved progress dives onto
+  // their next undefeated boss instead of always Alert Storm, so persistence
+  // doesn't turn every reload into a redundant rematch. A visitor who has
+  // beaten every IMPLEMENTED boss skips the battle entirely and lands in the
+  // menu world (standing M5 ruling: the menu world is the post-battle
+  // landing). First-time visitors are unaffected — nextUndefeatedBoss([])
+  // is always "alert-storm". Reads stateRef, not the `defeatedBosses` state
+  // variable directly: this callback's only dep is `goPhase` (referentially
+  // stable forever, `useCallback(..., [])`), so it is created once on mount
+  // and any state closed over directly would freeze at its mount-time value
+  // (dissect pass 2 F4 — the same stale-closure shape task B4 hits).
   const onIntroHandoff = useCallback(
     (_target: IntroTarget) => {
       setHasDived(true);
-      setBattleBoot({ seed: (Math.random() * 2147483646) | 0 || 1, attempt: 1 });
+      const nextBoss = nextUndefeatedBoss(stateRef.current.defeatedBosses);
+      if (nextBoss === undefined) {
+        goPhase("play");
+        return;
+      }
+      setBattleBoot({ seed: (Math.random() * 2147483646) | 0 || 1, attempt: 1, boss: nextBoss });
       goPhase("battle");
     },
     [goPhase],
@@ -513,6 +566,9 @@ export default function App() {
   const onBattleVictory = useCallback(
     (final: BattleState) => {
       setDefeatedBosses(final.defeatedBosses);
+      // The only write site (claim 4) — persist immediately alongside the
+      // in-memory state update so a reload never loses a just-earned win.
+      writeProgress(progressStore(), final.defeatedBosses);
       setBattleBoot(null);
       setCol("root");
       goPhase("play");
