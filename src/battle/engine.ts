@@ -413,7 +413,13 @@ function isBossTargetable(boss: BossState): boolean {
  * gate blocks them; only `attack` is exempted and lands here to whiff).
  * Returns the amount actually applied, so callers (attack's own +1 MP gain)
  * can gate on whether damage actually landed, generically. */
-function dealSingleTarget(s: BattleState, targetId: number, amount: number): number {
+/** `ignoreStealth` (default false — every existing caller keeps byte-identical
+ * behavior): bypasses the boss's own untargetable-while-hidden gate and lands
+ * the full amount anyway. Root Cause is the one caller that passes `true`
+ * ("reveals/ignores stealth", N-table) — attack's whiff rule and pt/debug's
+ * upstream invalid-target rejection are both untouched, so this flag can
+ * never leak into them. */
+function dealSingleTarget(s: BattleState, targetId: number, amount: number, ignoreStealth = false): number {
   if (s.boss.kind === CASCADE_ID) {
     const before = s.boss.nodes.find((n) => n.id === targetId)!.hp;
     s.boss = damageNode(s.boss, targetId, amount);
@@ -428,7 +434,11 @@ function dealSingleTarget(s: BattleState, targetId: number, amount: number): num
     return amount;
   }
   if (s.boss.kind === SILENT_FAILURE_ID) {
-    const applied = isTargetable(s.boss) ? amount : 0;
+    // Diff-review fix: Root Cause reaching here against a VANISHED boss must
+    // land its full hit, not whiff — "targeting-while-hidden stays Root
+    // Cause's job" (Boss 3 table) is exactly what PR-3 delivers. Every other
+    // caller (attack) still passes `ignoreStealth=false` and keeps whiffing.
+    const applied = (ignoreStealth || isTargetable(s.boss)) ? amount : 0;
     const before = s.boss.hp;
     s.boss = damageSilentFailure(s.boss, applied);
     const dealt = before - s.boss.hp;
@@ -442,8 +452,11 @@ function dealSingleTarget(s: BattleState, targetId: number, amount: number): num
     // them). `wasPop` is derived from boss state BEFORE the hit resolves,
     // never inferred from `dealt === 0` (carried-forward note: a real hit
     // can never coincidentally read as a pop this way, but the plan is
-    // explicit that the call site must derive it, not assume it).
-    const applied = isBossTargetable(s.boss) ? amount : 0;
+    // explicit that the call site must derive it, not assume it). rc never
+    // reaches this arm for Imposter (its own case has a bespoke bypass that
+    // ignores the CLONES illusion entirely), but `ignoreStealth` is honored
+    // generically here anyway, matching the SF arm's shape.
+    const applied = (ignoreStealth || isBossTargetable(s.boss)) ? amount : 0;
     const wasPop = s.boss.phase === "clones" && targetId !== s.boss.realIndex;
     const result = resolveImposterHit(s.boss, targetId, applied);
     s.boss = result.boss;
@@ -473,6 +486,26 @@ function markTarget(s: BattleState, targetId: number): void {
     assertNever(s.boss);
   }
   s.events.push({ type: "mark", batId: targetId });
+}
+
+/** Is `targetId` currently marked? Root Cause's +50% row (N-table: "vs marked
+ * +50% -> 33") describes the ABILITY, not an Imposter-only interaction — the
+ * mark exists on all four boss kinds (Cascade's per-node `marked`, Alert
+ * Storm's per-bat `marked`, Silent Failure's and Imposter's single boss-wide
+ * `marked`), so this is a generic accessor alongside cloneBoss/findTarget/
+ * isBossTargetable/dealSingleTarget/markTarget, never a kind check inlined at
+ * the rc call site (diff-review fix — the marked bonus was Imposter-only in
+ * the shipped 972a0f0 commit, a real defect against the abilities.ts row's
+ * promised "33 vs marked" for every other boss). */
+function isTargetMarked(boss: BossState, targetId: number): boolean {
+  if (boss.kind === CASCADE_ID) return !!boss.nodes.find((n) => n.id === targetId)?.marked;
+  if (boss.kind === ALERT_STORM_ID) return !!boss.bats.find((b) => b.id === targetId)?.marked;
+  if (boss.kind === SILENT_FAILURE_ID) return boss.marked;
+  if (boss.kind === IMPOSTER_ID) {
+    return boss.marked; // whole-boss flag — targetId (a clone slot) is irrelevant to it
+    /* v8 ignore next */
+  }
+  return assertNever(boss);
 }
 
 export function battleReduce(state: BattleState, action: BattleAction): BattleState {
@@ -594,7 +627,7 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
         // — bypasses resolveImposterHit's pop logic and always resolves for
         // real, regardless of which slot the player targeted.
         const wasVanish = s.boss.phase === "vanish";
-        const base = s.boss.marked ? ROOT_CAUSE_MARKED_DMG : ROOT_CAUSE_DMG;
+        const base = isTargetMarked(s.boss, action.target) ? ROOT_CAUSE_MARKED_DMG : ROOT_CAUSE_DMG;
         const amount = dealtDamage(base, s.ctTurns > 0, s.conviction);
         const realId = s.boss.realIndex ?? action.target;
         const before = s.boss.hp;
@@ -607,7 +640,16 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
         // completed phase).
         if (wasVanish) s.boss = ripBackVanish(s.boss);
       } else {
-        dealSingleTarget(s, action.target, dealtDamage(ROOT_CAUSE_DMG, s.ctTurns > 0, s.conviction));
+        // Diff-review fixes (two real defects in the shipped 972a0f0):
+        // (1) the +50%-vs-marked bonus is the ABILITY's own rule (N-table),
+        // not Imposter-only — every boss's Debug-mark state feeds the
+        // generic isTargetMarked accessor. (2) "reveals/ignores stealth"
+        // (Boss 3 table: "targeting-while-hidden stays Root Cause's job")
+        // means rc must land its full hit on a vanished Silent Failure, not
+        // whiff — `ignoreStealth=true` bypasses dealSingleTarget's own
+        // targetable gate for this one caller only.
+        const base = isTargetMarked(s.boss, action.target) ? ROOT_CAUSE_MARKED_DMG : ROOT_CAUSE_DMG;
+        dealSingleTarget(s, action.target, dealtDamage(base, s.ctTurns > 0, s.conviction), true);
       }
       break;
     }

@@ -1162,12 +1162,94 @@ describe("Root Cause (rc) — new ability this task: 4 MP (N1)", () => {
     expect(s1.boss.phase).toBe("clones");
   });
 
-  it("against a non-Imposter boss (fallback): plain flat-22 hit, no marked bonus, no vanish interaction", () => {
+  it("against a non-Imposter boss (fallback): flat 22 unmarked (the marked bonus + ignore-stealth generic behavior are covered below)", () => {
     const s0 = initBattle({ seed: 42, defeatedBosses: ["alert-storm", "cascade", "silent-failure"] });
     const real = bats(s0).find((b) => b.real)!;
     const s1 = battleReduce(s0, { type: "rc", target: real.id });
     const dmg = s1.events.find((e) => e.type === "damage");
     expect(dmg?.amount).toBe(22);
+  });
+});
+
+describe("rc marked bonus + ignores-stealth (diff-review fixes against 972a0f0 — both are player-reachable: beat Silent Failure, rc unlocks, rematch any boss)", () => {
+  it("vs a marked Cascade node deals 33, not 22 (and an unmarked node still takes 22)", () => {
+    const s0 = initBattle({ seed: 42, boss: "cascade", defeatedBosses: ["silent-failure"] });
+    if (s0.boss.kind !== "cascade") throw new Error("unreachable");
+    const cascadeBoss0 = s0.boss;
+    const targetId = cascadeBoss0.nodes.find((n) => n.id !== cascadeBoss0.carrier)!.id; // avoid the carrier shield's halving
+
+    const s1 = battleReduce(s0, { type: "rc", target: targetId });
+    if (s1.boss.kind !== "cascade") throw new Error("unreachable");
+    expect(s1.boss.nodes.find((n) => n.id === targetId)!.hp).toBe(25 - 22); // unmarked
+
+    // A real node's max is 25 (addendum-signed) — too low to observe an
+    // unclamped 33 without dying first, so this fixture bumps just the hp/
+    // maxHp headroom on the ALREADY-BUILT state to isolate the marked-bonus
+    // arithmetic from the unrelated 25-HP clamp; nothing else about the
+    // node (id, carrier status, marked flag under test) is touched.
+    const markedNodes = cascadeBoss0.nodes.map((n) =>
+      n.id === targetId ? { ...n, marked: true, hp: 100, maxHp: 100 } : n,
+    );
+    const marked: BattleState = { ...s0, boss: { ...cascadeBoss0, nodes: markedNodes } };
+    const s2 = battleReduce(marked, { type: "rc", target: targetId });
+    if (s2.boss.kind !== "cascade") throw new Error("unreachable");
+    expect(s2.boss.nodes.find((n) => n.id === targetId)!.hp).toBe(100 - 33);
+  });
+
+  it("vs a marked Alert Storm bat deals 33", () => {
+    const s0 = initBattle({ seed: 42, defeatedBosses: ["cascade", "silent-failure"] }); // alert-storm boots by default
+    const real = bats(s0).find((b) => b.real)!; // 60 HP — comfortably absorbs 33 unclamped
+    const marked: BattleState = {
+      ...s0,
+      boss: {
+        ...(s0.boss as AlertStormBoss),
+        bats: bats(s0).map((b) => (b.id === real.id ? { ...b, marked: true } : b)),
+      },
+    };
+    const s1 = battleReduce(marked, { type: "rc", target: real.id });
+    const realAfter = bats(s1).find((b) => b.id === real.id)!;
+    expect(real.hp - realAfter.hp).toBe(33);
+  });
+
+  it("vs a VANISHED Silent Failure lands full damage and does NOT whiff (Boss 3 table: \"targeting-while-hidden stays Root Cause's job\")", () => {
+    // rc only exists in kit AFTER Silent Failure is defeated once (KIT_UNLOCKS),
+    // so the only legal in-game way to cast it against SF at all is exactly
+    // the coordinator's scenario: a REMATCH — defeatedBosses already includes
+    // "silent-failure".
+    const s0 = silentFailureState(
+      { phase: "vanished", phaseTurnsLeft: 2 },
+      { defeatedBosses: ["alert-storm", "cascade", "silent-failure"] },
+    );
+    const s1 = battleReduce(s0, { type: "rc", target: SF_TARGET_ID });
+    if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(140 - 22); // full hit landed, not the whiffed 0
+    const dmg = s1.events.find((e) => e.type === "damage");
+    expect(dmg?.amount).toBe(22);
+  });
+
+  it("vs an embodied Silent Failure is unchanged: still a plain 22 hit", () => {
+    const s0 = silentFailureState(
+      { phase: "embodied", phaseTurnsLeft: 2 },
+      { defeatedBosses: ["alert-storm", "cascade", "silent-failure"] },
+    );
+    const s1 = battleReduce(s0, { type: "rc", target: SF_TARGET_ID });
+    if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(140 - 22);
+  });
+
+  it("regression guard: the ignore-stealth flag did not leak into attack/pt/debug against a vanished Silent Failure", () => {
+    const s0 = silentFailureState({ phase: "vanished", phaseTurnsLeft: 2 });
+
+    const attacked = battleReduce(s0, { type: "attack", target: SF_TARGET_ID });
+    if (attacked.boss.kind !== "silent-failure") throw new Error("unreachable");
+    expect(attacked.boss.hp).toBe(140); // still whiffs
+    expect(attacked.hero.mp).toBe(s0.hero.mp); // still no +1-on-hit (capped at the same max either way)
+
+    const pt = battleReduce(s0, { type: "pt", target: SF_TARGET_ID });
+    expect(pt.events).toEqual([{ type: "invalid", reason: "target is not there" }]);
+
+    const debug = battleReduce(s0, { type: "debug", target: SF_TARGET_ID });
+    expect(debug.events).toEqual([{ type: "invalid", reason: "target is not there" }]);
   });
 });
 
