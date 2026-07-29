@@ -33,12 +33,14 @@ const HERO_LAB = resolve(root, "docs/battle-prototypes/hero-battle.html");
 const BOSS_LAB = resolve(root, "docs/battle-prototypes/boss-alert-storm.html");
 const BF_LAB = resolve(root, "docs/battle-prototypes/battlefield.html");
 const CASCADE_LAB = resolve(root, "docs/battle-prototypes/boss-cascade.html");
+const SF_LAB = resolve(root, "docs/battle-prototypes/boss-silent-failure.html");
 const OUT_JS = resolve(root, "src/generated/stationCanon.js");
 const OUT_TIMELINE = resolve(root, "src/generated/diveTimeline.js");
 const OUT_HERO = resolve(root, "src/generated/heroBattle.js");
 const OUT_BOSS = resolve(root, "src/generated/bossAlertStorm.js");
 const OUT_BF = resolve(root, "src/generated/battlefieldScene.js");
 const OUT_CASCADE = resolve(root, "src/generated/bossCascade.js");
+const OUT_SF = resolve(root, "src/generated/bossSilentFailure.js");
 
 // Every symbol the dive lab's pure block declares — all exported, no cherry-picking.
 const TIMELINE_EXPORTS = [
@@ -171,6 +173,24 @@ const CASCADE_EXPORTS = [
   "cascadeDark", "cascadeAshes", "CAS_DIE",
 ];
 
+// Silent Failure slice (M6 PR-2 task 2): start `const EROWS`, end before
+// `function drawGrid` (docs/battle-prototypes/boss-silent-failure.html,
+// anchors at lines 372/689, slice = 372-688 inclusive — verified against
+// today's checkout). `buildSilAtk()` is invoked INSIDE the slice (line 670)
+// after its PIECES (648) / pieceShift (659) dependencies, so no reordering
+// is needed. Every top-level declaration in the slice is exported, no
+// cherry-picking (same policy as CASCADE_EXPORTS) — verified name-for-name
+// against the slice before use, per plan instruction.
+const SILENT_FAILURE_EXPORTS = [
+  "EROWS", "ECOLS", "newG", "eP", "eR", "eCarve", "eOutline", "eDither",
+  "draftA", "draftB", "draftC", "DRAFT_A", "DRAFT_B", "DRAFT_C",
+  "silentFinal", "SIL_BODY", "SIL_FADE", "SIL_EMPTY", "SIL_REEL",
+  "eOverlay", "eFlashOf", "eDitherAll", "eShift",
+  "SIL_ATK", "buildSilAtk",
+  "KNOCKED", "SIL_HIT",
+  "PIECES", "pieceShift", "SEP_MOVES", "FALL_MOVES", "silentHeap", "SIL_DIE",
+];
+
 // Two-anchor slice; the cut lands at the START of the line holding endAnchor.
 function sliceBetween(html, startAnchor, endAnchor, name) {
   const a = html.indexOf(startAnchor);
@@ -218,6 +238,12 @@ function buildCascadeModule(body) {
     "export { " + CASCADE_EXPORTS.join(", ") + " };\n";
 }
 
+function buildSilentFailureModule(body) {
+  return battleHeader("boss-silent-failure.html", "Monolithic reels are the API here (single entity, no per-entity state) — silentFinal/SIL_REEL/SIL_ATK/SIL_HIT/SIL_DIE drive frame family from engine phase. The lab's draftA/B/C hooded-specter/smoke/hollow-armor drafts ride along inertly. No PAL here — import it from diveTimeline.") +
+    body + "\n" +
+    "export { " + SILENT_FAILURE_EXPORTS.join(", ") + " };\n";
+}
+
 // PAL-equality guard (pass-1 F13 / pass-2 n1): parse each lab's PAL literal and
 // deep-compare VALUES (text differs legitimately: quoting/layout).
 function parsePal(html, name) {
@@ -252,6 +278,7 @@ const heroHtml = readLf(HERO_LAB);
 const bossHtml = readLf(BOSS_LAB);
 const bfHtml = readLf(BF_LAB);
 const cascadeHtml = readLf(CASCADE_LAB);
+const sfHtml = readLf(SF_LAB);
 const generatedHero = buildHeroModule(
   sliceBetween(heroHtml, "const PAL", "document.getElementById('staticRow')", "hero-battle.html"),
 );
@@ -263,6 +290,9 @@ const generatedBf = buildBfModule(
 );
 const generatedCascade = buildCascadeModule(
   sliceBetween(cascadeHtml, "const EROWS", "function drawGrid", "boss-cascade.html"),
+);
+const generatedSf = buildSilentFailureModule(
+  sliceBetween(sfHtml, "const EROWS", "function drawGrid", "boss-silent-failure.html"),
 );
 
 // Drift guard first — the lab's embedded copy must match canon regardless of mode.
@@ -279,6 +309,7 @@ for (const [html, name] of [
   [bossHtml, "boss-alert-storm.html"],
   [bfHtml, "battlefield.html"],
   [cascadeHtml, "boss-cascade.html"],
+  [sfHtml, "boss-silent-failure.html"],
 ]) {
   if (canonicalJson(parsePal(html, name)) !== palRef) {
     fail("DRIFT: PAL in " + name + " no longer value-matches dive-intro.html's palette");
@@ -293,6 +324,7 @@ if (process.argv.includes("--verify")) {
     [OUT_BOSS, generatedBoss, "bossAlertStorm.js"],
     [OUT_BF, generatedBf, "battlefieldScene.js"],
     [OUT_CASCADE, generatedCascade, "bossCascade.js"],
+    [OUT_SF, generatedSf, "bossSilentFailure.js"],
   ];
   for (const [path, fresh, name] of targets) {
     let committed;
@@ -303,7 +335,7 @@ if (process.argv.includes("--verify")) {
     }
     if (committed !== fresh) fail("DRIFT: committed " + name + " differs from a fresh extraction");
   }
-  console.log("verify:canon OK — station/timeline/hero/boss/battlefield/cascade modules match canon; lab station copy + PAL values match");
+  console.log("verify:canon OK — station/timeline/hero/boss/battlefield/cascade/silent-failure modules match canon; lab station copy + PAL values match");
 } else {
   mkdirSync(dirname(OUT_JS), { recursive: true });
   writeFileSync(OUT_JS, generated);
@@ -312,9 +344,11 @@ if (process.argv.includes("--verify")) {
   writeFileSync(OUT_BOSS, generatedBoss);
   writeFileSync(OUT_BF, generatedBf);
   writeFileSync(OUT_CASCADE, generatedCascade);
+  writeFileSync(OUT_SF, generatedSf);
   console.log(
     "extract-canon: wrote stationCanon.js (" + generated.length + " b) + diveTimeline.js (" + generatedTimeline.length +
     " b) + heroBattle.js (" + generatedHero.length + " b) + bossAlertStorm.js (" + generatedBoss.length +
-    " b) + battlefieldScene.js (" + generatedBf.length + " b) + bossCascade.js (" + generatedCascade.length + " b)",
+    " b) + battlefieldScene.js (" + generatedBf.length + " b) + bossCascade.js (" + generatedCascade.length +
+    " b) + bossSilentFailure.js (" + generatedSf.length + " b)",
   );
 }
