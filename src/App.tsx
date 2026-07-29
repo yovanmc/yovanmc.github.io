@@ -582,6 +582,19 @@ export default function App() {
     snd.back();
   }, [goPhase, snd]);
 
+  /** Player-facing progress wipe (M4 A6). A player who has beaten the rush
+   * has no way to replay from zero once progress persists (A5), so a reset
+   * affordance lives in the play-path menu (not the browse path). A single
+   * click performs the wipe and confirms via the existing showToast pattern
+   * (App.tsx:181/368) - no separate are-you-sure step. */
+  const resetProgressAction = useCallback(() => {
+    snd.resume();
+    clearProgress(progressStore());
+    setDefeatedBosses([]);
+    showToast("Progress reset. Back to the start.");
+    snd.back();
+  }, [snd, showToast]);
+
   // ---- derived view values ----
   const isMobile = w < MOBILE_BREAKPOINT;
   const cat = CATS[rootIdx];
@@ -916,6 +929,53 @@ export default function App() {
             {fightChoice.mode === "direct" ? BOSS_NAMES[fightChoice.boss].toUpperCase() : "CHOOSE"}
           </span>
         </div>
+
+        {/* RESET — play-path progress wipe (M4 A6). Simplest-correct default
+            placement per the plan (a small subdued text row below FIGHT,
+            inside the same play-phase-only command-system container as the
+            root menu and FIGHT). PLACEMENT QUESTION for the orchestrator's
+            diff review: the plan flagged this menu as ambiguous on where a
+            reset action belongs; this is the builder's default, not an
+            owner ruling. Not inside CATS/content.ts (owner-voice surface,
+            untouched by this milestone, same reason FIGHT lives out here).
+            Owner ruling (diff review): gated on defeatedBosses.length > 0 —
+            a permanently visible reset advertises state machinery to a
+            first-time visitor with nothing to reset, and after PR-B it
+            would sit next to locked rows as pure noise.
+            KNOWN ACCEPTED GAP: this row is click-only, not keyboard-
+            reachable. The desktop command system is keyboard-first and
+            FIGHT is arrow-key-reachable, so this is inconsistent with that
+            precedent — but wiring RESET into the col/rootIdx/"fight" state
+            machine is out of scope for a persistence milestone and risks
+            regressing navigation. Deliberately NOT adding tabIndex/onKeyDown
+            either: a focusable element inside a UI with a global keydown
+            listener risks double-firing. Logged, not fixed here. */}
+        {defeatedBosses.length > 0 && (
+          <div
+            role="button"
+            aria-label="Reset progress"
+            onClick={resetProgressAction}
+            style={{
+              marginTop: "10px",
+              width: "236px",
+              padding: "9px 16px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              cursor: "pointer",
+              borderRadius: "10px",
+              background: "rgba(255,255,255,.02)",
+              border: "1px solid rgba(140,160,190,.18)",
+              fontFamily: MONO,
+              fontSize: "10.5px",
+              letterSpacing: ".14em",
+              color: "#7f8fac",
+            }}
+          >
+            <span style={{ color: "#9aa8c4" }}>↺</span>
+            <span>RESET PROGRESS</span>
+          </div>
+        )}
 
         {/* submenu */}
         <div
@@ -1302,6 +1362,41 @@ export default function App() {
       >
         <span style={{ color: "#ff9d8a" }}>⚔</span> Fight
       </div>
+
+      {/* mobile RESET chip (M4 A6) — same play-phase-only rule as the FIGHT
+          chip (isMobile && booted && !page, matching the shipped FIGHT chip
+          exactly), positioned top-right since the bottom edge is already
+          occupied by the command bar and the FIGHT chip. Placement question
+          same as the desktop RESET row above. Gated on defeatedBosses.length
+          > 0, same owner ruling as the desktop row. */}
+      {defeatedBosses.length > 0 && (
+      <div
+        data-ui
+        role="button"
+        aria-label="Reset progress"
+        onClick={resetProgressAction}
+        style={{
+          position: "absolute",
+          right: "14px",
+          top: "20px",
+          zIndex: 24,
+          display: isMobile && booted && !page ? "flex" : "none",
+          alignItems: "center",
+          gap: "6px",
+          padding: "8px 14px",
+          borderRadius: "999px",
+          background: "rgba(255,255,255,.05)",
+          border: "1px solid rgba(160,175,200,.28)",
+          fontFamily: MONO,
+          fontSize: "10px",
+          letterSpacing: ".12em",
+          color: "#aab6cc",
+          cursor: "pointer",
+        }}
+      >
+        ↺ RESET
+      </div>
+      )}
 
       {/* toast */}
       <div
