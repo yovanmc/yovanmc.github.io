@@ -33,22 +33,35 @@ export interface DefeatedParseResult {
   rejected: boolean;
 }
 
-/** `defeated=` capture key: validates as a RUSH_ORDER PREFIX (order-sensitive,
- * per the literal meaning of "prefix") after dedupe (dissect F8 — id-set
- * validation would let rider count and kit derivation disagree, e.g.
- * `defeated=silent-failure` implying 110/12 stats with Root Cause but no Fan
- * Out, a state unreachable in play). Anything that isn't an exact prefix
- * rejects to `[]`. */
+/** Shared dedupe+prefix-validation core (M4 D1 — one shared validator,
+ * never two). Dedupes `tokens` preserving first-seen order, then checks the
+ * result against an exact prefix of `rushOrder` (order-sensitive, per the
+ * literal meaning of "prefix"): dissect F8 found that id-set validation
+ * would let rider count and kit derivation disagree, e.g. `silent-failure`
+ * alone implying 110/12 stats with Root Cause but no Fan Out, a state
+ * unreachable in play. Anything that isn't an exact prefix rejects to `[]`.
+ * `rushOrder` defaults to the real RUSH_ORDER; the parameter exists so
+ * src/progress's D2 implemented-boss cap is testable without mutating the
+ * real constants (M4 A1 — required, not optional, per dissect pass 2 F3). */
+export function coerceRushPrefix(
+  tokens: string[],
+  rushOrder: readonly string[] = RUSH_ORDER,
+): DefeatedParseResult {
+  const deduped = Array.from(new Set(tokens));
+  const prefix = rushOrder.slice(0, deduped.length);
+  const isValid = deduped.length === prefix.length && deduped.every((id, i) => id === prefix[i]);
+  return isValid ? { value: prefix, rejected: false } : { value: [], rejected: true };
+}
+
+/** `defeated=` capture key: validates as a RUSH_ORDER PREFIX after dedupe.
+ * See coerceRushPrefix for the shared validation core. */
 export function parseDefeatedBosses(raw: string | null): DefeatedParseResult {
   if (raw === null) return { value: [], rejected: false };
   const tokens = raw
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
-  const deduped = Array.from(new Set(tokens));
-  const prefix = RUSH_ORDER.slice(0, deduped.length);
-  const isValid = deduped.length === prefix.length && deduped.every((id, i) => id === prefix[i]);
-  return isValid ? { value: prefix, rejected: false } : { value: [], rejected: true };
+  return coerceRushPrefix(tokens);
 }
 
 /** `actions=` capture key: `ct,debug:3,pt:0,fo` -> engine actions (targets

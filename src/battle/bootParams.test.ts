@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseActions, parseBoss, parseDefeatedBosses } from "./bootParams";
+import { coerceRushPrefix, parseActions, parseBoss, parseDefeatedBosses } from "./bootParams";
 
 describe("parseBoss (`boss=` capture key — whitelist = IMPLEMENTED_BOSSES, default alert-storm)", () => {
   it("defaults to alert-storm when the param is absent", () => {
@@ -89,6 +89,30 @@ describe("parseDefeatedBosses (`defeated=` capture key — rush-order PREFIX val
     expect(
       parseDefeatedBosses("alert-storm,cascade,silent-failure,imposter-syndrome,bogus"),
     ).toEqual({ value: [], rejected: true });
+  });
+});
+
+describe("coerceRushPrefix (shared dedupe+prefix-validation core, extracted from parseDefeatedBosses — A1)", () => {
+  it("dedupes preserving first-seen order and validates against the default RUSH_ORDER", () => {
+    expect(coerceRushPrefix(["alert-storm", "alert-storm", "cascade"])).toEqual({
+      value: ["alert-storm", "cascade"],
+      rejected: false,
+    });
+  });
+
+  it("rejects an out-of-order token set against the default RUSH_ORDER", () => {
+    expect(coerceRushPrefix(["cascade", "alert-storm"])).toEqual({ value: [], rejected: true });
+  });
+
+  it("accepts an empty token list as an empty, non-rejected prefix", () => {
+    expect(coerceRushPrefix([])).toEqual({ value: [], rejected: false });
+  });
+
+  it("validates against an explicit non-default rushOrder parameter, not the real RUSH_ORDER (D2 seam)", () => {
+    const localRoster = ["a", "b", "c"];
+    expect(coerceRushPrefix(["a", "b"], localRoster)).toEqual({ value: ["a", "b"], rejected: false });
+    // "alert-storm" is valid against the real RUSH_ORDER but not against localRoster.
+    expect(coerceRushPrefix(["alert-storm"], localRoster)).toEqual({ value: [], rejected: true });
   });
 });
 
