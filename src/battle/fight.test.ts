@@ -16,13 +16,28 @@ describe("deriveFightChoice (FIGHT submenu chooser derivation, defeatedBosses �
     });
   });
 
-  it("shows the defeated roster only, no next row, once every IMPLEMENTED boss is defeated", () => {
+  it("shows Imposter Syndrome as the next-undefeated row (not a rematch) once Alert Storm, Cascade, and Silent Failure are all beaten (E3 reconciliation: this 3-defeated input used to be the full roster — the roster grew a 4th boss at PR-3)", () => {
     expect(deriveFightChoice(["alert-storm", "cascade", "silent-failure"])).toEqual({
+      mode: "chooser",
+      rows: [
+        { boss: "imposter-syndrome", label: "Imposter Syndrome", isRematch: false },
+        { boss: "alert-storm", label: "Alert Storm", isRematch: true },
+        { boss: "cascade", label: "The Cascade", isRematch: true },
+        { boss: "silent-failure", label: "The Silent Failure", isRematch: true },
+      ],
+    });
+  });
+
+  it("shows the defeated roster only, no next row, once every IMPLEMENTED boss is defeated (E3 reconciliation: re-pointed to the full four-boss input now that the roster is complete)", () => {
+    expect(
+      deriveFightChoice(["alert-storm", "cascade", "silent-failure", "imposter-syndrome"]),
+    ).toEqual({
       mode: "chooser",
       rows: [
         { boss: "alert-storm", label: "Alert Storm", isRematch: true },
         { boss: "cascade", label: "The Cascade", isRematch: true },
         { boss: "silent-failure", label: "The Silent Failure", isRematch: true },
+        { boss: "imposter-syndrome", label: "Imposter Syndrome", isRematch: true },
       ],
     });
   });
@@ -38,8 +53,8 @@ describe("deriveFightChoice (FIGHT submenu chooser derivation, defeatedBosses �
     });
   });
 
-  it("ignores an unimplemented boss id in defeatedBosses (defensive — never reachable via validated parseDefeatedBosses)", () => {
-    expect(deriveFightChoice(["imposter-syndrome"])).toEqual({ mode: "direct", boss: "alert-storm" });
+  it("ignores a fake boss id in defeatedBosses (defensive — never reachable via validated parseDefeatedBosses; E3 reconciliation: re-pointed from imposter-syndrome, which is now IMPLEMENTED and asserted for real above — the all-four-defeated full-rematch-chooser case this row also calls for is exactly the 'shows the defeated roster only' case above, not duplicated here)", () => {
+    expect(deriveFightChoice(["not-a-real-boss"])).toEqual({ mode: "direct", boss: "alert-storm" });
   });
 
   it("shows silent-failure as a chooser REMATCH row once implemented, even though defeating it alone (without alert-storm/cascade first) is unreachable in real play", () => {

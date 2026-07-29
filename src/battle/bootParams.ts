@@ -64,7 +64,8 @@ export function parseActions(raw: string | null): BattleAction[] | undefined {
     if (name === "ct") out.push({ type: "ct" });
     else if (name === "fo") out.push({ type: "fo" });
     else if (name === "rb") out.push({ type: "rb" });
-    else if (name === "attack" || name === "pt" || name === "debug") {
+    else if (name === "conv") out.push({ type: "conv" });
+    else if (name === "attack" || name === "pt" || name === "debug" || name === "rc") {
       const target = tgt !== undefined ? parseInt(tgt, 10) : NaN;
       if (!Number.isNaN(target)) out.push({ type: name, target });
     }

@@ -418,9 +418,9 @@ describe("derived rider (M6 — carry-over is derived, not stored)", () => {
 });
 
 describe("RUSH_ORDER / IMPLEMENTED_BOSSES (pinned constants)", () => {
-  it("rush order is the four bosses in fight order; Alert Storm, Cascade, and Silent Failure are implemented as of PR-2", () => {
+  it("rush order is the four bosses in fight order; all four are implemented as of PR-3 (E3 reconciliation)", () => {
     expect(RUSH_ORDER).toEqual(["alert-storm", "cascade", "silent-failure", "imposter-syndrome"]);
-    expect(IMPLEMENTED_BOSSES).toEqual(["alert-storm", "cascade", "silent-failure"]);
+    expect(IMPLEMENTED_BOSSES).toEqual(["alert-storm", "cascade", "silent-failure", "imposter-syndrome"]);
   });
 });
 
@@ -430,8 +430,30 @@ describe("kit derivation", () => {
     expect(deriveKit(["alert-storm"])).toEqual(["attack", "ct", "pt", "debug", "fo"]);
   });
 
-  it("cascade grants its real PR-2 unlock (rb); imposter-syndrome, still outside IMPLEMENTED_BOSSES, is ignored — no crash, no phantom kit growth (pass-2 G1 guard)", () => {
-    expect(deriveKit(["cascade", "imposter-syndrome"])).toEqual(["attack", "ct", "pt", "debug", "rb"]);
+  it("cascade grants its real PR-2 unlock (rb); a fake boss id is ignored — no crash, no phantom kit growth (pass-2 G1 guard, 5th E3 reconciliation: re-pointed from imposter-syndrome, which is now IMPLEMENTED and asserted separately below rather than folded into this G1 probe — flipping THIS test's expectation to include \"conv\" would have deleted the only assertion protecting the G1 invariant)", () => {
+    expect(deriveKit(["cascade", "not-a-real-boss"])).toEqual(["attack", "ct", "pt", "debug", "rb"]);
+  });
+
+  it("N10 path (b), both arms (task 5's deriveKit v8-ignore deletion): imposter-syndrome defeated grants conv; imposter-syndrome NOT defeated does not, even alongside every other boss", () => {
+    expect(deriveKit(["alert-storm", "cascade", "silent-failure", "imposter-syndrome"])).toEqual([
+      "attack",
+      "ct",
+      "pt",
+      "debug",
+      "fo",
+      "rb",
+      "rc",
+      "conv",
+    ]);
+    expect(deriveKit(["alert-storm", "cascade", "silent-failure"])).toEqual([
+      "attack",
+      "ct",
+      "pt",
+      "debug",
+      "fo",
+      "rb",
+      "rc",
+    ]);
   });
 
   it("the reducer rejects an out-of-kit action type as invalid, without mutating turn/hero (forward-compat guard proven ahead of Fan Out landing)", () => {
@@ -594,11 +616,17 @@ describe("Cascade boot + dispatch (M6 PR-1b task 3)", () => {
     expect(s.boss.carrier).toBe(0);
   });
 
-  it("falls back to alert-storm for an unimplemented/garbage boss id (never a crash path)", () => {
-    // M6 PR-2 task 5 reconciliation (authorized table): re-pointed from
-    // "silent-failure" to "imposter-syndrome" now that silent-failure boots
-    // for real below; "not-a-real-boss" (the G1 guard, D1) stays untouched.
-    expect(initBattle({ seed: 42, boss: "imposter-syndrome" }).boss.kind).toBe("alert-storm");
+  it("initBattle boots boss: \"imposter-syndrome\" on request, opens in clones at full HP (6th E3-class reconciliation, task 5)", () => {
+    const s = initBattle({ seed: 42, boss: "imposter-syndrome" });
+    expect(s.boss.kind).toBe("imposter-syndrome");
+    if (s.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s.boss.hp).toBe(180);
+    expect(s.boss.maxHp).toBe(180);
+    expect(s.boss.phase).toBe("clones");
+    expect(s.boss.realIndex).not.toBeNull();
+  });
+
+  it("falls back to alert-storm for a fake boss id (never a crash path; 6th E3-class reconciliation: re-pointed from imposter-syndrome, which now boots for real above — see the M6 PR-2 task 5 precedent this same test followed for silent-failure)", () => {
     expect(initBattle({ seed: 42, boss: "not-a-real-boss" }).boss.kind).toBe("alert-storm");
     expect(initBattle({ seed: 42 }).boss.kind).toBe("alert-storm");
   });
@@ -1537,5 +1565,175 @@ describe("engine.ts real coverage gaps (Imposter) — E2 discipline: every new b
     const s1 = battleReduce(s0, { type: "ct" }); // untargeted, isolates the tick
     expect(s1.status).toBe("victory");
     expect(s1.events.some((e) => e.type === "batDown" && e.batId === 0)).toBe(true);
+  });
+});
+
+describe("Imposter boot + engine-generated win line (M6 PR-3 task 5)", () => {
+  it('initBattle boots boss: "imposter-syndrome" on request: opens in CLONES at full 180/180, unmarked, no forge/degeneration yet', () => {
+    const s = initBattle({
+      seed: 42,
+      boss: "imposter-syndrome",
+      defeatedBosses: ["alert-storm", "cascade", "silent-failure"],
+    });
+    expect(s.boss.kind).toBe("imposter-syndrome");
+    if (s.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s.boss.hp).toBe(180);
+    expect(s.boss.maxHp).toBe(180);
+    expect(s.boss.phase).toBe("clones");
+    expect(s.boss.phaseTurnsLeft).toBe(2);
+    expect(s.boss.marked).toBe(false);
+    expect(s.boss.degenerate).toBe(false);
+    expect(s.boss.forgeFired).toBe(false);
+    expect(s.boss.realIndex).not.toBeNull();
+  });
+
+  it("hero arrives at the signed 130/16 with Root Cause in kit (defeatedBosses: alert-storm + cascade + silent-failure)", () => {
+    const s = initBattle({
+      seed: 42,
+      boss: "imposter-syndrome",
+      defeatedBosses: ["alert-storm", "cascade", "silent-failure"],
+    });
+    expect(s.hero).toEqual({ hp: 130, maxHp: 130, mp: 16, maxMp: 16 });
+    expect(deriveKit(s.defeatedBosses)).toContain("rc");
+  });
+
+  describe("action tokens (bootParams.ts §actions=): rc:<id> / conv now parse (M6 PR-3 task 5)", () => {
+    // engine.test.ts owns the reducer-level shape; bootParams.test.ts owns the
+    // string-parsing contract. Covered here too because the reducer is what
+    // actually consumes the parsed shape end to end.
+    it("rc with a target reaches the reducer and resolves", () => {
+      const s0 = imposterState();
+      const s1 = battleReduce(s0, { type: "rc", target: 0 });
+      if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+      expect(s1.boss.hp).toBe(180 - 22);
+    });
+
+    it("conv without the gate met (hp*4 > maxHp) is rejected as invalid, same rejection path a garbage token's absence would leave silent", () => {
+      // forgeFired:true unlocks conv via the mid-fight N10(a) channel (kit
+      // derivation off defeatedBosses would ALSO reject this as "not in
+      // kit" first — this isolates the gate check itself).
+      const s0 = imposterState({ forgeFired: true });
+      const s1 = battleReduce(s0, { type: "conv" });
+      expect(s1.events).toEqual([{ type: "invalid", reason: "conviction gate not met" }]);
+    });
+  });
+
+  describe("the engine-generated win line (the plan's hand-derivation was illegal at H5 against the shipped phase-transition timing — VANISH's untargetable gate, the SAME signed rule Silent Failure's own PT/PT/whiff/CT/PT/PT line already demonstrates, rejects PT the instant PULSE's fire crosses the phase boundary INSIDE that same reducer call, one turn earlier than the hand-derivation assumed. This is the corrected, empirically re-derived line — not a hand-pinned literal sequence: it runs through the real reducer and asserts OBSERVED facts, per standing rule F1)", () => {
+    function winLine() {
+      let s = initBattle({
+        seed: 42,
+        boss: "imposter-syndrome",
+        defeatedBosses: ["alert-storm", "cascade", "silent-failure"],
+      });
+      if (s.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+      const realIndex = s.boss.realIndex ?? 0; // seeded at spawn, never reseeds this fight
+
+      // H1 attack (real slot, clones) · H2 rc (clones->pulse, ignores the
+      // illusion) · H3 ct (buff window) · H4 pt (pulse fires -> vanish) ·
+      // H5 ct (re-cast, covers the vanish ambush + the rip-back turn) ·
+      // H6 rc (rips the vanish; the <=50% crossing fires here too) ·
+      // H7 debug (marks the boss; mirror fires, mirroring Debug) ·
+      // H8 rc (the marked-target payoff: 33 vs the plain 22) ·
+      // H9 attack (mirror fires again, mirroring rc) · H10 attack (lethal,
+      // real slot).
+      const ACTIONS: BattleAction[] = [
+        { type: "attack", target: realIndex },
+        { type: "rc", target: 0 },
+        { type: "ct" },
+        { type: "pt", target: 0 },
+        { type: "ct" },
+        { type: "rc", target: 0 },
+        { type: "debug", target: 0 },
+        { type: "rc", target: 0 },
+        { type: "attack", target: 0 },
+        { type: "attack", target: realIndex },
+      ];
+
+      const phasesSeen = new Set<string>();
+      let invalidCount = 0;
+      let mirrorFired = 0;
+      let pulseFired = false;
+      let vanishRippedByRc = false;
+      let degenerateReached = false;
+      let forgeCrossingSeen = false;
+      let unlockSeen = false;
+      let victorySeen = false;
+      phasesSeen.add(s.boss.phase);
+      for (const action of ACTIONS) {
+        if (s.status !== "active") break;
+        const prePhase = s.boss.kind === "imposter-syndrome" ? s.boss.phase : undefined;
+        s = battleReduce(s, action);
+        // Each battleReduce call replaces `events` with just THIS call's log
+        // (never accumulates) — every event-based fact must be captured
+        // turn-by-turn here, not read off the final state's events array.
+        if (s.events.some((e) => e.type === "invalid")) invalidCount++;
+        if (s.events.some((e) => e.type === "forge" && e.ability === "conviction")) forgeCrossingSeen = true;
+        if (s.events.some((e) => e.type === "unlock" && e.id === "imposter-syndrome")) unlockSeen = true;
+        if (s.events.some((e) => e.type === "victory")) victorySeen = true;
+        if (s.boss.kind === "imposter-syndrome") {
+          phasesSeen.add(s.boss.phase);
+          if (s.boss.degenerate) degenerateReached = true;
+          // "fired", not just charged: PULSE's charge turn always deals 0;
+          // only the fire turn deals a nonzero hit.
+          if (prePhase === "pulse" && s.events.some((e) => e.type === "heroDamage" && e.amount > 0)) {
+            pulseFired = true;
+          }
+          // MIRROR's own boss turn resolves against whatever phase was
+          // current at the START of the call (rc's rip-back is the only
+          // action that changes phase mid-call, and it only ever fires from
+          // "vanish", never from "mirror" — so this is unambiguous here).
+          if (prePhase === "mirror") mirrorFired++;
+        }
+        if (prePhase === "vanish" && action.type === "rc") vanishRippedByRc = true;
+      }
+      return {
+        s,
+        phasesSeen,
+        invalidCount,
+        mirrorFired,
+        pulseFired,
+        vanishRippedByRc,
+        degenerateReached,
+        forgeCrossingSeen,
+        unlockSeen,
+        victorySeen,
+      };
+    }
+
+    it("every action is legal (zero invalid events) and MP-feasible throughout", () => {
+      const { invalidCount } = winLine();
+      expect(invalidCount).toBe(0);
+    });
+
+    it("reaches victory within the signed 9-14 hero-turn band (N12), entering every phase — clones opened, pulse FIRED, vanish entered and ripped back by Root Cause, mirror fired at least twice — the forge crossing and degeneration both reached", () => {
+      const { s, phasesSeen, mirrorFired, pulseFired, vanishRippedByRc, degenerateReached, forgeCrossingSeen } =
+        winLine();
+      expect(s.status).toBe("victory");
+      expect(s.turn).toBeGreaterThanOrEqual(9);
+      expect(s.turn).toBeLessThanOrEqual(14);
+      expect(phasesSeen.has("clones")).toBe(true);
+      expect(phasesSeen.has("pulse")).toBe(true);
+      expect(phasesSeen.has("vanish")).toBe(true);
+      expect(phasesSeen.has("mirror")).toBe(true);
+      expect(pulseFired).toBe(true);
+      expect(vanishRippedByRc).toBe(true);
+      expect(mirrorFired).toBeGreaterThanOrEqual(2);
+      expect(degenerateReached).toBe(true);
+      expect(forgeCrossingSeen).toBe(true);
+      expect(s.hero.hp).toBeGreaterThan(0);
+    });
+
+    it("emits victory + unlock=imposter-syndrome (no post-defeat forge — N14/the rush order ends here), and the final state's defeatedBosses covers RUSH_ORDER — the named M4 full-clear contract, no invented event", () => {
+      const { s, unlockSeen, victorySeen } = winLine();
+      expect(victorySeen).toBe(true);
+      expect(unlockSeen).toBe(true);
+      // No post-defeat forge for Imposter (N14) — the mid-fight "forge:
+      // conviction" crossing event (asserted above) is a different channel
+      // entirely and already fired earlier in this same run.
+      expect(s.events.some((e) => e.type === "forge" && e.ability !== "conviction")).toBe(false);
+      for (const bossId of RUSH_ORDER) {
+        expect(s.defeatedBosses).toContain(bossId);
+      }
+    });
   });
 });

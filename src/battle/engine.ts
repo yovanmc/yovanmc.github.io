@@ -54,6 +54,7 @@ import {
   resolveImposterBossTurn,
   resolveImposterHit,
   ripBackVanish,
+  spawnImposter,
   trackSpecial,
 } from "./bosses/imposter";
 import { IMPLEMENTED_BOSSES, RUSH_ORDER } from "./rushOrder";
@@ -202,6 +203,10 @@ export function initBattle(opts: InitOptions): BattleState {
   } else if (requestedBoss === SILENT_FAILURE_ID) {
     boss = spawnSilentFailure(); // no rng draw — the boss starts embodied, deterministic
     rng = seeded;
+  } else if (requestedBoss === IMPOSTER_ID) {
+    // N2: opens already in CLONES, realIndex seeded (one rng draw, same
+    // pattern as spawnAlertStorm's own rng use).
+    ({ boss, rng } = spawnImposter(seeded, nextRng));
   } else {
     // G1 anti-crash fallback (D1, pass-2 J2): dispatches on a `string`, so
     // never-narrowing is impossible here; this trailing else stays even after
@@ -334,13 +339,12 @@ export function deriveKit(defeatedBosses: string[]): AbilityId[] {
   // Imposter is actually defeated — is a different channel entirely: this
   // function only sees `defeatedBosses`, so that path is gated separately at
   // the battleReduce call site off the boss's own `forgeFired` flag.
-  // Genuinely dead until task 5 appends IMPOSTER_ID to IMPLEMENTED_BOSSES —
-  // the left operand can never be true yet, so this whole block is
-  // unreachable by construction, not a masked gap (same class as an
-  // assertNever arm guarding a not-yet-possible state). Task 5 makes it live;
-  // do not delete the IMPLEMENTED_BOSSES intersection to "fix" the coverage
-  // number — that intersection is the G1 guard this line exists for.
-  /* v8 ignore next 3 */
+  // Live as of M6 PR-3 task 5 (IMPOSTER_ID joined IMPLEMENTED_BOSSES this
+  // task) — both arms of this branch are now real and tested: an
+  // imposter-defeated input grants "conv", any other input does not. Do not
+  // delete the IMPLEMENTED_BOSSES intersection to "simplify" this — that
+  // intersection is the G1 guard this line exists for (a boss beaten ahead
+  // of its own PR must never grant a kit entry with no ability behind it).
   if (IMPLEMENTED_BOSSES.includes(IMPOSTER_ID) && defeatedBosses.includes(IMPOSTER_ID)) {
     kit.push("conv");
   }
