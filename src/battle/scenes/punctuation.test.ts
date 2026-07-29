@@ -32,6 +32,24 @@ function copyStringsFor(scene: (typeof SCENE_MODULES)[string]): { label: string;
   let s = initBattle({ seed: 42 });
   s = { ...s, turn: 3, status: "active" };
   out.push({ label: "banner(scream turn)", value: scene.banner(s) });
+  // D3 (M6 PR-2 task 6): plate.labelFor is optional and additive — Alert
+  // Storm/Cascade don't implement it, so `plate.label` above already covers
+  // them. When a module DOES implement it (Silent Failure), its output is a
+  // different string per phase that `plate.label` alone would never surface
+  // — without this, "VANISHED" is the one new copy string this gate never
+  // sees (dissect D3's own warning). Sampled against the module's own boot
+  // (`scene.id`), both phase values (the vanished one built by overriding
+  // `phase` on the state).
+  if (scene.plate.labelFor) {
+    const boot = initBattle({ seed: 42, boss: scene.id, defeatedBosses: ["alert-storm", "cascade"] });
+    out.push({ label: "plate.labelFor(embodied)", value: scene.plate.labelFor(boot) });
+    // "phase" narrows across the BossState union to exactly the boss kinds
+    // that have a vanish cycle (Silent Failure today); other kinds pass
+    // through unchanged, so this stays generic for future labelFor modules.
+    const vanishedBoss = "phase" in boot.boss ? { ...boot.boss, phase: "vanished" as const } : boot.boss;
+    const vanished = { ...boot, boss: vanishedBoss };
+    out.push({ label: "plate.labelFor(vanished)", value: scene.plate.labelFor(vanished) });
+  }
   return out;
 }
 

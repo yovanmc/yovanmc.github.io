@@ -6,11 +6,13 @@
 // requested (`IMPLEMENTED_BOSSES` gates `boss=` upstream in bootParams.ts).
 import { alertStormScene } from "./alertStorm";
 import { cascadeScene } from "./cascade";
+import { silentFailureScene } from "./silentFailure";
 import type { BossSceneModule } from "./types";
 
 export const SCENE_MODULES: Record<string, BossSceneModule> = {
   [alertStormScene.id]: alertStormScene,
   [cascadeScene.id]: cascadeScene,
+  [silentFailureScene.id]: silentFailureScene,
 };
 
 export function sceneFor(bossId: string): BossSceneModule {

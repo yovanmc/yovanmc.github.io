@@ -189,3 +189,18 @@ description that lands the extraction.
   gate: empty — the slice references only its own `EROWS`/`ECOLS`/`NODES`/
   `PATH` and local params, confirmed by a standalone Node eval of the
   generated module (30 exports, no `ReferenceError`).
+- `src/generated/bossSilentFailure.js` from `boss-silent-failure.html`
+  (`const EROWS` → before `function drawGrid`, lines 372-688): monolithic
+  reels are correct here (single entity, no per-entity state, unlike
+  Cascade) — `silentFinal(fr, mode)` drives frame family (`SIL_BODY`/
+  `SIL_FADE`/`SIL_EMPTY`) from engine phase directly, plus `SIL_ATK`/
+  `SIL_HIT`/`SIL_DIE`. `buildSilAtk()` is invoked inside the slice (line
+  670) after its `PIECES`/`pieceShift` dependencies — no reordering needed.
+  The lab's own `draftA`/`draftB`/`draftC` hooded-specter/smoke/hollow-armor
+  drafts ride along inertly, same precedent as Cascade's domino/wyrm drafts.
+  Free-identifier gate: empty — measured by evaluating the raw slice in a
+  bare Node `vm` context with no extra globals (no `PAL`, no hero
+  `overlay`/`ROWS`/`COLS`); it ran to completion with no `ReferenceError`
+  (M6 PR-2 task 2, pass-2 J10 — the pinned method for this slice, since a
+  naive text grep false-positives on a comment at lab line 562 naming the
+  hero's `overlay()`).

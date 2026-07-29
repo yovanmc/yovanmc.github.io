@@ -9,8 +9,10 @@ import {
   RUSH_ORDER,
   takenDamage,
 } from "./engine";
-import type { BattleState, Bat } from "./engine";
+import type { BattleState, Bat, BattleAction } from "./engine";
 import type { AlertStormBoss } from "./bosses/alertStorm";
+import { SF_TARGET_ID, spawnSilentFailure } from "./bosses/silentFailure";
+import type { SilentFailureBoss } from "./bosses/silentFailure";
 
 /** `BattleState.boss` is a discriminated union as of M6 PR-1b (Cascade joined
  * Alert Storm) — this file is the pre-M6 Alert Storm suite, so every state it
@@ -414,9 +416,9 @@ describe("derived rider (M6 — carry-over is derived, not stored)", () => {
 });
 
 describe("RUSH_ORDER / IMPLEMENTED_BOSSES (pinned constants)", () => {
-  it("rush order is the four bosses in fight order; Alert Storm and Cascade are implemented as of PR-1b", () => {
+  it("rush order is the four bosses in fight order; Alert Storm, Cascade, and Silent Failure are implemented as of PR-2", () => {
     expect(RUSH_ORDER).toEqual(["alert-storm", "cascade", "silent-failure", "imposter-syndrome"]);
-    expect(IMPLEMENTED_BOSSES).toEqual(["alert-storm", "cascade"]);
+    expect(IMPLEMENTED_BOSSES).toEqual(["alert-storm", "cascade", "silent-failure"]);
   });
 });
 
@@ -426,8 +428,8 @@ describe("kit derivation", () => {
     expect(deriveKit(["alert-storm"])).toEqual(["attack", "ct", "pt", "debug", "fo"]);
   });
 
-  it("ignores a defeated boss outside IMPLEMENTED_BOSSES (pass-2 G1 guard) — no crash, no phantom kit growth", () => {
-    expect(deriveKit(["cascade", "silent-failure"])).toEqual(["attack", "ct", "pt", "debug"]);
+  it("cascade grants its real PR-2 unlock (rb); imposter-syndrome, still outside IMPLEMENTED_BOSSES, is ignored — no crash, no phantom kit growth (pass-2 G1 guard)", () => {
+    expect(deriveKit(["cascade", "imposter-syndrome"])).toEqual(["attack", "ct", "pt", "debug", "rb"]);
   });
 
   it("the reducer rejects an out-of-kit action type as invalid, without mutating turn/hero (forward-compat guard proven ahead of Fan Out landing)", () => {
@@ -591,7 +593,10 @@ describe("Cascade boot + dispatch (M6 PR-1b task 3)", () => {
   });
 
   it("falls back to alert-storm for an unimplemented/garbage boss id (never a crash path)", () => {
-    expect(initBattle({ seed: 42, boss: "silent-failure" }).boss.kind).toBe("alert-storm");
+    // M6 PR-2 task 5 reconciliation (authorized table): re-pointed from
+    // "silent-failure" to "imposter-syndrome" now that silent-failure boots
+    // for real below; "not-a-real-boss" (the G1 guard, D1) stays untouched.
+    expect(initBattle({ seed: 42, boss: "imposter-syndrome" }).boss.kind).toBe("alert-storm");
     expect(initBattle({ seed: 42, boss: "not-a-real-boss" }).boss.kind).toBe("alert-storm");
     expect(initBattle({ seed: 42 }).boss.kind).toBe("alert-storm");
   });
@@ -764,5 +769,306 @@ describe("Cascade boot + dispatch (M6 PR-1b task 3)", () => {
     expect(s.events.some((e) => e.type === "rider")).toBe(false);
     expect(s.events.some((e) => e.type === "unlock")).toBe(false);
     expect(s.hero.maxHp).toBe(s0.hero.maxHp); // no second bump
+  });
+});
+
+// ---- M6 PR-2 task 4: Silent Failure engine wiring + Rollback --------------
+// Silent Failure isn't bootable via initBattle until task 5 — until then
+// these tests build a synthetic BattleState directly (same precedent as
+// bosses/cascade.ts's own PR-1b task 2 tests, before Cascade had boot wiring
+// either). Hero starts at the signed table's stated arrival stats (120/14
+// with Rollback) by deriving from defeatedBosses: ["alert-storm", "cascade"].
+function silentFailureState(
+  bossOverrides: Partial<SilentFailureBoss> = {},
+  stateOverrides: Partial<BattleState> = {},
+): BattleState {
+  const base = initBattle({ seed: 42, defeatedBosses: ["alert-storm", "cascade"] });
+  const boss: SilentFailureBoss = { ...spawnSilentFailure(), ...bossOverrides };
+  return { ...base, boss, ...stateOverrides };
+}
+
+describe("Silent Failure engine wiring (M6 PR-2 task 4)", () => {
+  describe("D2 targetability: pt/debug/fo invalid while vanished; attack is exempted and whiffs", () => {
+    it("pt against a vanished boss is invalid: no MP spent, no turn consumed", () => {
+      const s0 = silentFailureState({ phase: "vanished" });
+      const s1 = battleReduce(s0, { type: "pt", target: SF_TARGET_ID });
+      expect(s1.events).toEqual([{ type: "invalid", reason: "target is not there" }]);
+      expect(s1.turn).toBe(s0.turn);
+      expect(s1.hero.mp).toBe(s0.hero.mp);
+    });
+
+    it("debug against a vanished boss is invalid: no MP spent, no mark, no DoT started", () => {
+      const s0 = silentFailureState({ phase: "vanished" });
+      const s1 = battleReduce(s0, { type: "debug", target: SF_TARGET_ID });
+      expect(s1.events).toEqual([{ type: "invalid", reason: "target is not there" }]);
+      expect(s1.hero.mp).toBe(s0.hero.mp);
+      expect(s1.dots).toEqual([]);
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.marked).toBe(false);
+    });
+
+    it("fo against a vanished boss is invalid: no MP spent, no turn consumed (gated before the MP deduction, not inside the fan-out helper)", () => {
+      const s0 = silentFailureState({ phase: "vanished" });
+      const s1 = battleReduce(s0, { type: "fo" });
+      expect(s1.events).toEqual([{ type: "invalid", reason: "target is not there" }]);
+      expect(s1.turn).toBe(s0.turn);
+      expect(s1.hero.mp).toBe(s0.hero.mp);
+    });
+
+    it("pt/debug/fo are all legal against an embodied boss (no invalid event)", () => {
+      const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2 });
+      expect(battleReduce(s0, { type: "pt", target: SF_TARGET_ID }).events.some((e) => e.type === "invalid")).toBe(false);
+      expect(battleReduce(s0, { type: "debug", target: SF_TARGET_ID }).events.some((e) => e.type === "invalid")).toBe(false);
+      expect(battleReduce(s0, { type: "fo" }).events.some((e) => e.type === "invalid")).toBe(false);
+    });
+
+    it("attack against a vanished boss whiffs: a damage event with amount 0, turn consumed, no +1 MP gain, boss HP untouched", () => {
+      const s0 = silentFailureState({ phase: "vanished", phaseTurnsLeft: 2 });
+      const s1 = battleReduce(s0, { type: "attack", target: SF_TARGET_ID });
+      expect(s1.events).toContainEqual({ type: "damage", batId: SF_TARGET_ID, amount: 0 });
+      expect(s1.events.some((e) => e.type === "invalid")).toBe(false);
+      expect(s1.turn).toBe(s0.turn + 1);
+      expect(s1.hero.mp).toBe(s0.hero.mp); // attack costs 0 MP and gains none back on a whiff
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.hp).toBe(140);
+    });
+
+    it("attack against an embodied boss deals ATTACK_DMG and grants +1 MP as usual (the generic amount > 0 gate is behaviour-neutral here)", () => {
+      const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2 });
+      const hurt: BattleState = { ...s0, hero: { ...s0.hero, mp: s0.hero.maxMp - 5 } };
+      const s1 = battleReduce(hurt, { type: "attack", target: SF_TARGET_ID });
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.hp).toBe(140 - 12);
+      // +1 MP on hit, then +1 end-of-turn regen (an embodied swing follows) = +2 total
+      expect(s1.hero.mp).toBe(hurt.hero.mp + 2);
+    });
+  });
+
+  describe("Debug mark + DoT on the Silent Failure (verbatim: DoT ticks through the hidden phase)", () => {
+    it("debug deals 6, marks it, and starts a DoT that has not ticked yet this turn", () => {
+      const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2 });
+      const s1 = battleReduce(s0, { type: "debug", target: SF_TARGET_ID });
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.hp).toBe(140 - 6);
+      expect(s1.boss.marked).toBe(true);
+      expect(s1.dots).toEqual([{ batId: SF_TARGET_ID, ticksLeft: 3 }]);
+    });
+
+    it("an existing DoT keeps ticking while vanished even though the boss is untargetable", () => {
+      const s0 = silentFailureState(
+        { phase: "vanished", phaseTurnsLeft: 2, hp: 100, marked: true },
+        { dots: [{ batId: SF_TARGET_ID, ticksLeft: 2 }] },
+      );
+      const s1 = battleReduce(s0, { type: "ct" }); // untargeted, deals no direct damage — isolates the DoT tick
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.hp).toBe(96); // DOT_TICK 4
+      expect(s1.dots).toEqual([{ batId: SF_TARGET_ID, ticksLeft: 1 }]);
+    });
+  });
+
+  describe("Fan Out vs the Silent Failure (single target — degenerates to a plain hit, no reshuffle, no shield)", () => {
+    it("hits for the standard Fan Out amount", () => {
+      const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2 });
+      const s1 = battleReduce(s0, { type: "fo" });
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.hp).toBe(140 - 8);
+    });
+
+    it("CT'd: dealtDamage(8, true, false) = 12", () => {
+      const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2 }, { ctTurns: 3 });
+      const s1 = battleReduce(s0, { type: "fo" });
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.hp).toBe(140 - 12);
+    });
+  });
+
+  describe("boss turn: swing (embodied) / ambush (vanished)", () => {
+    // Triggered with `attack`, not `ct`: casting CT itself sets ctTurns > 0
+    // for THIS SAME boss turn (pre-existing engine behaviour, same mechanism
+    // Cascade's own CT tests rely on), which would silently CT-reduce the
+    // swing/ambush amount these tests are trying to measure uncT'd.
+    it("embodied boss turn deals the swing amount (12) and decrements the window", () => {
+      const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2 });
+      const s1 = battleReduce(s0, { type: "attack", target: SF_TARGET_ID });
+      expect(s1.hero.hp).toBe(s0.hero.hp - 12);
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.phase).toBe("embodied");
+      expect(s1.boss.phaseTurnsLeft).toBe(1);
+    });
+
+    it("vanished boss turn deals the ambush amount (18) and decrements the window", () => {
+      const s0 = silentFailureState({ phase: "vanished", phaseTurnsLeft: 2 });
+      const s1 = battleReduce(s0, { type: "attack", target: SF_TARGET_ID }); // whiffs (vanished), still consumes the turn
+      expect(s1.hero.hp).toBe(s0.hero.hp - 18);
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.phase).toBe("vanished");
+      expect(s1.boss.phaseTurnsLeft).toBe(1);
+    });
+
+    it("a full window flips the phase (embodied -> vanished) across two hero turns", () => {
+      let s = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2 });
+      s = battleReduce(s, { type: "attack", target: SF_TARGET_ID });
+      s = battleReduce(s, { type: "attack", target: SF_TARGET_ID });
+      if (s.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s.boss.phase).toBe("vanished");
+      expect(s.boss.phaseTurnsLeft).toBe(2);
+    });
+
+    it("a boss turn that empties hero HP defeats: status, event, HP floored at 0", () => {
+      const s0 = silentFailureState(
+        { phase: "vanished", phaseTurnsLeft: 2 },
+        { hero: { hp: 10, maxHp: 120, mp: 14, maxMp: 14 } },
+      );
+      const s1 = battleReduce(s0, { type: "ct" }); // ambush 18 > 10
+      expect(s1.status).toBe("defeat");
+      expect(s1.hero.hp).toBe(0);
+      expect(s1.events.some((e) => e.type === "defeat")).toBe(true);
+    });
+  });
+
+  describe("Rollback (new ability this task): heal 30 capped at maxHp, 3 MP, untargeted", () => {
+    it("heals 30 and costs 3 MP", () => {
+      const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2 });
+      const hurt: BattleState = { ...s0, hero: { ...s0.hero, hp: 50 } };
+      const s1 = battleReduce(hurt, { type: "rb" });
+      expect(s1.hero.hp).toBe(50 + 30 - 12); // heal 30, then the embodied swing (12)
+      expect(s1.hero.mp).toBe(hurt.hero.mp - 3 + 1); // 3 MP cost, +1 end-of-turn regen
+    });
+
+    it("caps the heal at maxHp rather than overhealing", () => {
+      const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2 });
+      const hurt: BattleState = { ...s0, hero: { ...s0.hero, hp: s0.hero.maxHp - 5 } };
+      const s1 = battleReduce(hurt, { type: "rb" });
+      expect(s1.hero.hp).toBe(s0.hero.maxHp - 12); // capped at max, then the swing
+    });
+
+    it("is invalid without Cascade defeated (out of kit)", () => {
+      const s0 = initBattle({ seed: 42, defeatedBosses: ["alert-storm"] }); // no cascade -> no rb
+      const s1 = battleReduce(s0, { type: "rb" });
+      expect(s1.events).toEqual([{ type: "invalid", reason: "not in kit" }]);
+    });
+  });
+
+  describe("victory: forge event is root-cause; no KIT_UNLOCKS entry lands yet (G1 — never a kit entry without an arm)", () => {
+    it("defeating Silent Failure emits forge: root-cause, rider, and unlock, but grants no rc ability", () => {
+      const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2, hp: 5 });
+      const s1 = battleReduce(s0, { type: "pt", target: SF_TARGET_ID }); // PT_DMG 28 >> 5, kills outright
+      expect(s1.status).toBe("victory");
+      expect(s1.events.some((e) => e.type === "forge" && e.ability === "root-cause")).toBe(true);
+      expect(s1.events.some((e) => e.type === "unlock" && e.id === "silent-failure")).toBe(true);
+      // base four + fo (alert-storm) + rb (cascade) — no rc entry for silent-failure
+      expect(deriveKit([...s0.defeatedBosses, "silent-failure"])).toEqual(["attack", "ct", "pt", "debug", "fo", "rb"]);
+    });
+  });
+
+  describe("signed DoT-kill ruling: a DoT tick that drops the boss to 0 while vanished fires victory and sets forceBodyForDeath", () => {
+    it("vanished: forceBodyForDeath becomes true", () => {
+      const s0 = silentFailureState(
+        { phase: "vanished", phaseTurnsLeft: 2, hp: 4, marked: true },
+        { dots: [{ batId: SF_TARGET_ID, ticksLeft: 2 }] },
+      );
+      const s1 = battleReduce(s0, { type: "ct" }); // no direct damage — only the DoT tick touches boss HP
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.hp).toBe(0);
+      expect(s1.boss.forceBodyForDeath).toBe(true);
+      expect(s1.status).toBe("victory");
+      expect(s1.events.some((e) => e.type === "victory")).toBe(true);
+    });
+
+    it("embodied: forceBodyForDeath stays false (already showing the body)", () => {
+      const s0 = silentFailureState(
+        { phase: "embodied", phaseTurnsLeft: 2, hp: 4, marked: true },
+        { dots: [{ batId: SF_TARGET_ID, ticksLeft: 2 }] },
+      );
+      const s1 = battleReduce(s0, { type: "ct" });
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.hp).toBe(0);
+      expect(s1.boss.forceBodyForDeath).toBe(false);
+      expect(s1.status).toBe("victory");
+    });
+
+    it("a direct-hit kill while embodied never forces the flag (it's already the body frame)", () => {
+      const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2, hp: 5 });
+      const s1 = battleReduce(s0, { type: "pt", target: SF_TARGET_ID });
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.forceBodyForDeath).toBe(false);
+    });
+  });
+});
+
+// ---- M6 PR-2 task 5: Silent Failure bootable + engine-generated win line --
+describe("Silent Failure boot + engine-generated win line (M6 PR-2 task 5)", () => {
+  it('initBattle boots boss: "silent-failure" on request: 140/140, embodied, 2 turns left, unmarked, no extension used, body forced off', () => {
+    const s = initBattle({ seed: 42, boss: "silent-failure", defeatedBosses: ["alert-storm", "cascade"] });
+    expect(s.boss.kind).toBe("silent-failure");
+    if (s.boss.kind !== "silent-failure") throw new Error("unreachable");
+    expect(s.boss.hp).toBe(140);
+    expect(s.boss.maxHp).toBe(140);
+    expect(s.boss.phase).toBe("embodied");
+    expect(s.boss.phaseTurnsLeft).toBe(2);
+    expect(s.boss.marked).toBe(false);
+    expect(s.boss.extendedThisWindow).toBe(false);
+    expect(s.boss.forceBodyForDeath).toBe(false);
+  });
+
+  it("hero arrives at the signed 120/14 with Rollback in kit (defeatedBosses: alert-storm + cascade)", () => {
+    const s = initBattle({ seed: 42, boss: "silent-failure", defeatedBosses: ["alert-storm", "cascade"] });
+    expect(s.hero).toEqual({ hp: 120, maxHp: 120, mp: 14, maxMp: 14 });
+    expect(deriveKit(s.defeatedBosses)).toContain("rb");
+  });
+
+  describe("the engine-generated win line (fastest legal line from the signed table: PT, PT, whiff, CT, PT, PT — 28+28+42+42 = exactly 140)", () => {
+    // Not a hand-pinned literal sequence (standing F1 rule): this runs the
+    // signed line through the real reducer and reads OBSERVED facts off the
+    // resulting states — phases actually entered, whether an ambush turn was
+    // survived, and where the run actually lands relative to the signed 6-11
+    // hero-turn band — rather than typing in numbers computed by hand.
+    const ACTIONS: BattleAction[] = [
+      { type: "pt", target: SF_TARGET_ID }, // T1 embodied
+      { type: "pt", target: SF_TARGET_ID }, // T2 embodied -> flips to vanished
+      { type: "attack", target: SF_TARGET_ID }, // T3 vanished whiff
+      { type: "ct" }, // T4 vanished (CT active same turn) -> flips to embodied
+      { type: "pt", target: SF_TARGET_ID }, // T5 embodied, CT'd
+      { type: "pt", target: SF_TARGET_ID }, // T6 embodied, CT'd, lethal
+    ];
+
+    function winLine() {
+      let s = initBattle({ seed: 42, boss: "silent-failure", defeatedBosses: ["alert-storm", "cascade"] });
+      const phasesSeen = new Set<string>();
+      const ambushDamageSurvived: number[] = [];
+      if (s.boss.kind === "silent-failure") phasesSeen.add(s.boss.phase);
+      for (const action of ACTIONS) {
+        if (s.status !== "active") break;
+        const prePhase = s.boss.kind === "silent-failure" ? s.boss.phase : undefined;
+        s = battleReduce(s, action);
+        if (s.boss.kind === "silent-failure") phasesSeen.add(s.boss.phase);
+        const dmg = s.events.find((e) => e.type === "heroDamage");
+        if (dmg && dmg.type === "heroDamage" && prePhase === "vanished" && s.status !== "defeat") {
+          ambushDamageSurvived.push(dmg.amount);
+        }
+      }
+      return { s, phasesSeen, ambushDamageSurvived };
+    }
+
+    it("reaches victory within the signed 6-11 hero-turn band, entering both phases, surviving at least one ambush, hero HP > 0", () => {
+      const { s, phasesSeen, ambushDamageSurvived } = winLine();
+      expect(s.status).toBe("victory");
+      expect(s.turn).toBeGreaterThanOrEqual(6);
+      expect(s.turn).toBeLessThanOrEqual(11);
+      expect(phasesSeen.has("embodied")).toBe(true);
+      expect(phasesSeen.has("vanished")).toBe(true);
+      expect(ambushDamageSurvived.length).toBeGreaterThanOrEqual(1);
+      expect(s.hero.hp).toBeGreaterThan(0);
+    });
+
+    it("emits victory + forge=root-cause + unlock=silent-failure, rider applied on top of the fight's ending HP", () => {
+      const { s } = winLine();
+      expect(s.events.some((e) => e.type === "victory")).toBe(true);
+      expect(s.events.some((e) => e.type === "forge" && e.ability === "root-cause")).toBe(true);
+      expect(s.events.some((e) => e.type === "unlock" && e.id === "silent-failure")).toBe(true);
+      expect(s.defeatedBosses).toEqual(["alert-storm", "cascade", "silent-failure"]);
+      // no rc ability/KIT_UNLOCKS entry ships this PR (G1 — PR-3 adds the arm)
+      expect(deriveKit(s.defeatedBosses)).not.toContain("rc");
+    });
   });
 });

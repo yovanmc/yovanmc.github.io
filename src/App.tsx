@@ -947,7 +947,25 @@ export default function App() {
           nested in the desktop-only command-system container above) so the
           mobile FIGHT chip opens the identical panel; positioning branches
           on isMobile instead. Tap targets are 44 CSS px tall (minHeight
-          below) per the mobile ergonomics rule. */}
+          below) per the mobile ergonomics rule.
+          M6 PR-2 task 6d (D5a follow-up, owner-ruled, inherited from PR-1b
+          058f311): zIndex raised from 20 to 25, above the mobile category
+          sheet (22) and the mobile command bar / FIGHT chip (24) that
+          otherwise fully cover this panel's region at 390x844 while it's
+          open. Plain z-index ordering, not a stacking-context trap — this
+          div, the category sheet, and the command bar/chip are all direct
+          children of the same root `position: fixed` container with no
+          intermediate transform/filter/opacity/will-change wrapper (the
+          comment above already documents this element being deliberately
+          pulled OUT of the one nearby container that could have introduced
+          one), so they compete on z-index within a single shared stacking
+          context and a plain numeric bump is sufficient. Desktop is
+          unaffected: both elements this panel now out-ranks are
+          `display: isMobile ? ... : "none"`, i.e. never painted on desktop
+          at all, and desktop's only other visible overlay in this region is
+          the command-system container at zIndex 7 (already below 20, still
+          below 25) — nothing sits between 8 and 24 on desktop today, so
+          raising 20 to 25 changes zero desktop stacking relationships. */}
       {fightChooserOpen && booted && !page && (
         <div
           data-ui
@@ -956,7 +974,7 @@ export default function App() {
             left: isMobile ? "50%" : "248px",
             bottom: isMobile ? "calc(150px + env(safe-area-inset-bottom, 0px))" : "38px",
             transform: isMobile ? "translateX(-50%)" : "none",
-            zIndex: 20,
+            zIndex: 25,
             width: isMobile ? "min(88vw, 280px)" : "246px",
           }}
         >

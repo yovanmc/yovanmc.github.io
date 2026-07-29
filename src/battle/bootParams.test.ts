@@ -18,8 +18,11 @@ describe("parseBoss (`boss=` capture key — whitelist = IMPLEMENTED_BOSSES, def
     expect(parseBoss("cascade")).toBe("cascade");
   });
 
+  it("accepts silent-failure (implemented as of PR-2)", () => {
+    expect(parseBoss("silent-failure")).toBe("silent-failure");
+  });
+
   it("rejects a boss id that is not yet implemented, falling back to alert-storm (pass-2 G1 live-crash guard)", () => {
-    expect(parseBoss("silent-failure")).toBe("alert-storm");
     expect(parseBoss("imposter-syndrome")).toBe("alert-storm");
   });
 
@@ -100,6 +103,10 @@ describe("parseActions (`actions=` capture key — extends the M5 grammar with `
 
   it("parses a bare fo token (Fan Out hits all living targets, no target id)", () => {
     expect(parseActions("fo")).toEqual([{ type: "fo" }]);
+  });
+
+  it("parses a bare rb token (Rollback is untargeted, M6 PR-2 task 5 — the grammar was specified in PR-1a task 5 but rb was not a valid AbilityId until PR-2 task 4)", () => {
+    expect(parseActions("rb")).toEqual([{ type: "rb" }]);
   });
 
   it("parses targeted tokens (attack/pt/debug carry a bat id)", () => {

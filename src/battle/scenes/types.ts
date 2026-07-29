@@ -44,6 +44,15 @@ export interface ScenePlate {
   /** Shown instead of the HP bar while the boss's identity is still hidden. */
   hiddenLabel: string;
   footer(livingCount: number): string;
+  /** M6 PR-2 task 6 (D3) — OPTIONAL, additive. `BattleScene` renders
+   * `plate.labelFor?.(state) ?? plate.label`. Alert Storm and Cascade do not
+   * implement this, so their rendered output and existing `plate.label`
+   * property-access tests (`alertStorm.test.ts:99`, `punctuation.test.ts`)
+   * stay byte-identical. Silent Failure implements it (name while embodied,
+   * `VANISHED` while hidden) since its plate label changes with phase while
+   * the HP bar itself stays visible throughout (`revealBoss` is always true
+   * for this boss — there is no label/HP coupling to decouple, per D3). */
+  labelFor?(state: BattleState): string;
 }
 
 /** One module per boss id (§Scene generalization). */
