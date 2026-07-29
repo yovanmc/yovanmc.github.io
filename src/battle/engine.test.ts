@@ -1619,35 +1619,32 @@ describe("Imposter boot + engine-generated win line (M6 PR-3 task 5)", () => {
   });
 
   describe("the engine-generated win line (the plan's hand-derivation was illegal at H5 against the shipped phase-transition timing — VANISH's untargetable gate, the SAME signed rule Silent Failure's own PT/PT/whiff/CT/PT/PT line already demonstrates, rejects PT the instant PULSE's fire crosses the phase boundary INSIDE that same reducer call, one turn earlier than the hand-derivation assumed. This is the corrected, empirically re-derived line — not a hand-pinned literal sequence: it runs through the real reducer and asserts OBSERVED facts, per standing rule F1)", () => {
+    // PLAYABILITY FIX (found in review of the first cut of this line): a
+    // CLONES-phase targeted hit only lands for real if it happens to name
+    // `realIndex` — but `realIndex` is seeded rng, invisible to a real
+    // player until Debug's mark reveals it (the plan's own CLONES row:
+    // "Debug's mark reveals the real one ... the seeded realIndex never
+    // matters to it" otherwise). The first draft of this line spent H1 on
+    // `{ type: "attack", target: realIndex }` before anything had marked the
+    // boss — a hit no player could have aimed; that made the 10-turn figure
+    // a claim about ORACLE play, not achievable play.
+    //
+    // Structural guard, not just a comment: `realIndex` is kept OUT OF
+    // LEXICAL SCOPE for every action taken before the mark is confirmed
+    // held (PRE_MARK_ACTIONS below cannot reference it — there is nothing to
+    // reference). Every PRE_MARK_ACTIONS entry is illusion-independent (rc
+    // always resolves real regardless of aim; ct is untargeted; pt/debug
+    // target id 0, the only id that exists once the boss has left CLONES,
+    // never a guess). Only after H7's Debug is confirmed to have landed AND
+    // held the mark does `realIndex` come into scope at all, for
+    // POST_MARK_ACTIONS — exactly the point a real player would also learn
+    // it.
     function winLine() {
       let s = initBattle({
         seed: 42,
         boss: "imposter-syndrome",
         defeatedBosses: ["alert-storm", "cascade", "silent-failure"],
       });
-      if (s.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
-      const realIndex = s.boss.realIndex ?? 0; // seeded at spawn, never reseeds this fight
-
-      // H1 attack (real slot, clones) · H2 rc (clones->pulse, ignores the
-      // illusion) · H3 ct (buff window) · H4 pt (pulse fires -> vanish) ·
-      // H5 ct (re-cast, covers the vanish ambush + the rip-back turn) ·
-      // H6 rc (rips the vanish; the <=50% crossing fires here too) ·
-      // H7 debug (marks the boss; mirror fires, mirroring Debug) ·
-      // H8 rc (the marked-target payoff: 33 vs the plain 22) ·
-      // H9 attack (mirror fires again, mirroring rc) · H10 attack (lethal,
-      // real slot).
-      const ACTIONS: BattleAction[] = [
-        { type: "attack", target: realIndex },
-        { type: "rc", target: 0 },
-        { type: "ct" },
-        { type: "pt", target: 0 },
-        { type: "ct" },
-        { type: "rc", target: 0 },
-        { type: "debug", target: 0 },
-        { type: "rc", target: 0 },
-        { type: "attack", target: 0 },
-        { type: "attack", target: realIndex },
-      ];
 
       const phasesSeen = new Set<string>();
       let invalidCount = 0;
@@ -1658,10 +1655,26 @@ describe("Imposter boot + engine-generated win line (M6 PR-3 task 5)", () => {
       let forgeCrossingSeen = false;
       let unlockSeen = false;
       let victorySeen = false;
-      phasesSeen.add(s.boss.phase);
-      for (const action of ACTIONS) {
-        if (s.status !== "active") break;
+      let oracleViolation = false;
+      if (s.boss.kind === "imposter-syndrome") phasesSeen.add(s.boss.phase);
+
+      function step(action: BattleAction) {
+        if (s.status !== "active") return;
         const prePhase = s.boss.kind === "imposter-syndrome" ? s.boss.phase : undefined;
+        // The structural playability guard (runtime half — the lexical
+        // PRE_MARK/POST_MARK split below is the other half): a targeted hit
+        // against a SPECIFIC clone slot, while still in CLONES and still
+        // unmarked, is a hit no real player could have aimed. Checked
+        // against the PRE-call state, before this action's own effects.
+        if (
+          s.boss.kind === "imposter-syndrome" &&
+          s.boss.phase === "clones" &&
+          !s.boss.marked &&
+          (action.type === "attack" || action.type === "pt" || action.type === "debug") &&
+          action.target === s.boss.realIndex
+        ) {
+          oracleViolation = true;
+        }
         s = battleReduce(s, action);
         // Each battleReduce call replaces `events` with just THIS call's log
         // (never accumulates) — every event-based fact must be captured
@@ -1686,6 +1699,45 @@ describe("Imposter boot + engine-generated win line (M6 PR-3 task 5)", () => {
         }
         if (prePhase === "vanish" && action.type === "rc") vanishRippedByRc = true;
       }
+
+      // H1 rc (clones, ignores the illusion — the plan's own line opens
+      // with rc for the same reason) · H2 rc (clones->pulse) · H3 ct (buff
+      // window) · H4 pt (pulse fires -> vanish; the only visible target,
+      // id 0) · H5 ct (re-cast, covers the vanish ambush + the rip-back
+      // turn) · H6 rc (rips the vanish; the <=50% crossing fires here too)
+      // · H7 debug (mirror phase, single visible target — marks the boss).
+      const PRE_MARK_ACTIONS: BattleAction[] = [
+        { type: "rc", target: 0 },
+        { type: "rc", target: 0 },
+        { type: "ct" },
+        { type: "pt", target: 0 },
+        { type: "ct" },
+        { type: "rc", target: 0 },
+        { type: "debug", target: 0 },
+      ];
+      for (const action of PRE_MARK_ACTIONS) step(action);
+
+      // The rest of this line is only legitimate if H7's Debug actually
+      // landed and the mark is still held (no pulse-break intervenes in the
+      // degenerate rotation — pulse is behind us) — the exact condition the
+      // coordinator's ruling requires before `realIndex` may be consulted.
+      if (s.boss.kind !== "imposter-syndrome" || !s.boss.marked) {
+        throw new Error("PRE_MARK_ACTIONS must land Debug's mark before realIndex is legitimate to target");
+      }
+      const realIndex = s.boss.realIndex ?? 0; // seeded at spawn, never reseeds — and now legitimately known
+
+      // H8 attack (clones, real slot — legitimate: the mark is held) · H9
+      // attack (mirror fires again, mirroring rc; single visible target) ·
+      // H10 attack (clones, real slot — still marked) · H11 attack (mirror,
+      // lethal).
+      const POST_MARK_ACTIONS: BattleAction[] = [
+        { type: "attack", target: realIndex },
+        { type: "attack", target: 0 },
+        { type: "attack", target: realIndex },
+        { type: "attack", target: 0 },
+      ];
+      for (const action of POST_MARK_ACTIONS) step(action);
+
       return {
         s,
         phasesSeen,
@@ -1697,12 +1749,14 @@ describe("Imposter boot + engine-generated win line (M6 PR-3 task 5)", () => {
         forgeCrossingSeen,
         unlockSeen,
         victorySeen,
+        oracleViolation,
       };
     }
 
-    it("every action is legal (zero invalid events) and MP-feasible throughout", () => {
-      const { invalidCount } = winLine();
+    it("every action is legal (zero invalid events) and MP-feasible throughout — and no CLONES-phase real-slot hit ever lands before the mark is held (the structural playability guard, checked two ways: the PRE_MARK/POST_MARK lexical split above keeps realIndex out of scope until it's earned, and this asserts the runtime invariant directly so a future edit that merges the two arrays back together still gets caught)", () => {
+      const { invalidCount, oracleViolation } = winLine();
       expect(invalidCount).toBe(0);
+      expect(oracleViolation).toBe(false);
     });
 
     it("reaches victory within the signed 9-14 hero-turn band (N12), entering every phase — clones opened, pulse FIRED, vanish entered and ripped back by Root Cause, mirror fired at least twice — the forge crossing and degeneration both reached", () => {
