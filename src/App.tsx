@@ -404,6 +404,17 @@ export default function App() {
       const c = CATS[r];
       const it = c.items[j];
       if (c.key === "projects" || c.key === "experience") {
+        // M4 task B3 (dissect pass 1 BLOCKER): activate() is shared with
+        // BrowseIndex (`onItem={(ri, si) => activate(ri, si)}`), so this
+        // gate is scoped to `s.phase === "play"` ONLY — without the phase
+        // check this would silently block the always-open browse path
+        // (owner ruling 1). This is the feedback path only; the
+        // authoritative gate that actually closes the popstate bypass
+        // (D10) lives at the CaseStudyPage render boundary below.
+        if (s.phase === "play" && isGateable(c.key, it.slug) && !unlockedSlugs(s.defeatedBosses).has(it.slug!)) {
+          showToast(LOCKED_HINT);
+          return;
+        }
         openPage(r, j);
         return;
       }
@@ -616,6 +627,16 @@ export default function App() {
   const isLocked = (catKey: string, slug: string | undefined) =>
     phase === "play" && isGateable(catKey, slug) && !unlockedSet.has(slug!);
   const itemLocked = isLocked(cat.key, item.slug);
+  // M4 task B3, D10 — the AUTHORITATIVE gate. `activate()`'s early return
+  // above is only the feedback path for a keypress/click; it cannot see the
+  // popstate handler's own `setPage(p)` call (App.tsx onPop, ~line 511),
+  // which is what a "beat the rush, open a project, reset, press Back"
+  // sequence drives. Gating the actual render of the resolved page — not
+  // just the entry points into it — is what closes that bypass. Deep links
+  // are unaffected: pageForPath always resolves to phase "browse" (ruling 1).
+  const pageCat = page ? CATS[page.ri] : null;
+  const pageItem = page && pageCat ? pageCat.items[page.si] : null;
+  const pageLocked = page !== null && pageCat !== null && isLocked(pageCat.key, pageItem?.slug);
   const ringOpacity = phase === "gate" || phase === "intro" ? 0.82 : 0.2;
   const glassScale = isMobile ? Math.max(0.44, Math.min(0.62, (w - 30) / 680)) : 1;
   const detailW = Math.max(330, Math.min(540, w - 612));
@@ -1468,9 +1489,101 @@ export default function App() {
         {toast}
       </div>
 
-      <CaseStudyPage page={page} isMobile={isMobile} onClose={closePage} />
+      <CaseStudyPage page={pageLocked ? null : page} isMobile={isMobile} onClose={closePage} />
+      {pageLocked && pageCat && (
+        <LockedCaseStudy catLabel={pageCat.label} isMobile={isMobile} onClose={closePage} />
+      )}
 
       {introOn && <DiveIntro onHandoff={onIntroHandoff} onDone={onIntroDone} freezeAt={boot.current.freezeAt} />}
+    </div>
+  );
+}
+
+/** Locked treatment for the CaseStudyPage render boundary (M4 task B3,
+ * D10 — the authoritative gate; see the `pageLocked` computation in App()).
+ * Deliberately a standalone overlay rather than a CaseStudyPage prop:
+ * CaseStudyPage.tsx is untouched by this milestone's file list, and a
+ * separate component keeps "what renders when locked" fully visible at the
+ * mount site instead of buried behind a flag inside the real page. */
+function LockedCaseStudy({
+  catLabel,
+  isMobile,
+  onClose,
+}: {
+  catLabel: string;
+  isMobile: boolean;
+  onClose: () => void;
+}) {
+  const mono = "'JetBrains Mono',monospace";
+  return (
+    <div
+      data-scroll
+      onClick={(e) => {
+        if (!(e.target as HTMLElement).closest("[data-page-content]")) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={LOCKED_LABEL}
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 30,
+        background: "radial-gradient(ellipse 110% 90% at 50% 0%, #16284a 0%, #0a1124 52%, #060a16 100%)",
+        overflowY: "auto",
+        overflowX: "hidden",
+      }}
+    >
+      <div
+        data-page-content
+        style={{
+          maxWidth: "960px",
+          margin: "0 auto",
+          padding: "clamp(64px,9vw,84px) clamp(20px,5vw,44px) 120px",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "42px" }}>
+          <div
+            onClick={onClose}
+            role="button"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "11px",
+              padding: "11px 18px",
+              borderRadius: "11px",
+              cursor: "pointer",
+              background: "rgba(80,150,255,.1)",
+              border: "1px solid rgba(140,185,255,.3)",
+              color: "#cfe0ff",
+              fontFamily: mono,
+              fontSize: "12px",
+              letterSpacing: ".12em",
+            }}
+          >
+            <span style={{ color: "#7fb0ff" }}>◂</span> BACK{" "}
+            <span style={{ color: "#5f7196", display: isMobile ? "none" : "inline" }}>ESC</span>
+          </div>
+          <div style={{ fontFamily: mono, fontSize: "11px", letterSpacing: ".4em", color: "#7fb0ff" }}>
+            {catLabel.toUpperCase()}
+          </div>
+        </div>
+
+        <div
+          style={{
+            fontFamily: "'Marcellus',serif",
+            fontSize: "clamp(38px,8vw,62px)",
+            lineHeight: 1.04,
+            color: "#f2f6fc",
+            letterSpacing: ".01em",
+            marginBottom: "22px",
+          }}
+        >
+          {LOCKED_LABEL}
+        </div>
+        <div style={{ color: "#c2cee2", fontSize: "17px", lineHeight: 1.78, maxWidth: "680px" }}>{LOCKED_BODY}</div>
+      </div>
     </div>
   );
 }
