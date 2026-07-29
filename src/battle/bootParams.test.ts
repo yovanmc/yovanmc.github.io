@@ -18,8 +18,11 @@ describe("parseBoss (`boss=` capture key — whitelist = IMPLEMENTED_BOSSES, def
     expect(parseBoss("cascade")).toBe("cascade");
   });
 
+  it("accepts silent-failure (implemented as of PR-2)", () => {
+    expect(parseBoss("silent-failure")).toBe("silent-failure");
+  });
+
   it("rejects a boss id that is not yet implemented, falling back to alert-storm (pass-2 G1 live-crash guard)", () => {
-    expect(parseBoss("silent-failure")).toBe("alert-storm");
     expect(parseBoss("imposter-syndrome")).toBe("alert-storm");
   });
 

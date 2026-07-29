@@ -14,11 +14,12 @@ import {
 import { commandsForKit } from "./abilities";
 import { sceneFor } from "./scenes";
 import { CASCADE_ID, type CascadeNode } from "./bosses/cascade";
+import { livingTargets, SILENT_FAILURE_ID } from "./bosses/silentFailure";
 import { nodeBox } from "./scenes/cascadeCompose";
 import { PAL } from "../generated/diveTimeline";
 import {
   IDLE, ATK, ATK_MS, BUFF, BUFF_MS, CAST, CAST_MS, PWR, PWR_MS,
-  FAN, FAN_MS,
+  FAN, FAN_MS, RBK, RBK_MS,
   HIT, HIT_MS, KO, KO_MS,
 } from "../generated/heroBattle";
 import type { Grid } from "../generated/heroBattle";
@@ -39,12 +40,14 @@ import { SR, SC, BOSS_AT, HERO_AT } from "../generated/battlefieldScene";
 function alertBats(boss: BossState): Bat[] {
   if (boss.kind === "alert-storm") return boss.bats;
   if (boss.kind === CASCADE_ID) return [];
+  if (boss.kind === SILENT_FAILURE_ID) return [];
   return assertNever(boss);
 }
 
 function cascadeNodes(boss: BossState): CascadeNode[] {
   if (boss.kind === CASCADE_ID) return boss.nodes;
   if (boss.kind === "alert-storm") return [];
+  if (boss.kind === SILENT_FAILURE_ID) return [];
   return assertNever(boss);
 }
 
@@ -264,6 +267,13 @@ export default function BattleScene(props: Props) {
       const [r, c] = SWARM[bat.pos];
       return [BOSS_AT[0] + r, BOSS_AT[1] + c + 7];
     }
+    if (s.boss.kind === SILENT_FAILURE_ID) {
+      // Stopgap anchor (M6 PR-2 task 4) — the single-entity boss has no
+      // per-boss placement of its own yet; task 6 (scene module + shell
+      // generalization) owns the real on-stage footprint via composeBoss.
+      // Unreachable in play until then (no initBattle/scene wiring exists).
+      return [BOSS_AT[0], BOSS_AT[1]];
+    }
     return assertNever(s.boss);
   }, []);
 
@@ -281,6 +291,12 @@ export default function BattleScene(props: Props) {
       const bat = alertBats(s.boss).find((b) => b.id === targetId)!;
       const [r, c] = SWARM[bat.pos];
       return [BOSS_AT[0] + r - 5, BOSS_AT[1] + c + 5];
+    }
+    if (s.boss.kind === SILENT_FAILURE_ID) {
+      // Stopgap anchor (M6 PR-2 task 4) — see batCell; task 6 owns the real
+      // cursor position via the SF scene module. Unreachable in play until
+      // then.
+      return [BOSS_AT[0] - 5, BOSS_AT[1] - 2];
     }
     return assertNever(s.boss);
   }, []);
@@ -304,6 +320,7 @@ export default function BattleScene(props: Props) {
         pt: { frames: PWR, ms: PWR_MS },
         debug: { frames: CAST, ms: CAST_MS },
         fo: { frames: FAN, ms: FAN_MS },
+        rb: { frames: RBK, ms: RBK_MS },
       };
       setHeroFrame(0);
       setHeroReel(reel[action.type]);
@@ -403,6 +420,12 @@ export default function BattleScene(props: Props) {
       return alertBats(s.boss)
         .filter((b) => b.alive)
         .sort((a, b) => SWARM[a.pos][1] - SWARM[b.pos][1]);
+    }
+    if (s.boss.kind === SILENT_FAILURE_ID) {
+      // Single-entity case: livingTargets is [0] while alive, [] when dead —
+      // correct as-is (D2 keeps the armor selectable whether embodied or
+      // vanished; only battleReduce refuses the action).
+      return livingTargets(s.boss).map((id) => ({ id }));
     }
     return assertNever(s.boss);
   }, []);
@@ -542,6 +565,20 @@ export default function BattleScene(props: Props) {
     livingCount = bats.filter((b) => b.alive).length;
     plateHp = { hp: real.hp, maxHp: real.maxHp };
     cursorBatObj = cursorBat !== null ? bats.find((b) => b.id === cursorBat) : null;
+    cursorNodeObj = null;
+  } else if (state.boss.kind === SILENT_FAILURE_ID) {
+    // Single-entity case: HP always shown (plan §Scene generalization — the
+    // VANISHED/embodied swap is a plate-LABEL concern, D3's labelFor, not
+    // this HP-bar-vs-hiddenLabel reveal flag). cursorBatObj/cursorNodeObj
+    // are left both null here (M6 PR-2 task 4 stopgap): neither type fits a
+    // single-entity boss, and giving the cursor a real home is task 6's
+    // explicit job (D1, pass-2 J4 — the invisible-cursor finding). This is
+    // the SAME gap J4 already named, now compiler-visible instead of silent;
+    // unreachable in play until task 5/6 wire boot + scene.
+    revealBoss = true;
+    livingCount = state.boss.hp > 0 ? 1 : 0;
+    plateHp = { hp: state.boss.hp, maxHp: state.boss.maxHp };
+    cursorBatObj = null;
     cursorNodeObj = null;
   } else {
     assertNever(state.boss);

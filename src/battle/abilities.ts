@@ -16,7 +16,7 @@ export interface AbilityCommand {
 }
 
 /** Fixed menu order; `commandsForKit` filters this down to the kit. */
-const ABILITY_ORDER: readonly AbilityId[] = ["attack", "ct", "pt", "debug", "fo"];
+const ABILITY_ORDER: readonly AbilityId[] = ["attack", "ct", "pt", "debug", "fo", "rb"];
 
 const ABILITY_DEFS: Record<AbilityId, AbilityCommand> = {
   attack: { id: "attack", label: "Attack", mp: 0, needsTarget: true, desc: "12 dmg · +1 MP on hit" },
@@ -26,6 +26,9 @@ const ABILITY_DEFS: Record<AbilityId, AbilityCommand> = {
   // Fan Out — signed Cascade resolution (base 8, dissect F1); an AoE cast
   // like CT: no target step, commits straight from the menu.
   fo: { id: "fo", label: "Fan Out", mp: 3, needsTarget: false, desc: "8 dmg to all · one reshuffle" },
+  // Rollback — M6 PR-2 task 4; an untargeted heal like CT/Fan Out. Cleanse is
+  // inert this fight (no hero-side debuff state exists until the Imposter).
+  rb: { id: "rb", label: "Rollback", mp: 3, needsTarget: false, desc: "30 heal · cleanses mark + DoT" },
 };
 
 /** Ordered command list for a derived kit (src/battle/engine.ts's `deriveKit`). */

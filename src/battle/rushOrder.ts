@@ -35,7 +35,7 @@ export const RUSH_ORDER: readonly string[] = [
  * own PR never grants a kit entry / route with no module behind it. Extend
  * this array, never remove from it, as each subsequent PR ships a boss.
  * M6 PR-1b task 3 grows it to include Cascade. */
-export const IMPLEMENTED_BOSSES: readonly string[] = [ALERT_STORM_ID, CASCADE_ID];
+export const IMPLEMENTED_BOSSES: readonly string[] = [ALERT_STORM_ID, CASCADE_ID, SILENT_FAILURE_ID];
 
 /** Display names for the FIGHT submenu (M6 plan §App wiring, PR-1b task 5).
  * Pinned here rather than in src/battle/fight.ts so the chooser-row helper

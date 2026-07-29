@@ -29,6 +29,16 @@ import {
   resolveCascadeBossTurn,
   spawnCascade,
 } from "./bosses/cascade";
+import type { SilentFailureBoss } from "./bosses/silentFailure";
+import {
+  damageSilentFailure,
+  isSilentFailureDefeated,
+  isTargetable,
+  markSilentFailure,
+  resolveSilentFailureBossTurn,
+  SF_TARGET_ID,
+  SILENT_FAILURE_ID,
+} from "./bosses/silentFailure";
 import { IMPLEMENTED_BOSSES, RUSH_ORDER } from "./rushOrder";
 export type { Bat };
 export { isScreamTurn };
@@ -38,9 +48,9 @@ export { isScreamTurn };
 // landing bundle (measured regression + fix: see rushOrder.ts).
 export { IMPLEMENTED_BOSSES, RUSH_ORDER };
 
-/** Discriminated on `.kind`. M6 PR-1b task 3 adds Cascade; Silent Failure and
- * Imposter join in PR-2/PR-3. */
-export type BossState = AlertStormBoss | CascadeBoss;
+/** Discriminated on `.kind`. M6 PR-1b task 3 added Cascade; PR-2 task 4 adds
+ * Silent Failure; Imposter joins in PR-3. */
+export type BossState = AlertStormBoss | CascadeBoss | SilentFailureBoss;
 
 /** M6 PR-2 task 1 (D1): exhaustive-dispatch guard. Every per-boss branch
  * point in this file and in BattleScene.tsx narrows through every real
@@ -70,20 +80,21 @@ export type BattleEvent =
   | { type: "batDown"; batId: number }
   | { type: "victory" }
   | { type: "defeat" }
-  | { type: "forge"; ability: "fan-out" | "rollback" }
+  | { type: "forge"; ability: "fan-out" | "rollback" | "root-cause" }
   | { type: "rider"; maxHp: number; maxMp: number }
   | { type: "unlock"; id: string }
   | { type: "firstCast"; ability: AbilityId }
   | { type: "invalid"; reason: string };
 
-export type AbilityId = "attack" | "ct" | "pt" | "debug" | "fo";
+export type AbilityId = "attack" | "ct" | "pt" | "debug" | "fo" | "rb";
 
 export type BattleAction =
   | { type: "attack"; target: number }
   | { type: "ct" }
   | { type: "pt"; target: number }
   | { type: "debug"; target: number }
-  | { type: "fo" };
+  | { type: "fo" }
+  | { type: "rb" };
 
 export interface BattleState {
   seed: number;
@@ -185,7 +196,8 @@ export const FAN_OUT_DMG = 8; // Cascade-signed resolution (dissect F1) — adde
 const DOT_TICK = 4;
 const DOT_TICKS = 3;
 const CT_DURATION = 3;
-const MP_COST: Record<AbilityId, number> = { attack: 0, ct: 2, pt: 3, debug: 2, fo: 3 };
+const ROLLBACK_HEAL = 30;
+const MP_COST: Record<AbilityId, number> = { attack: 0, ct: 2, pt: 3, debug: 2, fo: 3, rb: 3 };
 const RIDER_HP = 10;
 const RIDER_MP = 2;
 const CT_DEALT_MULT = 1.5;
@@ -229,11 +241,13 @@ export function takenDamage(base: number, ct: boolean, conviction: boolean): num
 // ---- Kit derivation (M6 §Cross-boss architecture) --------------------------
 const BASE_KIT: readonly AbilityId[] = ["attack", "ct", "pt", "debug"];
 
-/** Boss-defeat → ability unlock map, gated to shipped modules. Later PRs
- * extend this map (Rollback on cascade, Root Cause on silent-failure), never
- * `deriveKit`'s body. */
+/** Boss-defeat → ability unlock map, gated to shipped modules. Root Cause
+ * lands on silent-failure in PR-3, never here (G1 — never a kit entry without
+ * an arm; PR-2 emits the SF forge event but grants no `rc` entry, same as
+ * PR-1b's Cascade forge with no `rb` entry until this PR shipped it). */
 const KIT_UNLOCKS: Partial<Record<string, AbilityId>> = {
   [ALERT_STORM_ID]: "fo",
+  [CASCADE_ID]: "rb",
 };
 
 /** Rush-order cumulative unlocks, intersected with `IMPLEMENTED_BOSSES` (a
@@ -261,12 +275,26 @@ function invalid(state: BattleState, reason: string): BattleState {
 function cloneBoss(boss: BossState): BossState {
   if (boss.kind === CASCADE_ID) return { ...boss, nodes: boss.nodes.map((n) => ({ ...n })) };
   if (boss.kind === ALERT_STORM_ID) return { ...boss, bats: boss.bats.map((b) => ({ ...b })) };
+  if (boss.kind === SILENT_FAILURE_ID) return { ...boss };
   return assertNever(boss);
 }
 
 function findTarget(boss: BossState, id: number): { alive: boolean } | undefined {
   if (boss.kind === CASCADE_ID) return boss.nodes.find((n) => n.id === id);
   if (boss.kind === ALERT_STORM_ID) return boss.bats.find((b) => b.id === id);
+  if (boss.kind === SILENT_FAILURE_ID) return id === SF_TARGET_ID ? { alive: boss.hp > 0 } : undefined;
+  return assertNever(boss);
+}
+
+/** D2: is the current boss target valid to act against right now? Alert Storm
+ * and Cascade have no vanish mechanic (always targetable); Silent Failure
+ * answers this itself via its own `isTargetable` (embodied only) — the
+ * targetability question is answered by the boss module, never a `kind`
+ * check written inline at a gate call site. */
+function isBossTargetable(boss: BossState): boolean {
+  if (boss.kind === SILENT_FAILURE_ID) return isTargetable(boss);
+  if (boss.kind === CASCADE_ID) return true;
+  if (boss.kind === ALERT_STORM_ID) return true;
   return assertNever(boss);
 }
 
@@ -274,29 +302,49 @@ function findTarget(boss: BossState, id: number): { alive: boolean } | undefined
  * through `damageBat` (reshuffle-aware, mutates `s` directly). Cascade routes
  * through the pure `damageNode` (carrier-shield-aware) and reports the actual
  * HP lost — not the pre-clamp/pre-shield amount — via a before/after diff, so
- * a killing blow against an already-low node never over-reports. */
-function dealSingleTarget(s: BattleState, targetId: number, amount: number): void {
+ * a killing blow against an already-low node never over-reports. Silent
+ * Failure routes through `damageSilentFailure`, forced to 0 while vanished
+ * (D2's whiff rule — `pt`/`debug` never reach here vanished, the pre-validate
+ * gate blocks them; only `attack` is exempted and lands here to whiff).
+ * Returns the amount actually applied, so callers (attack's own +1 MP gain)
+ * can gate on whether damage actually landed, generically. */
+function dealSingleTarget(s: BattleState, targetId: number, amount: number): number {
   if (s.boss.kind === CASCADE_ID) {
     const before = s.boss.nodes.find((n) => n.id === targetId)!.hp;
     s.boss = damageNode(s.boss, targetId, amount);
     const node = s.boss.nodes.find((n) => n.id === targetId)!;
-    s.events.push({ type: "damage", batId: targetId, amount: before - node.hp });
+    const dealt = before - node.hp;
+    s.events.push({ type: "damage", batId: targetId, amount: dealt });
     if (!node.alive) s.events.push({ type: "batDown", batId: targetId });
-  } else if (s.boss.kind === ALERT_STORM_ID) {
-    damageBat(s, targetId, amount);
-  } else {
-    assertNever(s.boss);
+    return dealt;
   }
+  if (s.boss.kind === ALERT_STORM_ID) {
+    damageBat(s, targetId, amount);
+    return amount;
+  }
+  if (s.boss.kind === SILENT_FAILURE_ID) {
+    const applied = isTargetable(s.boss) ? amount : 0;
+    const before = s.boss.hp;
+    s.boss = damageSilentFailure(s.boss, applied);
+    const dealt = before - s.boss.hp;
+    s.events.push({ type: "damage", batId: targetId, amount: dealt });
+    if (s.boss.hp === 0) s.events.push({ type: "batDown", batId: targetId });
+    return dealt;
+  }
+  return assertNever(s.boss);
 }
 
 /** Debug's target mark. Cascade's `markNode` is what the pulse-absorb check
  * (resolveCascadeBossTurn) reads; Alert Storm keeps its own permanent
- * `bat.marked` flag (the memory tool). */
+ * `bat.marked` flag (the memory tool); Silent Failure's mark is permanent for
+ * the fight (verbatim intent) via `markSilentFailure`. */
 function markTarget(s: BattleState, targetId: number): void {
   if (s.boss.kind === CASCADE_ID) {
     s.boss = markNode(s.boss, targetId);
   } else if (s.boss.kind === ALERT_STORM_ID) {
     s.boss.bats.find((b) => b.id === targetId)!.marked = true;
+  } else if (s.boss.kind === SILENT_FAILURE_ID) {
+    s.boss = markSilentFailure(s.boss);
   } else {
     assertNever(s.boss);
   }
@@ -314,6 +362,18 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
   if (action.type === "attack" || action.type === "pt" || action.type === "debug") {
     const target = findTarget(state.boss, action.target);
     if (!target || !target.alive) return invalid(state, "invalid target");
+    // D2: pt/debug against a vanished boss are invalid; attack is EXEMPTED
+    // from this extension (pass-2 J8) — it reaches dealSingleTarget and
+    // resolves as a whiff instead, per the signed table.
+    if (action.type !== "attack" && !isBossTargetable(state.boss)) {
+      return invalid(state, "target is not there");
+    }
+  }
+  // fo has no target to pre-validate (untargeted) but D2 still gates it while
+  // vanished — checked here, before the MP deduction below, not inside the
+  // fan-out helper's SF arm (which would run after MP is already spent).
+  if (action.type === "fo" && !isBossTargetable(state.boss)) {
+    return invalid(state, "target is not there");
   }
   const mpCost = MP_COST[action.type];
   if (state.hero.mp < mpCost) return invalid(state, "not enough MP");
@@ -336,12 +396,23 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
 
   switch (action.type) {
     case "attack": {
-      dealSingleTarget(s, action.target, roundHalfUp(ATTACK_DMG * dealtMult));
-      s.hero.mp = Math.min(s.hero.maxMp, s.hero.mp + 1); // +1 MP on hit
+      const dealt = dealSingleTarget(s, action.target, roundHalfUp(ATTACK_DMG * dealtMult));
+      // +1 MP on hit — gated GENERICALLY on damage actually landing (D2),
+      // never a kind check: "on hit" is what the ability text already
+      // promised, so a Silent Failure vanished whiff (0 dealt) naturally
+      // grants nothing, with no boss-specific code here.
+      if (dealt > 0) s.hero.mp = Math.min(s.hero.maxMp, s.hero.mp + 1);
       break;
     }
     case "ct": {
       s.ctTurns = CT_DURATION; // re-cast = refresh, no stack
+      break;
+    }
+    case "rb": {
+      // Cleanse (hero mark + hero DoTs) is inert THIS fight — no hero-side
+      // debuff state exists until the Imposter's mirror mechanic (PR-3), so
+      // there is nothing to cleanse yet; only the heal has an effect.
+      s.hero.hp = Math.min(s.hero.maxHp, s.hero.hp + ROLLBACK_HEAL);
       break;
     }
     case "pt": {
@@ -369,6 +440,16 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
         }
       } else if (s.boss.kind === ALERT_STORM_ID) {
         fanOutHit(s, dealtDamage(FAN_OUT_DMG, s.ctTurns > 0, s.conviction));
+      } else if (s.boss.kind === SILENT_FAILURE_ID) {
+        // Single-entity degenerate case: "hit every living target" is just
+        // one target. Reached only while embodied (the pre-validate gate
+        // above blocks fo while vanished), so a plain full-amount hit is
+        // correct — no reshuffle (nothing to scramble) and no shield.
+        const before = s.boss.hp;
+        s.boss = damageSilentFailure(s.boss, dealtDamage(FAN_OUT_DMG, s.ctTurns > 0, s.conviction));
+        const dealt = before - s.boss.hp;
+        s.events.push({ type: "damage", batId: SF_TARGET_ID, amount: dealt });
+        if (s.boss.hp === 0) s.events.push({ type: "batDown", batId: SF_TARGET_ID });
       } else {
         assertNever(s.boss);
       }
@@ -405,6 +486,23 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
             s.events.push({ type: "batDown", batId: d.batId });
           }
         }
+      } else if (s.boss.kind === SILENT_FAILURE_ID) {
+        if (s.boss.hp > 0) {
+          const before = s.boss.hp;
+          s.boss = damageSilentFailure(s.boss, DOT_TICK);
+          s.events.push({ type: "dot", batId: d.batId, amount: before - s.boss.hp });
+          if (s.boss.hp === 0) {
+            s.events.push({ type: "batDown", batId: d.batId });
+            // Signed DoT-kill ruling: the boss dies on the tick and
+            // re-embodies for the death reel — victory fires below like any
+            // other lethal source, but the scene must show the body frame,
+            // never empty-armor, so flag it here (the only place that knows
+            // a TICK, not a direct hit, was the killing blow).
+            if (s.boss.phase === "vanished") {
+              s.boss = { ...s.boss, forceBodyForDeath: true };
+            }
+          }
+        }
       } else {
         assertNever(s.boss);
       }
@@ -417,6 +515,9 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
       if (s.boss.kind === ALERT_STORM_ID) {
         return d.ticksLeft > 0 && s.boss.bats.find((b) => b.id === d.batId)!.alive;
       }
+      if (s.boss.kind === SILENT_FAILURE_ID) {
+        return d.ticksLeft > 0 && s.boss.hp > 0;
+      }
       return assertNever(s.boss);
     });
   }
@@ -426,14 +527,16 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
   let bossDefeated: boolean;
   if (s.boss.kind === CASCADE_ID) bossDefeated = isCascadeDefeated(s.boss);
   else if (s.boss.kind === ALERT_STORM_ID) bossDefeated = isBossDefeated(s.boss);
+  else if (s.boss.kind === SILENT_FAILURE_ID) bossDefeated = isSilentFailureDefeated(s.boss);
   else bossDefeated = assertNever(s.boss);
   if (bossDefeated) {
     s.status = "victory";
     s.events.push({ type: "victory" });
     const bossId = s.boss.kind;
-    let forgeAbility: "fan-out" | "rollback";
+    let forgeAbility: "fan-out" | "rollback" | "root-cause";
     if (s.boss.kind === CASCADE_ID) forgeAbility = "rollback";
     else if (s.boss.kind === ALERT_STORM_ID) forgeAbility = "fan-out";
+    else if (s.boss.kind === SILENT_FAILURE_ID) forgeAbility = "root-cause";
     else forgeAbility = assertNever(s.boss);
     if (!s.defeatedBosses.includes(bossId)) {
       s.defeatedBosses.push(bossId);
@@ -465,6 +568,10 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
       heroDamage = result.heroDamage;
     } else if (s.boss.kind === ALERT_STORM_ID) {
       heroDamage = roundHalfUp(rawVolley(s.boss.bats) * (s.ctTurns > 0 ? CT_TAKEN_MULT : 1));
+    } else if (s.boss.kind === SILENT_FAILURE_ID) {
+      const result = resolveSilentFailureBossTurn(s.boss, s.ctTurns > 0, s.conviction);
+      s.boss = result.boss;
+      heroDamage = result.heroDamage;
     } else {
       heroDamage = assertNever(s.boss);
     }
