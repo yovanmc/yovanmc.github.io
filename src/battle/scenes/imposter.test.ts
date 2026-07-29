@@ -233,3 +233,41 @@ describe("imposterScene registration shape", () => {
     expect(imposterScene.plate.footer(0)).toBe("0/1 TARGET");
   });
 });
+
+describe("plate.footerFor - phase-aware targetable-slot count", () => {
+  const base = initBattle({ seed: 1, boss: IMPOSTER_ID });
+  const withBoss = (o: Partial<ImposterBoss>) => ({ ...base, boss: fresh(o) });
+
+  it("is wired as a function on the plate", () => {
+    expect(typeof imposterScene.plate.footerFor).toBe("function");
+  });
+
+  it("CLONES: three targetable slots, all alive", () => {
+    expect(imposterScene.plate.footerFor!(withBoss({ phase: "clones" }))).toBe("3/3 TARGET");
+  });
+
+  it("PULSE: one targetable slot, alive", () => {
+    expect(imposterScene.plate.footerFor!(withBoss({ phase: "pulse" }))).toBe("1/1 TARGET");
+  });
+
+  it("VANISH: one targetable slot, alive", () => {
+    expect(imposterScene.plate.footerFor!(withBoss({ phase: "vanish" }))).toBe("1/1 TARGET");
+  });
+
+  it("MIRROR: one targetable slot, alive", () => {
+    expect(imposterScene.plate.footerFor!(withBoss({ phase: "mirror" }))).toBe("1/1 TARGET");
+  });
+
+  it("MIRROR + dead: 0/1, the ordinary single-entity fast-kill display", () => {
+    expect(imposterScene.plate.footerFor!(withBoss({ phase: "mirror", hp: 0 }))).toBe("0/1 TARGET");
+  });
+
+  // Not a defensive corner: a killing blow never advances the phase (only the
+  // boss's own turn does, via tickPhase/advancePhase), and CLONES is the
+  // opening phase (spawnImposter). So a fast kill during CLONES is the
+  // ordinary outcome, and the plate keeps rendering this string through the
+  // IMP_DIE death-animation window - it is player-visible, not a corner case.
+  it("CLONES + dead: 0/3, the ordinary fast-kill display during the opening phase (slots still exist, none targetable)", () => {
+    expect(imposterScene.plate.footerFor!(withBoss({ phase: "clones", hp: 0 }))).toBe("0/3 TARGET");
+  });
+});
