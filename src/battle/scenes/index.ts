@@ -7,12 +7,14 @@
 import { alertStormScene } from "./alertStorm";
 import { cascadeScene } from "./cascade";
 import { silentFailureScene } from "./silentFailure";
+import { imposterScene } from "./imposter";
 import type { BossSceneModule } from "./types";
 
 export const SCENE_MODULES: Record<string, BossSceneModule> = {
   [alertStormScene.id]: alertStormScene,
   [cascadeScene.id]: cascadeScene,
   [silentFailureScene.id]: silentFailureScene,
+  [imposterScene.id]: imposterScene,
 };
 
 export function sceneFor(bossId: string): BossSceneModule {

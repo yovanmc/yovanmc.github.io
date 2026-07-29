@@ -15,6 +15,11 @@ import { commandsForKit } from "./abilities";
 import { sceneFor } from "./scenes";
 import { CASCADE_ID, type CascadeNode } from "./bosses/cascade";
 import { livingTargets, SF_TARGET_ID, SILENT_FAILURE_ID } from "./bosses/silentFailure";
+import {
+  IMPOSTER_ID,
+  livingTargets as imposterLivingTargets,
+} from "./bosses/imposter";
+import { imposterBatAnchor, imposterCursorAnchor } from "./scenes/imposter";
 import { nodeBox } from "./scenes/cascadeCompose";
 import { PIECES as SF_PIECES } from "../generated/bossSilentFailure";
 import { shouldComposeBoss } from "./sceneGate";
@@ -24,6 +29,7 @@ import {
   IDLE, ATK, ATK_MS, BUFF, BUFF_MS, CAST, CAST_MS, PWR, PWR_MS,
   FAN, FAN_MS, RBK, RBK_MS,
   HIT, HIT_MS, KO, KO_MS,
+  ROOT, ROOT_MS, CONV, CONV_MS, DEBUFF, goldHairOf,
 } from "../generated/heroBattle";
 import type { Grid } from "../generated/heroBattle";
 import { SWARM } from "../generated/bossAlertStorm";
@@ -44,8 +50,9 @@ function alertBats(boss: BossState): Bat[] {
   if (boss.kind === "alert-storm") return boss.bats;
   if (boss.kind === CASCADE_ID) return [];
   if (boss.kind === SILENT_FAILURE_ID) return [];
-  // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders nothing.
-  if (boss.kind === "imposter-syndrome") return [];
+  // Imposter has no bat list of its own (M6 PR-3 task 6) — same permanent
+  // empty-array contribution Silent Failure and Cascade each make here.
+  if (boss.kind === IMPOSTER_ID) return [];
   return assertNever(boss);
 }
 
@@ -53,8 +60,9 @@ function cascadeNodes(boss: BossState): CascadeNode[] {
   if (boss.kind === CASCADE_ID) return boss.nodes;
   if (boss.kind === "alert-storm") return [];
   if (boss.kind === SILENT_FAILURE_ID) return [];
-  // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders nothing.
-  if (boss.kind === "imposter-syndrome") return [];
+  // Imposter has no node list of its own (M6 PR-3 task 6) — same permanent
+  // empty-array contribution Silent Failure and Alert Storm each make here.
+  if (boss.kind === IMPOSTER_ID) return [];
   return assertNever(boss);
 }
 
@@ -245,7 +253,13 @@ export default function BattleScene(props: Props) {
     const off = offRef.current;
     const octx = off.getContext("2d")!;
 
-    const g = scene.arena[flutter].map((row) => row.slice());
+    // M6 PR-3 task 6 (E9): `arenaFor?.(shown.boss)` reads `shown` (the
+    // animation-lagged copy), not the live `state` — so the stage-3 PURE
+    // station is what's on screen during the Imposter's death-animation
+    // window (`shouldComposeBoss` below keeps the boss layer alive through
+    // it). Shipped modules don't implement `arenaFor`, so their `?? scene.arena`
+    // fallback keeps their output byte-identical.
+    const g = (scene.arenaFor?.(shown.boss) ?? scene.arena)[flutter].map((row) => row.slice());
     const screaming = isScreamTurn(shown) && shown.status === "active";
     // M6 PR-2 task 6b (D5a — owner-ruled): gate on `mode`, not `shown.status`.
     // `shown.status` flips to "victory" at the very first animation step
@@ -261,10 +275,31 @@ export default function BattleScene(props: Props) {
     // that point.
     if (shouldComposeBoss({ descend, mode })) {
       const bossGrid = scene.composeBoss(shown.boss, screaming, flutter, swarmFx);
-      stampGrid(g, bossGrid, BOSS_AT[0], BOSS_AT[1]);
+      // M6 PR-3 task 6 (E4): stamp at the boss module's own `stampOrigin`
+      // when it implements one (the Imposter's leftward clone spread),
+      // falling back to the bare `BOSS_AT` constant otherwise — shipped
+      // modules don't implement this, so their stamp position is untouched.
+      const bossOrigin = scene.stampOrigin?.(shown.boss) ?? BOSS_AT;
+      stampGrid(g, bossGrid, bossOrigin[0], bossOrigin[1]);
     }
-    const heroGrid =
-      heroReel ? heroReel.frames[Math.min(heroFrame, heroReel.frames.length - 1)] : IDLE[flutter];
+    // M6 PR-3 task 6: gold-hair remap "on every reel while active" (N10 —
+    // Conviction doubles every other ability's effects AND recolors the
+    // hero, persisting once cast) applies uniformly to whatever frame was
+    // already selected, idle or mid-cast. `hd` matches the idle frames'
+    // own headO exactly (IDLE[0]/[1] build at headO 0/1 — see
+    // heroBattle.js's buildFrame); active-reel frames use varying headO
+    // internally with no per-frame metadata exported, so `flutter` is a
+    // deliberate approximation there (cosmetic only, no test can assert
+    // pixel-perfect hair alignment against every reel frame).
+    // The DEBUFF cue (visual only, grants nothing mechanically, M5
+    // mark-chevron precedent) shows only at idle (no active reel) so it
+    // never fights an ability animation for the same frame slot.
+    const heroBase = heroReel
+      ? heroReel.frames[Math.min(heroFrame, heroReel.frames.length - 1)]
+      : shown.heroMarked
+        ? DEBUFF[Math.min(flutter, DEBUFF.length - 1)]
+        : IDLE[flutter];
+    const heroGrid = shown.conviction ? goldHairOf(heroBase, flutter) : heroBase;
     stampGrid(g, heroGrid, HERO_AT[0], HERO_AT[1]);
 
     octx.clearRect(0, 0, SC, SR);
@@ -317,12 +352,13 @@ export default function BattleScene(props: Props) {
       // returns a real, art-derived position instead of the BOSS_AT stopgap.
       return [BOSS_AT[0] + SF_ARMOR_BOX.top, BOSS_AT[1] + SF_ARMOR_MID_COL];
     }
-    if (s.boss.kind === "imposter-syndrome") {
-      // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders nothing.
-      // The bare shared anchor, zero offset — deliberately NOT another
-      // boss's computed box/position (E4's real stampOrigin/clone-slot work
-      // is task 6's job).
-      return BOSS_AT;
+    if (s.boss.kind === IMPOSTER_ID) {
+      // M6 PR-3 task 6 (E4): the shared-origin contract — this computes
+      // from `imposterBatAnchor`, which internally keys off the exact same
+      // `stampOrigin` function `scenes/imposter.ts`'s `composeBoss` stamps
+      // its canvas at, so the float/cursor never targets art that isn't
+      // there. Three real homes during CLONES, one per slot.
+      return imposterBatAnchor(s.boss, targetId);
     }
     return assertNever(s.boss);
   }, []);
@@ -350,11 +386,10 @@ export default function BattleScene(props: Props) {
       // vanished or not — the boss stays selectable the whole fight.
       return [BOSS_AT[0] + SF_ARMOR_BOX.top - 5, BOSS_AT[1] + SF_ARMOR_MID_COL - 2];
     }
-    if (s.boss.kind === "imposter-syndrome") {
-      // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders nothing.
-      // Bare shared anchor, no offset — real per-clone-slot cursor homes
-      // (E4's shared-origin contract) are task 6's job.
-      return BOSS_AT;
+    if (s.boss.kind === IMPOSTER_ID) {
+      // M6 PR-3 task 6 (E4): same shared-origin contract as `batCell` above,
+      // via `imposterCursorAnchor` (a fixed offset from the float anchor).
+      return imposterCursorAnchor(s.boss, targetId);
     }
     return assertNever(s.boss);
   }, []);
@@ -379,16 +414,14 @@ export default function BattleScene(props: Props) {
         debug: { frames: CAST, ms: CAST_MS },
         fo: { frames: FAN, ms: FAN_MS },
         rb: { frames: RBK, ms: RBK_MS },
-        // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders nothing.
-        // Not one of E1's named 6 BossState sites — a 7th compile break this
-        // task's AbilityId growth (rc/conv) surfaced on its own, empirically,
-        // via the same tsc -b probe. Empty frames/ms is a true no-op (the
-        // `Math.min(heroFrame, frames.length - 1)` read above would go
-        // negative if this path were ever actually reached — it can't be
-        // yet: rc/conv are uncastable outside an Imposter fight, and Imposter
-        // isn't bootable until task 5). Never borrow another ability's reel.
-        rc: { frames: [], ms: [] },
-        conv: { frames: [], ms: [] },
+        // M6 PR-3 task 6: real reels, not the task-4 compile-only stub — E5
+        // measured ROOT/ROOT_MS and CONV/CONV_MS as already exported from
+        // canon heroBattle.js (wiring, not extraction). This was a LIVE
+        // CRASH PATH once the Imposter became bootable (task 5): the stub's
+        // empty frames/ms made `Math.min(heroFrame, frames.length - 1)`
+        // evaluate to -1 and index `frames[-1]`.
+        rc: { frames: ROOT, ms: ROOT_MS },
+        conv: { frames: CONV, ms: CONV_MS },
       };
       setHeroFrame(0);
       setHeroReel(reel[action.type]);
@@ -500,9 +533,11 @@ export default function BattleScene(props: Props) {
       // vanished; only battleReduce refuses the action).
       return livingTargets(s.boss).map((id) => ({ id }));
     }
-    if (s.boss.kind === "imposter-syndrome") {
-      // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders nothing.
-      return [];
+    if (s.boss.kind === IMPOSTER_ID) {
+      // M6 PR-3 task 6: [0,1,2] during CLONES (three targetable slots, per
+      // E8's targeting/rendering overlay), else just the single entity's
+      // [0] — same shape SF's own arm above returns.
+      return imposterLivingTargets(s.boss).map((id) => ({ id }));
     }
     return assertNever(s.boss);
   }, []);
@@ -664,16 +699,22 @@ export default function BattleScene(props: Props) {
       cursorBat !== null
         ? { id: SF_TARGET_ID, hp: state.boss.hp, maxHp: state.boss.maxHp, alive: state.boss.hp > 0, marked: state.boss.marked }
         : null;
-  } else if (state.boss.kind === "imposter-syndrome") {
-    // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders
-    // nothing. Neutral zeros/nulls, never another boss's plate/cursor values
-    // (real HP display, clone-slot cursor homes, and the reveal rule are
-    // task 6's job, per §Scene generalization / E4).
-    revealBoss = false;
-    livingCount = 0;
-    plateHp = { hp: 0, maxHp: 0 };
+  } else if (state.boss.kind === IMPOSTER_ID) {
+    // M6 PR-3 task 6: real HP shown always (plan §Scene generalization —
+    // "the puzzle is its phases, not its HP", same as Cascade/SF's no-mask
+    // rule). cursorNodeObj reuses Cascade/SF's structural shape (only `.id`
+    // is ever read below) — `cursorBat` during CLONES is the clone slot
+    // (0/1/2), otherwise always 0; every slot reads the SAME single boss
+    // entity's hp/maxHp/marked, since clone slots have no HP of their own
+    // (E8: they're a targeting/rendering overlay only).
+    revealBoss = true;
+    livingCount = state.boss.hp > 0 ? 1 : 0;
+    plateHp = { hp: state.boss.hp, maxHp: state.boss.maxHp };
     cursorBatObj = null;
-    cursorNodeObj = null;
+    cursorNodeObj =
+      cursorBat !== null
+        ? { id: cursorBat, hp: state.boss.hp, maxHp: state.boss.maxHp, alive: state.boss.hp > 0, marked: state.boss.marked }
+        : null;
   } else {
     assertNever(state.boss);
   }

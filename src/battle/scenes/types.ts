@@ -60,6 +60,26 @@ export interface BossSceneModule {
   id: string;
   /** Both flutter phases, built once. */
   arena: [Grid, Grid];
+  /** M6 PR-3 task 6 (E9) — OPTIONAL, additive (D3/E4 pattern). The static
+   * `arena` property can't express an HP-linked arena (the Imposter's
+   * erosion stages), so `BattleScene` renders
+   * `(scene.arenaFor?.(shown.boss) ?? scene.arena)[flutter]` instead —
+   * `shown.boss`, not the live `state.boss`, so the death-animation window
+   * (which keeps composing off `shown`, sceneGate.ts's `shouldComposeBoss`)
+   * shows the correct stage throughout. Shipped modules don't implement
+   * this, so their output stays byte-identical. */
+  arenaFor?(boss: BossState): [Grid, Grid];
+  /** M6 PR-3 task 6 (E4) — OPTIONAL, additive. `composeBoss`'s Grid is
+   * stamped TOP-LEFT at this origin instead of the bare `BOSS_AT` constant
+   * when present (default `BOSS_AT`) — needed for the Imposter's leftward
+   * clone spread, which `stampGrid`'s stage-bounds clipping would otherwise
+   * silently eat. The shared-origin contract (dissect pass 1, the J4
+   * invisible-cursor class): a module implementing this MUST have its own
+   * `batCell`/`cursorCell`/float-anchor arms compute from this SAME
+   * function, never the bare `BOSS_AT` constant, or the cursor targets art
+   * that isn't there. Shipped modules don't implement this, so their output
+   * stays byte-identical. */
+  stampOrigin?(boss: BossState): [number, number];
   /** Compose the boss's on-stage grid for this frame from engine + fx state.
    * Takes the whole `BossState` (not e.g. `Bat[]`) — M6 PR-1b widened this
    * from Alert-Storm-specific `bats: Bat[]` so a second boss (Cascade, whose
