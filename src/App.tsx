@@ -966,6 +966,32 @@ export default function App() {
           the command-system container at zIndex 7 (already below 20, still
           below 25) — nothing sits between 8 and 24 on desktop today, so
           raising 20 to 25 changes zero desktop stacking relationships. */}
+      {/* FIGHT chooser tap-outside dismiss (M6 PR-3 task 6b, owner-ruled,
+          closes the PR-2 follow-up: "the mobile FIGHT chooser has no
+          touch-dismiss affordance"). A full-viewport backdrop, same z-index
+          as the chooser panel itself and placed immediately BEFORE it in the
+          DOM - at equal z-index the LATER sibling wins the paint order where
+          they overlap, so the panel (and its rows) stay fully clickable in
+          its own footprint while the backdrop still out-ranks everything
+          else on screen (the mobile category sheet at 22, the command bar
+          and FIGHT chip at 24) everywhere OUTSIDE that footprint. Routes
+          through the SAME `back()` path Escape/Backspace already use here
+          (reuse, not a forked close) - `back()` reads `fightChooserOpen`
+          off `stateRef` and both closes the chooser and plays the back
+          sound. This element carries `data-ui` so the root container's own
+          `bgClick` background-unboot handler (which acts only when the
+          click target is NOT inside any `[data-ui]` element) never also
+          fires for the same tap. Desktop pointer behavior is unaffected
+          beyond gaining this same click-outside dismiss - nothing else
+          about the chooser or its positioning changes. */}
+      {fightChooserOpen && booted && !page && (
+        <div
+          data-ui
+          role="presentation"
+          onClick={() => back()}
+          style={{ position: "absolute", inset: 0, zIndex: 25 }}
+        />
+      )}
       {fightChooserOpen && booted && !page && (
         <div
           data-ui
