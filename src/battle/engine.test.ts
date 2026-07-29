@@ -842,6 +842,13 @@ describe("Silent Failure engine wiring (M6 PR-2 task 4)", () => {
       // +1 MP on hit, then +1 end-of-turn regen (an embodied swing follows) = +2 total
       expect(s1.hero.mp).toBe(hurt.hero.mp + 2);
     });
+
+    it("a target id other than SF_TARGET_ID is invalid: findTarget's unmatched-id path returns undefined (E2 real coverage gap)", () => {
+      const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2 });
+      const s1 = battleReduce(s0, { type: "attack", target: SF_TARGET_ID + 1 });
+      expect(s1.events).toEqual([{ type: "invalid", reason: "invalid target" }]);
+      expect(s1.turn).toBe(s0.turn);
+    });
   });
 
   describe("Debug mark + DoT on the Silent Failure (verbatim: DoT ticks through the hidden phase)", () => {
@@ -879,6 +886,14 @@ describe("Silent Failure engine wiring (M6 PR-2 task 4)", () => {
       const s1 = battleReduce(s0, { type: "fo" });
       if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
       expect(s1.boss.hp).toBe(140 - 12);
+    });
+
+    it("lethal Fan Out (hp exactly hits 0) pushes batDown same as a direct hit (E2 real coverage gap)", () => {
+      const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2, hp: 8 });
+      const s1 = battleReduce(s0, { type: "fo" });
+      if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+      expect(s1.boss.hp).toBe(0);
+      expect(s1.events).toContainEqual({ type: "batDown", batId: SF_TARGET_ID });
     });
   });
 
