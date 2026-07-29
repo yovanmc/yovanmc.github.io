@@ -938,7 +938,7 @@ export default function App() {
             reset action belongs; this is the builder's default, not an
             owner ruling. Not inside CATS/content.ts (owner-voice surface,
             untouched by this milestone, same reason FIGHT lives out here).
-            Owner ruling (diff review): gated on defeatedBosses.length > 0 —
+            Orchestrator ruling (diff review, NOT an owner ruling): gated on defeatedBosses.length > 0 —
             a permanently visible reset advertises state machinery to a
             first-time visitor with nothing to reset, and after PR-B it
             would sit next to locked rows as pure noise.
@@ -1368,7 +1368,7 @@ export default function App() {
           exactly), positioned top-right since the bottom edge is already
           occupied by the command bar and the FIGHT chip. Placement question
           same as the desktop RESET row above. Gated on defeatedBosses.length
-          > 0, same owner ruling as the desktop row. */}
+          > 0, same orchestrator ruling as the desktop row. */}
       {defeatedBosses.length > 0 && (
       <div
         data-ui
