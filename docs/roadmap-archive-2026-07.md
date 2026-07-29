@@ -7,6 +7,19 @@ step-by-step detail always lives in the linked plan docs under
 `docs/superpowers/plans/`; this file is the middle layer between the one-line
 table and the full plan.
 
+## M1–M2 — Battlefield system + Dive to the Heart design (PRs #12–#14, merged)
+
+Backlog: `docs/superpowers/specs/2026-07-25-milestones-backlog.md`
+
+Design-only milestones, no `src/` changes. Produced the canon prototype labs in
+`docs/battle-prototypes/` (standalone HTML, each carrying its own embedded hero
+half plus a boss half) and the battlefield/corruption-variant specs. Those labs
+became the single source of truth that `tools/extract-canon.mjs` carves verbatim
+slices out of from M3a onward, so every later boss's art enters the app through
+that pipeline rather than by hand transcription. Archived from the main table
+2026-07-29 during the PR #25 hygiene pass; the pipeline itself is recorded as a
+durable constraint in `ROADMAP.md`.
+
 ## S1a — Visual & copy fixes (PR #4, merged)
 
 Plan: `docs/superpowers/plans/2026-07-02-S1a-visual-copy-fixes.md`
