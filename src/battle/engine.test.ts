@@ -1687,17 +1687,49 @@ describe("Imposter boot + engine-generated win line (M6 PR-3 task 5)", () => {
           phasesSeen.add(s.boss.phase);
           if (s.boss.degenerate) degenerateReached = true;
           // "fired", not just charged: PULSE's charge turn always deals 0;
-          // only the fire turn deals a nonzero hit.
+          // only the fire turn deals a nonzero hit. Already robust against
+          // the counter-overcounting class below: a heroDamage event only
+          // ever gets pushed by a boss turn that actually ran (never by a
+          // rejected/invalid action, never by a call where the boss died
+          // from the hero's own hit before the boss-turn section), so
+          // requiring the event's presence — not just the pre-phase label —
+          // already confirms the fire actually resolved.
           if (prePhase === "pulse" && s.events.some((e) => e.type === "heroDamage" && e.amount > 0)) {
             pulseFired = true;
           }
           // MIRROR's own boss turn resolves against whatever phase was
           // current at the START of the call (rc's rip-back is the only
           // action that changes phase mid-call, and it only ever fires from
-          // "vanish", never from "mirror" — so this is unambiguous here).
-          if (prePhase === "mirror") mirrorFired++;
+          // "vanish", never from "mirror" — so prePhase === "mirror" is
+          // unambiguous about WHICH phase the boss turn dispatches on).
+          // But the pre-phase label alone does not prove the boss turn
+          // actually RAN this call — if the hero's own action ends the
+          // fight first (H11: a lethal hit resolves before the boss-turn
+          // section even runs), the label is still "mirror" going in with
+          // no mirror strike ever landing. heroDamage is pushed exactly
+          // once, only by that boss-turn section, so requiring its presence
+          // is what makes this "a mirror turn actually resolved and dealt
+          // its damage" rather than "the input phase happened to say
+          // mirror" — the exact distinction the coordinator's ruling drew.
+          if (prePhase === "mirror" && s.events.some((e) => e.type === "heroDamage")) mirrorFired++;
         }
-        if (prePhase === "vanish" && action.type === "rc") vanishRippedByRc = true;
+        // Same fix, same reasoning: casting rc while the PRE-call phase was
+        // "vanish" does not by itself prove the rip-back happened — the
+        // action could have been rejected (e.g. insufficient MP), in which
+        // case `invalid()` returns the state byte-unchanged (phase still
+        // "vanish") with nothing but an "invalid" event. Confirming no
+        // "invalid" event fired AND the boss has actually left "vanish"
+        // afterward is checking the real state transition, not inferring it
+        // from the action type and the pre-call phase alone.
+        if (
+          prePhase === "vanish" &&
+          action.type === "rc" &&
+          !s.events.some((e) => e.type === "invalid") &&
+          s.boss.kind === "imposter-syndrome" &&
+          s.boss.phase !== "vanish"
+        ) {
+          vanishRippedByRc = true;
+        }
       }
 
       // H1 rc (clones, ignores the illusion — the plan's own line opens
@@ -1726,10 +1758,14 @@ describe("Imposter boot + engine-generated win line (M6 PR-3 task 5)", () => {
       }
       const realIndex = s.boss.realIndex ?? 0; // seeded at spawn, never reseeds — and now legitimately known
 
-      // H8 attack (clones, real slot — legitimate: the mark is held) · H9
-      // attack (mirror fires again, mirroring rc; single visible target) ·
-      // H10 attack (clones, real slot — still marked) · H11 attack (mirror,
-      // lethal).
+      // H8 attack (clones, real slot — legitimate: the mark is held; the
+      // boss's OWN turn this call is a plain degenerate CLONES slash, phase
+      // then advances to mirror) · H9 attack (mirror fires, mirroring H7's
+      // Debug — attack never updates the last-special tracker; phase then
+      // advances back to clones) · H10 attack (clones, real slot — still
+      // marked; boss turn is a plain slash again, phase advances to mirror)
+      // · H11 attack (mirror phase's single visible target, lethal — the
+      // fight ends before this call's own boss turn ever runs).
       const POST_MARK_ACTIONS: BattleAction[] = [
         { type: "attack", target: realIndex },
         { type: "attack", target: 0 },
@@ -1759,7 +1795,7 @@ describe("Imposter boot + engine-generated win line (M6 PR-3 task 5)", () => {
       expect(oracleViolation).toBe(false);
     });
 
-    it("reaches victory within the signed 9-14 hero-turn band (N12), entering every phase — clones opened, pulse FIRED, vanish entered and ripped back by Root Cause, mirror fired at least twice — the forge crossing and degeneration both reached", () => {
+    it("reaches victory within the signed 9-14 hero-turn band (N12), entering every phase — clones opened, pulse FIRED, vanish entered and ripped back by Root Cause, mirror fired exactly twice (H7 mirroring Debug, H9 mirroring it again — H11's boss turn never runs, the fight ends first) — the forge crossing and degeneration both reached", () => {
       const { s, phasesSeen, mirrorFired, pulseFired, vanishRippedByRc, degenerateReached, forgeCrossingSeen } =
         winLine();
       expect(s.status).toBe("victory");
@@ -1771,7 +1807,12 @@ describe("Imposter boot + engine-generated win line (M6 PR-3 task 5)", () => {
       expect(phasesSeen.has("mirror")).toBe(true);
       expect(pulseFired).toBe(true);
       expect(vanishRippedByRc).toBe(true);
-      expect(mirrorFired).toBeGreaterThanOrEqual(2);
+      // The true count, not a loose lower bound: counting "input phase was
+      // mirror" alone (the pre-fix version) read 3, because it also counted
+      // H11, where the boss died from the hero's own hit before any boss
+      // turn ran — a metric that degrades quietly, since it would stay
+      // green even if the mirror mechanic stopped dealing damage entirely.
+      expect(mirrorFired).toBe(2);
       expect(degenerateReached).toBe(true);
       expect(forgeCrossingSeen).toBe(true);
       expect(s.hero.hp).toBeGreaterThan(0);
