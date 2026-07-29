@@ -42,6 +42,16 @@ export { IMPLEMENTED_BOSSES, RUSH_ORDER };
  * Imposter join in PR-2/PR-3. */
 export type BossState = AlertStormBoss | CascadeBoss;
 
+/** M6 PR-2 task 1 (D1): exhaustive-dispatch guard. Every per-boss branch
+ * point in this file and in BattleScene.tsx narrows through every real
+ * BossState kind and falls through to this only if a new boss kind was added
+ * to the union without updating that branch — `x: never` then fails to
+ * compile at the call site, which is the whole point (a silent two-arm
+ * `if/else` would type-check fine and mis-route a new boss instead). */
+export function assertNever(x: never): never {
+  throw new Error(`unhandled boss kind: ${JSON.stringify(x)}`);
+}
+
 export interface Hero {
   hp: number;
   maxHp: number;
@@ -250,12 +260,14 @@ function invalid(state: BattleState, reason: string): BattleState {
 
 function cloneBoss(boss: BossState): BossState {
   if (boss.kind === CASCADE_ID) return { ...boss, nodes: boss.nodes.map((n) => ({ ...n })) };
-  return { ...boss, bats: boss.bats.map((b) => ({ ...b })) };
+  if (boss.kind === ALERT_STORM_ID) return { ...boss, bats: boss.bats.map((b) => ({ ...b })) };
+  return assertNever(boss);
 }
 
 function findTarget(boss: BossState, id: number): { alive: boolean } | undefined {
   if (boss.kind === CASCADE_ID) return boss.nodes.find((n) => n.id === id);
-  return boss.bats.find((b) => b.id === id);
+  if (boss.kind === ALERT_STORM_ID) return boss.bats.find((b) => b.id === id);
+  return assertNever(boss);
 }
 
 /** Single-target hit (attack/pt/debug's own damage). Alert Storm routes
@@ -270,8 +282,10 @@ function dealSingleTarget(s: BattleState, targetId: number, amount: number): voi
     const node = s.boss.nodes.find((n) => n.id === targetId)!;
     s.events.push({ type: "damage", batId: targetId, amount: before - node.hp });
     if (!node.alive) s.events.push({ type: "batDown", batId: targetId });
-  } else {
+  } else if (s.boss.kind === ALERT_STORM_ID) {
     damageBat(s, targetId, amount);
+  } else {
+    assertNever(s.boss);
   }
 }
 
@@ -281,8 +295,10 @@ function dealSingleTarget(s: BattleState, targetId: number, amount: number): voi
 function markTarget(s: BattleState, targetId: number): void {
   if (s.boss.kind === CASCADE_ID) {
     s.boss = markNode(s.boss, targetId);
-  } else {
+  } else if (s.boss.kind === ALERT_STORM_ID) {
     s.boss.bats.find((b) => b.id === targetId)!.marked = true;
+  } else {
+    assertNever(s.boss);
   }
   s.events.push({ type: "mark", batId: targetId });
 }
@@ -351,8 +367,10 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
           s.events.push({ type: "damage", batId: b.id, amount: b.hp - node.hp });
           if (!node.alive) s.events.push({ type: "batDown", batId: b.id });
         }
-      } else {
+      } else if (s.boss.kind === ALERT_STORM_ID) {
         fanOutHit(s, dealtDamage(FAN_OUT_DMG, s.ctTurns > 0, s.conviction));
+      } else {
+        assertNever(s.boss);
       }
       break;
     }
@@ -377,7 +395,7 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
           s.events.push({ type: "dot", batId: d.batId, amount: before - after.hp });
           if (!after.alive) s.events.push({ type: "batDown", batId: d.batId });
         }
-      } else {
+      } else if (s.boss.kind === ALERT_STORM_ID) {
         const bat = s.boss.bats.find((b) => b.id === d.batId)!;
         if (bat.alive) {
           bat.hp = Math.max(0, bat.hp - DOT_TICK);
@@ -387,6 +405,8 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
             s.events.push({ type: "batDown", batId: d.batId });
           }
         }
+      } else {
+        assertNever(s.boss);
       }
       d.ticksLeft -= 1;
     }
@@ -394,18 +414,27 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
       if (s.boss.kind === CASCADE_ID) {
         return d.ticksLeft > 0 && !!s.boss.nodes.find((n) => n.id === d.batId)?.alive;
       }
-      return d.ticksLeft > 0 && s.boss.bats.find((b) => b.id === d.batId)!.alive;
+      if (s.boss.kind === ALERT_STORM_ID) {
+        return d.ticksLeft > 0 && s.boss.bats.find((b) => b.id === d.batId)!.alive;
+      }
+      return assertNever(s.boss);
     });
   }
 
   // victory: the boss going down ends the fight immediately — no boss turn
   // lands. Rider/forge/unlocks are first-victory only (rematch = lap).
-  const bossDefeated = s.boss.kind === CASCADE_ID ? isCascadeDefeated(s.boss) : isBossDefeated(s.boss);
+  let bossDefeated: boolean;
+  if (s.boss.kind === CASCADE_ID) bossDefeated = isCascadeDefeated(s.boss);
+  else if (s.boss.kind === ALERT_STORM_ID) bossDefeated = isBossDefeated(s.boss);
+  else bossDefeated = assertNever(s.boss);
   if (bossDefeated) {
     s.status = "victory";
     s.events.push({ type: "victory" });
     const bossId = s.boss.kind;
-    const forgeAbility = s.boss.kind === CASCADE_ID ? "rollback" : "fan-out";
+    let forgeAbility: "fan-out" | "rollback";
+    if (s.boss.kind === CASCADE_ID) forgeAbility = "rollback";
+    else if (s.boss.kind === ALERT_STORM_ID) forgeAbility = "fan-out";
+    else forgeAbility = assertNever(s.boss);
     if (!s.defeatedBosses.includes(bossId)) {
       s.defeatedBosses.push(bossId);
       s.events.push({ type: "forge", ability: forgeAbility });
@@ -434,8 +463,10 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
       const result = resolveCascadeBossTurn(s.boss, s.ctTurns > 0, s.conviction);
       s.boss = result.boss;
       heroDamage = result.heroDamage;
-    } else {
+    } else if (s.boss.kind === ALERT_STORM_ID) {
       heroDamage = roundHalfUp(rawVolley(s.boss.bats) * (s.ctTurns > 0 ? CT_TAKEN_MULT : 1));
+    } else {
+      heroDamage = assertNever(s.boss);
     }
     s.hero.hp = Math.max(0, s.hero.hp - heroDamage);
     s.events.push({ type: "heroDamage", amount: heroDamage });

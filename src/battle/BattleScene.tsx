@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  assertNever,
   battleReduce,
   deriveKit,
   initBattle,
@@ -36,11 +37,15 @@ import { SR, SC, BOSS_AT, HERO_AT } from "../generated/battlefieldScene";
  * crash against it).
  */
 function alertBats(boss: BossState): Bat[] {
-  return boss.kind === "alert-storm" ? boss.bats : [];
+  if (boss.kind === "alert-storm") return boss.bats;
+  if (boss.kind === CASCADE_ID) return [];
+  return assertNever(boss);
 }
 
 function cascadeNodes(boss: BossState): CascadeNode[] {
-  return boss.kind === CASCADE_ID ? boss.nodes : [];
+  if (boss.kind === CASCADE_ID) return boss.nodes;
+  if (boss.kind === "alert-storm") return [];
+  return assertNever(boss);
 }
 
 const MONO = "'JetBrains Mono',monospace";
@@ -254,9 +259,12 @@ export default function BattleScene(props: Props) {
       const midC = Math.floor((box.c + box.c2) / 2);
       return [BOSS_AT[0] + box.rr, BOSS_AT[1] + midC];
     }
-    const bat = alertBats(s.boss).find((b) => b.id === targetId)!;
-    const [r, c] = SWARM[bat.pos];
-    return [BOSS_AT[0] + r, BOSS_AT[1] + c + 7];
+    if (s.boss.kind === "alert-storm") {
+      const bat = alertBats(s.boss).find((b) => b.id === targetId)!;
+      const [r, c] = SWARM[bat.pos];
+      return [BOSS_AT[0] + r, BOSS_AT[1] + c + 7];
+    }
+    return assertNever(s.boss);
   }, []);
 
   /** Target-cursor arrow anchor — a separate offset from `batCell`'s float
@@ -269,9 +277,12 @@ export default function BattleScene(props: Props) {
       const midC = Math.floor((box.c + box.c2) / 2);
       return [BOSS_AT[0] + box.rr - 5, BOSS_AT[1] + midC - 2];
     }
-    const bat = alertBats(s.boss).find((b) => b.id === targetId)!;
-    const [r, c] = SWARM[bat.pos];
-    return [BOSS_AT[0] + r - 5, BOSS_AT[1] + c + 5];
+    if (s.boss.kind === "alert-storm") {
+      const bat = alertBats(s.boss).find((b) => b.id === targetId)!;
+      const [r, c] = SWARM[bat.pos];
+      return [BOSS_AT[0] + r - 5, BOSS_AT[1] + c + 5];
+    }
+    return assertNever(s.boss);
   }, []);
 
   const commit = useCallback(
@@ -388,9 +399,12 @@ export default function BattleScene(props: Props) {
     if (s.boss.kind === CASCADE_ID) {
       return cascadeNodes(s.boss).filter((n) => n.alive);
     }
-    return alertBats(s.boss)
-      .filter((b) => b.alive)
-      .sort((a, b) => SWARM[a.pos][1] - SWARM[b.pos][1]);
+    if (s.boss.kind === "alert-storm") {
+      return alertBats(s.boss)
+        .filter((b) => b.alive)
+        .sort((a, b) => SWARM[a.pos][1] - SWARM[b.pos][1]);
+    }
+    return assertNever(s.boss);
   }, []);
 
   const startTarget = useCallback(() => {
@@ -501,22 +515,37 @@ export default function BattleScene(props: Props) {
   // (six independent nodes, no fake/real identity) — the plate bar sums the
   // living chain's HP/maxHp in place of Alert Storm's reveal-on-mark rule,
   // and it never masks (plan §Boss 2 "Targeting": nodes show real HP always).
-  const isCascadeFight = state.boss.kind === CASCADE_ID;
-  const real = !isCascadeFight ? alertBats(state.boss).find((b) => b.real)! : null;
-  const revealBoss = isCascadeFight ? true : real!.marked || !real!.alive;
-  const livingCount = isCascadeFight
-    ? cascadeNodes(state.boss).filter((n) => n.alive).length
-    : alertBats(state.boss).filter((b) => b.alive).length;
-  const plateHp = isCascadeFight
-    ? cascadeNodes(state.boss).reduce(
-        (acc, n) => ({ hp: acc.hp + n.hp, maxHp: acc.maxHp + n.maxHp }),
-        { hp: 0, maxHp: 0 },
-      )
-    : { hp: real!.hp, maxHp: real!.maxHp };
-  const cursorBatObj =
-    !isCascadeFight && cursorBat !== null ? alertBats(state.boss).find((b) => b.id === cursorBat) : null;
-  const cursorNodeObj =
-    isCascadeFight && cursorBat !== null ? cascadeNodes(state.boss).find((n) => n.id === cursorBat) : null;
+  // M6 PR-2 task 1 (D1, pass-1 H2): exhaustive dispatch over boss.kind with a
+  // never-typed default, replacing the old isCascadeFight boolean shortcut —
+  // that shortcut let a third boss kind silently fall into the "alert storm"
+  // shape below with no compile error (measured: stubbing a third BossState
+  // member produced ZERO errors here before this refactor).
+  let revealBoss: boolean;
+  let livingCount: number;
+  let plateHp: { hp: number; maxHp: number };
+  let cursorBatObj: Bat | undefined | null;
+  let cursorNodeObj: CascadeNode | undefined | null;
+  if (state.boss.kind === CASCADE_ID) {
+    const nodes = cascadeNodes(state.boss);
+    revealBoss = true;
+    livingCount = nodes.filter((n) => n.alive).length;
+    plateHp = nodes.reduce(
+      (acc, n) => ({ hp: acc.hp + n.hp, maxHp: acc.maxHp + n.maxHp }),
+      { hp: 0, maxHp: 0 },
+    );
+    cursorBatObj = null;
+    cursorNodeObj = cursorBat !== null ? nodes.find((n) => n.id === cursorBat) : null;
+  } else if (state.boss.kind === "alert-storm") {
+    const bats = alertBats(state.boss);
+    const real = bats.find((b) => b.real)!;
+    revealBoss = real.marked || !real.alive;
+    livingCount = bats.filter((b) => b.alive).length;
+    plateHp = { hp: real.hp, maxHp: real.maxHp };
+    cursorBatObj = cursorBat !== null ? bats.find((b) => b.id === cursorBat) : null;
+    cursorNodeObj = null;
+  } else {
+    assertNever(state.boss);
+  }
   const cursorTargetId = cursorBatObj ? cursorBatObj.id : cursorNodeObj ? cursorNodeObj.id : null;
   const cursorRead = cursorBatObj
     ? cursorBatObj.marked || !cursorBatObj.alive
