@@ -44,6 +44,8 @@ function alertBats(boss: BossState): Bat[] {
   if (boss.kind === "alert-storm") return boss.bats;
   if (boss.kind === CASCADE_ID) return [];
   if (boss.kind === SILENT_FAILURE_ID) return [];
+  // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders nothing.
+  if (boss.kind === "imposter-syndrome") return [];
   return assertNever(boss);
 }
 
@@ -51,6 +53,8 @@ function cascadeNodes(boss: BossState): CascadeNode[] {
   if (boss.kind === CASCADE_ID) return boss.nodes;
   if (boss.kind === "alert-storm") return [];
   if (boss.kind === SILENT_FAILURE_ID) return [];
+  // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders nothing.
+  if (boss.kind === "imposter-syndrome") return [];
   return assertNever(boss);
 }
 
@@ -313,6 +317,13 @@ export default function BattleScene(props: Props) {
       // returns a real, art-derived position instead of the BOSS_AT stopgap.
       return [BOSS_AT[0] + SF_ARMOR_BOX.top, BOSS_AT[1] + SF_ARMOR_MID_COL];
     }
+    if (s.boss.kind === "imposter-syndrome") {
+      // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders nothing.
+      // The bare shared anchor, zero offset — deliberately NOT another
+      // boss's computed box/position (E4's real stampOrigin/clone-slot work
+      // is task 6's job).
+      return BOSS_AT;
+    }
     return assertNever(s.boss);
   }, []);
 
@@ -339,6 +350,12 @@ export default function BattleScene(props: Props) {
       // vanished or not — the boss stays selectable the whole fight.
       return [BOSS_AT[0] + SF_ARMOR_BOX.top - 5, BOSS_AT[1] + SF_ARMOR_MID_COL - 2];
     }
+    if (s.boss.kind === "imposter-syndrome") {
+      // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders nothing.
+      // Bare shared anchor, no offset — real per-clone-slot cursor homes
+      // (E4's shared-origin contract) are task 6's job.
+      return BOSS_AT;
+    }
     return assertNever(s.boss);
   }, []);
 
@@ -362,6 +379,16 @@ export default function BattleScene(props: Props) {
         debug: { frames: CAST, ms: CAST_MS },
         fo: { frames: FAN, ms: FAN_MS },
         rb: { frames: RBK, ms: RBK_MS },
+        // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders nothing.
+        // Not one of E1's named 6 BossState sites — a 7th compile break this
+        // task's AbilityId growth (rc/conv) surfaced on its own, empirically,
+        // via the same tsc -b probe. Empty frames/ms is a true no-op (the
+        // `Math.min(heroFrame, frames.length - 1)` read above would go
+        // negative if this path were ever actually reached — it can't be
+        // yet: rc/conv are uncastable outside an Imposter fight, and Imposter
+        // isn't bootable until task 5). Never borrow another ability's reel.
+        rc: { frames: [], ms: [] },
+        conv: { frames: [], ms: [] },
       };
       setHeroFrame(0);
       setHeroReel(reel[action.type]);
@@ -472,6 +499,10 @@ export default function BattleScene(props: Props) {
       // correct as-is (D2 keeps the armor selectable whether embodied or
       // vanished; only battleReduce refuses the action).
       return livingTargets(s.boss).map((id) => ({ id }));
+    }
+    if (s.boss.kind === "imposter-syndrome") {
+      // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders nothing.
+      return [];
     }
     return assertNever(s.boss);
   }, []);
@@ -633,6 +664,16 @@ export default function BattleScene(props: Props) {
       cursorBat !== null
         ? { id: SF_TARGET_ID, hp: state.boss.hp, maxHp: state.boss.maxHp, alive: state.boss.hp > 0, marked: state.boss.marked }
         : null;
+  } else if (state.boss.kind === "imposter-syndrome") {
+    // TODO(M6 PR-3 task 6): imposter rendering - compile-only stub, renders
+    // nothing. Neutral zeros/nulls, never another boss's plate/cursor values
+    // (real HP display, clone-slot cursor homes, and the reveal rule are
+    // task 6's job, per §Scene generalization / E4).
+    revealBoss = false;
+    livingCount = 0;
+    plateHp = { hp: 0, maxHp: 0 };
+    cursorBatObj = null;
+    cursorNodeObj = null;
   } else {
     assertNever(state.boss);
   }

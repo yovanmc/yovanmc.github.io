@@ -94,9 +94,11 @@ const MIRROR_DEBUG = 3;
 export const MIRROR_DEBUG_DOT_TICK = 2;
 export const MIRROR_DEBUG_DOT_TICKS = 3;
 const MIRROR_RB_HEAL = 15;
-/** Root Cause (rc) and Conviction (conv) don't exist in AbilityId yet — task
- * 4 adds `MIRROR_RC = 11` and the Conviction arm (-> glitch slash) to
- * `resolveMirror`'s switch when it grows AbilityId. */
+/** Root Cause's mirrored half: 22/2 = 11 exactly (not 14 — 14 is the plain
+ * glitch slash the diagnostic default falls back to; a boss with no
+ * explicit `rc` arm here would silently mirror Root Cause as a slash
+ * instead, which is exactly the bug this arm exists to prevent). */
+const MIRROR_RC = 11;
 
 /** Local copy of engine.ts's private round-half-up (not exported there).
  * Needed here because N8's mirror-CT dealt multiplier must compose with the
@@ -328,10 +330,12 @@ interface MirrorResolution {
  * debug/fo/rb) with a diagnostic default — never a thrown assertNever, since
  * "attack" (excluded by trackSpecial) and `null` (no special cast yet) both
  * legitimately reach here and both resolve to the plain glitch slash, same
- * as the table's "no special used yet -> glitch slash" row. Task 4 adds `rc`
- * (-> 11) and `conv` (-> glitch slash, "the imposter cannot mirror belief")
- * arms once AbilityId grows to include them — this switch is deliberately
- * left open to that extension, not closed with assertNever. */
+ * as the table's "no special used yet -> glitch slash" row. `rc` (-> 11, NOT
+ * 14 — falling through to the default would silently make a mirrored Root
+ * Cause indistinguishable from a mirrored nothing) and `conv` (-> glitch
+ * slash, "the imposter cannot mirror belief" — it fakes nothing and just
+ * swings, per the signed MIRROR row) are explicit arms, same as every other
+ * AbilityId variant; the default stays open only for `null`/"attack". */
 function resolveMirror(boss: ImposterBoss): MirrorResolution {
   switch (boss.lastSpecial) {
     case "ct":
@@ -344,6 +348,10 @@ function resolveMirror(boss: ImposterBoss): MirrorResolution {
       return { base: MIRROR_DEBUG, mirroredDebug: true, refreshMirrorCt: false, healAmount: 0 };
     case "rb":
       return { base: 0, mirroredDebug: false, refreshMirrorCt: false, healAmount: MIRROR_RB_HEAL };
+    case "rc":
+      return { base: MIRROR_RC, mirroredDebug: false, refreshMirrorCt: false, healAmount: 0 };
+    case "conv":
+      return { base: SLASH, mirroredDebug: false, refreshMirrorCt: false, healAmount: 0 };
     default:
       return { base: SLASH, mirroredDebug: false, refreshMirrorCt: false, healAmount: 0 };
   }

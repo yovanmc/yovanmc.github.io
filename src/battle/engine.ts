@@ -40,6 +40,22 @@ import {
   SILENT_FAILURE_ID,
   spawnSilentFailure,
 } from "./bosses/silentFailure";
+import type { ImposterBoss } from "./bosses/imposter";
+import {
+  breakPulse,
+  convictionCastable,
+  damageImposter,
+  IMPOSTER_ID,
+  isImposterDefeated,
+  livingTargets as imposterLivingTargets,
+  markImposter,
+  MIRROR_DEBUG_DOT_TICK,
+  MIRROR_DEBUG_DOT_TICKS,
+  resolveImposterBossTurn,
+  resolveImposterHit,
+  ripBackVanish,
+  trackSpecial,
+} from "./bosses/imposter";
 import { IMPLEMENTED_BOSSES, RUSH_ORDER } from "./rushOrder";
 export type { Bat };
 export { isScreamTurn };
@@ -50,8 +66,9 @@ export { isScreamTurn };
 export { IMPLEMENTED_BOSSES, RUSH_ORDER };
 
 /** Discriminated on `.kind`. M6 PR-1b task 3 added Cascade; PR-2 task 4 adds
- * Silent Failure; Imposter joins in PR-3. */
-export type BossState = AlertStormBoss | CascadeBoss | SilentFailureBoss;
+ * Silent Failure; PR-3 task 4 adds Imposter (BattleScene.tsx's 6 matching
+ * sites stay compile-only stubs, task 6 per the plan's E1 "task 4/6" split). */
+export type BossState = AlertStormBoss | CascadeBoss | SilentFailureBoss | ImposterBoss;
 
 /** M6 PR-2 task 1 (D1): exhaustive-dispatch guard. Every per-boss branch
  * point in this file and in BattleScene.tsx narrows through every real
@@ -73,7 +90,12 @@ export interface Hero {
 export type BattleStatus = "active" | "victory" | "defeat";
 
 export type BattleEvent =
-  | { type: "damage"; batId: number; amount: number }
+  // `wasPop` (optional, Imposter-only): a CLONES-phase hit against a
+  // non-real slot — the pop is the whole effect (no damage, no mark, no
+  // DoT); derived at the call site from boss state, never inferred from
+  // `amount === 0` (a real hit could coincidentally be exactly that, and
+  // the plan's own carried-forward note flags the inference as unsafe).
+  | { type: "damage"; batId: number; amount: number; wasPop?: boolean }
   | { type: "heroDamage"; amount: number }
   | { type: "dot"; batId: number; amount: number }
   | { type: "mark"; batId: number }
@@ -81,13 +103,13 @@ export type BattleEvent =
   | { type: "batDown"; batId: number }
   | { type: "victory" }
   | { type: "defeat" }
-  | { type: "forge"; ability: "fan-out" | "rollback" | "root-cause" }
+  | { type: "forge"; ability: "fan-out" | "rollback" | "root-cause" | "conviction" }
   | { type: "rider"; maxHp: number; maxMp: number }
   | { type: "unlock"; id: string }
   | { type: "firstCast"; ability: AbilityId }
   | { type: "invalid"; reason: string };
 
-export type AbilityId = "attack" | "ct" | "pt" | "debug" | "fo" | "rb";
+export type AbilityId = "attack" | "ct" | "pt" | "debug" | "fo" | "rb" | "rc" | "conv";
 
 export type BattleAction =
   | { type: "attack"; target: number }
@@ -95,7 +117,9 @@ export type BattleAction =
   | { type: "pt"; target: number }
   | { type: "debug"; target: number }
   | { type: "fo" }
-  | { type: "rb" };
+  | { type: "rb" }
+  | { type: "rc"; target: number }
+  | { type: "conv" };
 
 export interface BattleState {
   seed: number;
@@ -106,13 +130,25 @@ export interface BattleState {
   boss: BossState;
   /** Critical Thinking turns remaining (0 = inactive). */
   ctTurns: number;
-  /** Conviction's persist-once-active flag (M6 §Multipliers). Not castable in
-   * PR-1a — always false — but the field lands now so the multiplier core
-   * below is exercised by real state shape, not just bare booleans. Imposter
-   * (PR-3) is the only caster. */
+  /** Conviction's persist-once-active flag (M6 §Multipliers). PR-3 task 4 is
+   * the first real caster (`conv`); every earlier PR only ever reads it as
+   * false. */
   conviction: boolean;
-  /** Debug DoTs: batId → ticks remaining. */
-  dots: { batId: number; ticksLeft: number }[];
+  /** Debug DoTs: batId → ticks remaining. `tick` (PR-3 task 4) is STAMPED at
+   * push time from the conviction flag then live (4, or 8 if conviction was
+   * active at cast) — this is what makes "already-running DoTs keep their
+   * tick value" implementable: the tick loop applies the stamped value, not
+   * a recomputed one, so a DoT started before Conviction activates keeps
+   * ticking 4 even after. */
+  dots: { batId: number; ticksLeft: number; tick: number }[];
+  /** E6 (PR-3 task 4): a mark on the HERO from the Imposter's mirrored
+   * Debug — DoT anchor + cosmetic only, no ability keys off it (F7). */
+  heroMarked: boolean;
+  /** E6: DoT(s) anchored on the HERO (mirrored Debug only source in the
+   * game). Fixed tick (`MIRROR_DEBUG_DOT_TICK`), never CT/conviction-scaled
+   * (DoTs are never CT-multiplied, plan §Multipliers) — no `tick` field
+   * needed here, unlike the boss-side `dots` above. */
+  heroDots: { ticksLeft: number }[];
   status: BattleStatus;
   /** Events emitted by the last reduce (renderer input). Cleared each action. */
   events: BattleEvent[];
@@ -189,6 +225,8 @@ export function initBattle(opts: InitOptions): BattleState {
     ctTurns: 0,
     conviction: false,
     dots: [],
+    heroMarked: false,
+    heroDots: [],
     status: "active",
     events: [],
     rngState: rng,
@@ -206,7 +244,25 @@ const DOT_TICK = 4;
 const DOT_TICKS = 3;
 const CT_DURATION = 3;
 const ROLLBACK_HEAL = 30;
-const MP_COST: Record<AbilityId, number> = { attack: 0, ct: 2, pt: 3, debug: 2, fo: 3, rb: 3 };
+// Root Cause (N1, Boss 4 table): 22 base MP-gated above pt/fo/rb, below
+// Conviction; +50% vs a marked target -> 33. Both numbers are the GENERAL
+// kit-ability constants — the mark-bonus and vanish-ignoring/rip-back
+// mechanics are pinned specifically for Imposter (the only boss with a
+// signed "vs marked"/vanish interaction); against any other boss kind RC
+// falls back to the plain flat-22 hit (scope decision, flagged in the
+// task report — no other boss's signed table gives RC a mark bonus).
+const ROOT_CAUSE_DMG = 22;
+const ROOT_CAUSE_MARKED_DMG = 33;
+const MP_COST: Record<AbilityId, number> = {
+  attack: 0,
+  ct: 2,
+  pt: 3,
+  debug: 2,
+  fo: 3,
+  rb: 3,
+  rc: 4,
+  conv: 5,
+};
 const RIDER_HP = 10;
 const RIDER_MP = 2;
 const CT_DEALT_MULT = 1.5;
@@ -251,12 +307,14 @@ export function takenDamage(base: number, ct: boolean, conviction: boolean): num
 const BASE_KIT: readonly AbilityId[] = ["attack", "ct", "pt", "debug"];
 
 /** Boss-defeat → ability unlock map, gated to shipped modules. Root Cause
- * lands on silent-failure in PR-3, never here (G1 — never a kit entry without
- * an arm; PR-2 emits the SF forge event but grants no `rc` entry, same as
- * PR-1b's Cascade forge with no `rb` entry until this PR shipped it). */
+ * lands on silent-failure HERE, M6 PR-3 task 4 (G1 pairing: the reducer's
+ * `rc` case arm lands in the same commit, never a kit entry without one —
+ * PR-2 emitted the SF forge event but granted no `rc` entry, same as
+ * PR-1b's Cascade forge with no `rb` entry until PR-2 shipped it). */
 const KIT_UNLOCKS: Partial<Record<string, AbilityId>> = {
   [ALERT_STORM_ID]: "fo",
   [CASCADE_ID]: "rb",
+  [SILENT_FAILURE_ID]: "rc",
 };
 
 /** Rush-order cumulative unlocks, intersected with `IMPLEMENTED_BOSSES` (a
@@ -268,6 +326,23 @@ export function deriveKit(defeatedBosses: string[]): AbilityId[] {
     if (!IMPLEMENTED_BOSSES.includes(bossId)) continue;
     const unlock = KIT_UNLOCKS[bossId];
     if (unlock && !kit.includes(unlock)) kit.push(unlock);
+  }
+  // N10 path (b): Conviction is kit-derived in ANY fight once Imposter is
+  // defeated — deliberately NOT a KIT_UNLOCKS entry (N10: "KIT_UNLOCKS gains
+  // NO conviction entry"), so it can't be expressed as a per-boss unlock map
+  // lookup like fo/rb/rc. N10 path (a) — the mid-fight forge unlock, before
+  // Imposter is actually defeated — is a different channel entirely: this
+  // function only sees `defeatedBosses`, so that path is gated separately at
+  // the battleReduce call site off the boss's own `forgeFired` flag.
+  // Genuinely dead until task 5 appends IMPOSTER_ID to IMPLEMENTED_BOSSES —
+  // the left operand can never be true yet, so this whole block is
+  // unreachable by construction, not a masked gap (same class as an
+  // assertNever arm guarding a not-yet-possible state). Task 5 makes it live;
+  // do not delete the IMPLEMENTED_BOSSES intersection to "fix" the coverage
+  // number — that intersection is the G1 guard this line exists for.
+  /* v8 ignore next 3 */
+  if (IMPLEMENTED_BOSSES.includes(IMPOSTER_ID) && defeatedBosses.includes(IMPOSTER_ID)) {
+    kit.push("conv");
   }
   return kit;
 }
@@ -284,8 +359,9 @@ function invalid(state: BattleState, reason: string): BattleState {
 function cloneBoss(boss: BossState): BossState {
   if (boss.kind === CASCADE_ID) return { ...boss, nodes: boss.nodes.map((n) => ({ ...n })) };
   if (boss.kind === ALERT_STORM_ID) return { ...boss, bats: boss.bats.map((b) => ({ ...b })) };
-  if (boss.kind === SILENT_FAILURE_ID) {
-    return { ...boss };
+  if (boss.kind === SILENT_FAILURE_ID) return { ...boss };
+  if (boss.kind === IMPOSTER_ID) {
+    return { ...boss }; // flat interface, no nested arrays to deep-clone
     /* v8 ignore next */
   }
   return assertNever(boss);
@@ -296,6 +372,12 @@ function findTarget(boss: BossState, id: number): { alive: boolean } | undefined
   if (boss.kind === ALERT_STORM_ID) return boss.bats.find((b) => b.id === id);
   if (boss.kind === SILENT_FAILURE_ID) {
     return id === SF_TARGET_ID ? { alive: boss.hp > 0 } : undefined;
+  }
+  if (boss.kind === IMPOSTER_ID) {
+    // 0/1/2 during CLONES, else just [0] (or [] once dead) — the E8 overlay
+    // ids, never per-slot HP; targetability (vanish) is a separate gate
+    // (isBossTargetable), this only answers "does this id exist right now".
+    return imposterLivingTargets(boss).includes(id) ? { alive: true } : undefined;
     /* v8 ignore next */
   }
   return assertNever(boss);
@@ -309,8 +391,13 @@ function findTarget(boss: BossState, id: number): { alive: boolean } | undefined
 function isBossTargetable(boss: BossState): boolean {
   if (boss.kind === SILENT_FAILURE_ID) return isTargetable(boss);
   if (boss.kind === CASCADE_ID) return true;
-  if (boss.kind === ALERT_STORM_ID) {
-    return true;
+  if (boss.kind === ALERT_STORM_ID) return true;
+  if (boss.kind === IMPOSTER_ID) {
+    // Untargetable only during VANISH (N-table); CLONES/PULSE/MIRROR are all
+    // targetable (attack/pt/debug legal). Root Cause bypasses this gate
+    // entirely at the call site ("reveals/ignores stealth", like attack's
+    // own D2 exemption, but RC lands a real hit instead of whiffing).
+    return boss.phase !== "vanish";
     /* v8 ignore next */
   }
   return assertNever(boss);
@@ -348,6 +435,21 @@ function dealSingleTarget(s: BattleState, targetId: number, amount: number): num
     s.events.push({ type: "damage", batId: targetId, amount: dealt });
     if (s.boss.hp === 0) s.events.push({ type: "batDown", batId: targetId });
     return dealt;
+  }
+  if (s.boss.kind === IMPOSTER_ID) {
+    // D2 whiff (attack-only path here, same shape as SF's `applied` line —
+    // pt/debug never reach here untargetable, the pre-validate gate blocks
+    // them). `wasPop` is derived from boss state BEFORE the hit resolves,
+    // never inferred from `dealt === 0` (carried-forward note: a real hit
+    // can never coincidentally read as a pop this way, but the plan is
+    // explicit that the call site must derive it, not assume it).
+    const applied = isBossTargetable(s.boss) ? amount : 0;
+    const wasPop = s.boss.phase === "clones" && targetId !== s.boss.realIndex;
+    const result = resolveImposterHit(s.boss, targetId, applied);
+    s.boss = result.boss;
+    s.events.push({ type: "damage", batId: targetId, amount: result.dealt, wasPop });
+    if (isImposterDefeated(s.boss)) s.events.push({ type: "batDown", batId: targetId });
+    return result.dealt;
     /* v8 ignore next */
   }
   return assertNever(s.boss);
@@ -364,6 +466,8 @@ function markTarget(s: BattleState, targetId: number): void {
     s.boss.bats.find((b) => b.id === targetId)!.marked = true;
   } else if (s.boss.kind === SILENT_FAILURE_ID) {
     s.boss = markSilentFailure(s.boss);
+  } else if (s.boss.kind === IMPOSTER_ID) {
+    s.boss = markImposter(s.boss);
     /* v8 ignore next 3 */
   } else {
     assertNever(s.boss);
@@ -374,18 +478,26 @@ function markTarget(s: BattleState, targetId: number): void {
 export function battleReduce(state: BattleState, action: BattleAction): BattleState {
   if (state.status !== "active") return invalid(state, "battle over");
 
-  if (!deriveKit(state.defeatedBosses).includes(action.type)) {
+  const kit = deriveKit(state.defeatedBosses);
+  // N10 path (a): the mid-fight Conviction forge — castable the instant the
+  // Imposter's ≤50% crossing fires, well before Imposter is in
+  // `defeatedBosses` (so `deriveKit`, which only ever sees path (b), can't
+  // see it). Read directly off the boss's own `forgeFired` flag.
+  const convForgeUnlocked = state.boss.kind === IMPOSTER_ID && state.boss.forgeFired;
+  if (!kit.includes(action.type) && !(action.type === "conv" && convForgeUnlocked)) {
     return invalid(state, "not in kit");
   }
 
   // validate before cloning
-  if (action.type === "attack" || action.type === "pt" || action.type === "debug") {
+  if (action.type === "attack" || action.type === "pt" || action.type === "debug" || action.type === "rc") {
     const target = findTarget(state.boss, action.target);
     if (!target || !target.alive) return invalid(state, "invalid target");
     // D2: pt/debug against a vanished boss are invalid; attack is EXEMPTED
     // from this extension (pass-2 J8) — it reaches dealSingleTarget and
-    // resolves as a whiff instead, per the signed table.
-    if (action.type !== "attack" && !isBossTargetable(state.boss)) {
+    // resolves as a whiff instead, per the signed table. Root Cause is ALSO
+    // exempted (N-table: "reveals/ignores stealth") but, unlike attack,
+    // lands a real hit rather than whiffing — its own case arm handles that.
+    if (action.type !== "attack" && action.type !== "rc" && !isBossTargetable(state.boss)) {
       return invalid(state, "target is not there");
     }
   }
@@ -395,6 +507,12 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
   if (action.type === "fo" && !isBossTargetable(state.boss)) {
     return invalid(state, "target is not there");
   }
+  // Conviction's activation gate (N10): both unlock paths still require
+  // hp*4 <= maxHp at the moment of casting, checked here so a "not in kit"
+  // rejection above always takes precedence over a gate rejection.
+  if (action.type === "conv" && !convictionCastable(state.hero.hp, state.hero.maxHp)) {
+    return invalid(state, "conviction gate not met");
+  }
   const mpCost = MP_COST[action.type];
   if (state.hero.mp < mpCost) return invalid(state, "not enough MP");
 
@@ -403,6 +521,7 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
     hero: { ...state.hero },
     boss: cloneBoss(state.boss),
     dots: state.dots.map((d) => ({ ...d })),
+    heroDots: state.heroDots.map((d) => ({ ...d })),
     cast: [...state.cast],
     defeatedBosses: [...state.defeatedBosses],
     events: [],
@@ -410,13 +529,18 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
   // Scream is Alert Storm's own mechanic — Cascade has no mouths to close, so
   // it never reshuffles at "scream end" (the check below gates on boss.kind).
   const screaming = s.boss.kind === ALERT_STORM_ID && isScreamTurn(s);
-  const dealtMult = s.ctTurns > 0 ? CT_DEALT_MULT : 1;
   const preexistingDots = s.dots.length; // a dot cast this turn ticks from NEXT turn
+  // N5: capture the crossing BEFORE this turn's hit/DoT resolve, so the
+  // mid-fight "forge: conviction" event (below) fires exactly once, on the
+  // turn the boss's own forgeFired flips false -> true.
+  const forgeFiredBefore = s.boss.kind === IMPOSTER_ID && s.boss.forgeFired;
   s.hero.mp -= MP_COST[action.type];
 
   switch (action.type) {
     case "attack": {
-      const dealt = dealSingleTarget(s, action.target, roundHalfUp(ATTACK_DMG * dealtMult));
+      // Conviction-aware from PR-3 on (was the conviction-blind local
+      // `dealtMult` — replaced repo-wide by this same call in this task).
+      const dealt = dealSingleTarget(s, action.target, dealtDamage(ATTACK_DMG, s.ctTurns > 0, s.conviction));
       // +1 MP on hit — gated GENERICALLY on damage actually landing (D2),
       // never a kind check: "on hit" is what the ability text already
       // promised, so a Silent Failure vanished whiff (0 dealt) naturally
@@ -429,20 +553,66 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
       break;
     }
     case "rb": {
-      // Cleanse (hero mark + hero DoTs) is inert THIS fight — no hero-side
-      // debuff state exists until the Imposter's mirror mechanic (PR-3), so
-      // there is nothing to cleanse yet; only the heal has an effect.
-      s.hero.hp = Math.min(s.hero.maxHp, s.hero.hp + ROLLBACK_HEAL);
+      // Heal is conviction-doubled (§Multipliers: "Rollback heal 60") — CT
+      // never factors in (this isn't a damage roll, so CT's percentage has
+      // nothing to replace or stack with; conviction alone doubles it).
+      const healAmount = s.conviction ? ROLLBACK_HEAL * 2 : ROLLBACK_HEAL;
+      s.hero.hp = Math.min(s.hero.maxHp, s.hero.hp + healAmount);
+      // Real cleanse (E6) — inert before PR-3 (nothing to clear), now clears
+      // whatever hero-side mark/DoT the Imposter's mirrored Debug left.
+      s.heroMarked = false;
+      s.heroDots = [];
       break;
     }
     case "pt": {
-      dealSingleTarget(s, action.target, roundHalfUp(PT_DMG * dealtMult));
+      dealSingleTarget(s, action.target, dealtDamage(PT_DMG, s.ctTurns > 0, s.conviction));
       break;
     }
     case "debug": {
-      dealSingleTarget(s, action.target, roundHalfUp(DEBUG_DMG * dealtMult));
-      markTarget(s, action.target); // permanent — this is the memory tool
-      s.dots.push({ batId: action.target, ticksLeft: DOT_TICKS });
+      // A CLONES-phase pop (Imposter only) applies NOTHING beyond the spent
+      // turn/MP (N6) — no mark, no DoT push. Derived from boss state before
+      // the hit, same rule as dealSingleTarget's own `wasPop` (never from
+      // the returned damage amount).
+      const wasPop = s.boss.kind === IMPOSTER_ID && s.boss.phase === "clones" && action.target !== s.boss.realIndex;
+      dealSingleTarget(s, action.target, dealtDamage(DEBUG_DMG, s.ctTurns > 0, s.conviction));
+      if (!wasPop) {
+        markTarget(s, action.target); // permanent — this is the memory tool
+        s.dots.push({ batId: action.target, ticksLeft: DOT_TICKS, tick: s.conviction ? DOT_TICK * 2 : DOT_TICK });
+      }
+      // N4: Debugging the boss during an unfired PULSE charge breaks it —
+      // the mark is consumed as the cost (mark-semantics row); phase
+      // exclusivity means this can only ever be true outside CLONES, so no
+      // `wasPop` interaction is possible here.
+      if (s.boss.kind === IMPOSTER_ID && s.boss.phase === "pulse" && s.boss.pulseCharged) {
+        s.boss = breakPulse(s.boss);
+      }
+      break;
+    }
+    case "rc": {
+      if (s.boss.kind === IMPOSTER_ID) {
+        // Ignores the CLONES illusion entirely (N-table: "hits real clone")
+        // — bypasses resolveImposterHit's pop logic and always resolves for
+        // real, regardless of which slot the player targeted.
+        const wasVanish = s.boss.phase === "vanish";
+        const base = s.boss.marked ? ROOT_CAUSE_MARKED_DMG : ROOT_CAUSE_DMG;
+        const amount = dealtDamage(base, s.ctTurns > 0, s.conviction);
+        const realId = s.boss.realIndex ?? action.target;
+        const before = s.boss.hp;
+        s.boss = damageImposter(s.boss, amount);
+        const dealt = before - s.boss.hp;
+        s.events.push({ type: "damage", batId: realId, amount: dealt });
+        if (isImposterDefeated(s.boss)) s.events.push({ type: "batDown", batId: realId });
+        // "rips it back": VANISH ends THIS hero turn instead of waiting out
+        // its boss-turn countdown (N5: an early end still counts as a
+        // completed phase).
+        if (wasVanish) s.boss = ripBackVanish(s.boss);
+      } else {
+        dealSingleTarget(s, action.target, dealtDamage(ROOT_CAUSE_DMG, s.ctTurns > 0, s.conviction));
+      }
+      break;
+    }
+    case "conv": {
+      s.conviction = true;
       break;
     }
     case "fo": {
@@ -470,6 +640,30 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
         const dealt = before - s.boss.hp;
         s.events.push({ type: "damage", batId: SF_TARGET_ID, amount: dealt });
         if (s.boss.hp === 0) s.events.push({ type: "batDown", batId: SF_TARGET_ID });
+      } else if (s.boss.kind === IMPOSTER_ID) {
+        // Signed as DECIDED, not accidental (pass-2 G8): FO hits all three —
+        // both clone slots pop (rendering-only, no HP of their own) and the
+        // real slot takes the amount. Only the real slot ever carries HP, so
+        // one damageImposter call covers it; the non-real slots get their
+        // own zero-amount, wasPop-flagged event so a task-6 renderer can
+        // still show both pops.
+        const targets = imposterLivingTargets(s.boss);
+        // Outside CLONES, livingTargets is always exactly [0] while alive
+        // (fo can't reach a dead boss — the reducer's `status !== "active"`
+        // guard blocks any action once the fight has already ended), so the
+        // single-target id is the constant 0, no `targets[0]` lookup needed.
+        const realId = s.boss.phase === "clones" ? (s.boss.realIndex ?? 0) : 0;
+        const before = s.boss.hp;
+        s.boss = damageImposter(s.boss, dealtDamage(FAN_OUT_DMG, s.ctTurns > 0, s.conviction));
+        const dealt = before - s.boss.hp;
+        for (const id of targets) {
+          if (id === realId) {
+            s.events.push({ type: "damage", batId: id, amount: dealt });
+            if (isImposterDefeated(s.boss)) s.events.push({ type: "batDown", batId: id });
+          } else {
+            s.events.push({ type: "damage", batId: id, amount: 0, wasPop: true });
+          }
+        }
         /* v8 ignore next 3 */
       } else {
         assertNever(s.boss);
@@ -477,14 +671,23 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
       break;
     }
   }
+  // MIRROR's tracker (Imposter only): every special the hero casts updates
+  // `lastSpecial` — trackSpecial's own no-op guard excludes "attack" (it is
+  // not a special, and never should update the tracker).
+  if (s.boss.kind === IMPOSTER_ID) {
+    s.boss = trackSpecial(s.boss, action.type);
+  }
   if (!s.cast.includes(action.type)) {
     s.cast.push(action.type);
     s.events.push({ type: "firstCast", ability: action.type });
   }
 
-  // DoT ticks — flat 4, never CT-multiplied; a tick is not a hit (no
-  // reshuffle). Cascade nodes route through `damageNode` so the carrier
-  // shield applies "from every source" (plan §Boss 2 table) even to ticks.
+  // DoT ticks — flat per the stamped `tick` value (4, or 8 if conviction was
+  // active at cast — never CT-multiplied, never RE-derived from the CURRENT
+  // conviction flag, which is what makes "already-running DoTs keep their
+  // tick value" hold). A tick is not a hit (no reshuffle). Cascade nodes
+  // route through `damageNode` so the carrier shield applies "from every
+  // source" (plan §Boss 2 table) even to ticks.
   if (s.status === "active") {
     for (let i = 0; i < preexistingDots; i++) {
       const d = s.dots[i];
@@ -492,7 +695,7 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
         const node = s.boss.nodes.find((n) => n.id === d.batId);
         if (node && node.alive) {
           const before = node.hp;
-          s.boss = damageNode(s.boss, d.batId, DOT_TICK);
+          s.boss = damageNode(s.boss, d.batId, d.tick);
           const after = s.boss.nodes.find((n) => n.id === d.batId)!;
           s.events.push({ type: "dot", batId: d.batId, amount: before - after.hp });
           if (!after.alive) s.events.push({ type: "batDown", batId: d.batId });
@@ -500,8 +703,8 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
       } else if (s.boss.kind === ALERT_STORM_ID) {
         const bat = s.boss.bats.find((b) => b.id === d.batId)!;
         if (bat.alive) {
-          bat.hp = Math.max(0, bat.hp - DOT_TICK);
-          s.events.push({ type: "dot", batId: d.batId, amount: DOT_TICK });
+          bat.hp = Math.max(0, bat.hp - d.tick);
+          s.events.push({ type: "dot", batId: d.batId, amount: d.tick });
           if (bat.hp === 0) {
             bat.alive = false;
             s.events.push({ type: "batDown", batId: d.batId });
@@ -510,7 +713,7 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
       } else if (s.boss.kind === SILENT_FAILURE_ID) {
         if (s.boss.hp > 0) {
           const before = s.boss.hp;
-          s.boss = damageSilentFailure(s.boss, DOT_TICK);
+          s.boss = damageSilentFailure(s.boss, d.tick);
           s.events.push({ type: "dot", batId: d.batId, amount: before - s.boss.hp });
           if (s.boss.hp === 0) {
             s.events.push({ type: "batDown", batId: d.batId });
@@ -523,6 +726,16 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
               s.boss = { ...s.boss, forceBodyForDeath: true };
             }
           }
+        }
+      } else if (s.boss.kind === IMPOSTER_ID) {
+        // E8: DoT anchoring is phase-agnostic — a dot anchored before or
+        // during CLONES keeps ticking through/after it, same as SF's
+        // `hp > 0` shape (never clone-slot/batId identity).
+        if (s.boss.hp > 0) {
+          const before = s.boss.hp;
+          s.boss = damageImposter(s.boss, d.tick);
+          s.events.push({ type: "dot", batId: d.batId, amount: before - s.boss.hp });
+          if (isImposterDefeated(s.boss)) s.events.push({ type: "batDown", batId: d.batId });
         }
         /* v8 ignore next 3 */
       } else {
@@ -539,10 +752,21 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
       }
       if (s.boss.kind === SILENT_FAILURE_ID) {
         return d.ticksLeft > 0 && s.boss.hp > 0;
+      }
+      if (s.boss.kind === IMPOSTER_ID) {
+        return d.ticksLeft > 0 && s.boss.hp > 0;
         /* v8 ignore next */
       }
       return assertNever(s.boss);
     });
+  }
+
+  // N5, mid-fight: the Conviction forge fires the instant the boss's own
+  // forgeFired flag flips false -> true, from EITHER this turn's hit or the
+  // DoT tick above — independently of `defeatedBosses` (Imposter isn't
+  // defeated; this is the OTHER unlock path, N10 (a)).
+  if (s.boss.kind === IMPOSTER_ID && s.boss.forgeFired && !forgeFiredBefore) {
+    s.events.push({ type: "forge", ability: "conviction" });
   }
 
   // victory: the boss going down ends the fight immediately — no boss turn
@@ -550,8 +774,9 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
   let bossDefeated: boolean;
   if (s.boss.kind === CASCADE_ID) bossDefeated = isCascadeDefeated(s.boss);
   else if (s.boss.kind === ALERT_STORM_ID) bossDefeated = isBossDefeated(s.boss);
-  else if (s.boss.kind === SILENT_FAILURE_ID) {
-    bossDefeated = isSilentFailureDefeated(s.boss);
+  else if (s.boss.kind === SILENT_FAILURE_ID) bossDefeated = isSilentFailureDefeated(s.boss);
+  else if (s.boss.kind === IMPOSTER_ID) {
+    bossDefeated = isImposterDefeated(s.boss);
     /* v8 ignore next 2 */
   } else {
     bossDefeated = assertNever(s.boss);
@@ -560,18 +785,23 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
     s.status = "victory";
     s.events.push({ type: "victory" });
     const bossId = s.boss.kind;
-    let forgeAbility: "fan-out" | "rollback" | "root-cause";
+    // `undefined` for Imposter (N14/Victory row): the rush order ends here,
+    // so there is no follow-on ability left to forge — a forge event with
+    // no ability behind it would repeat the exact G1 mistake ("never a kit
+    // entry without an arm") one level up.
+    let forgeAbility: "fan-out" | "rollback" | "root-cause" | undefined;
     if (s.boss.kind === CASCADE_ID) forgeAbility = "rollback";
     else if (s.boss.kind === ALERT_STORM_ID) forgeAbility = "fan-out";
-    else if (s.boss.kind === SILENT_FAILURE_ID) {
-      forgeAbility = "root-cause";
+    else if (s.boss.kind === SILENT_FAILURE_ID) forgeAbility = "root-cause";
+    else if (s.boss.kind === IMPOSTER_ID) {
+      forgeAbility = undefined;
       /* v8 ignore next 2 */
     } else {
       forgeAbility = assertNever(s.boss);
     }
     if (!s.defeatedBosses.includes(bossId)) {
       s.defeatedBosses.push(bossId);
-      s.events.push({ type: "forge", ability: forgeAbility });
+      if (forgeAbility) s.events.push({ type: "forge", ability: forgeAbility });
       s.hero.maxHp += RIDER_HP;
       s.hero.hp = Math.min(s.hero.maxHp, s.hero.hp + RIDER_HP);
       s.hero.maxMp += RIDER_MP;
@@ -603,6 +833,26 @@ export function battleReduce(state: BattleState, action: BattleAction): BattleSt
       const result = resolveSilentFailureBossTurn(s.boss, s.ctTurns > 0, s.conviction);
       s.boss = result.boss;
       heroDamage = result.heroDamage;
+    } else if (s.boss.kind === IMPOSTER_ID) {
+      // E6: hero-side DoT ticks IN the boss phase — existing ticks resolve
+      // BEFORE this turn's own boss action, so a DoT the mirror pushes this
+      // same turn (below) starts ticking next boss turn, never this one
+      // (same "cast this turn ticks from next turn" rule as the boss-side
+      // loop above). Flat MIRROR_DEBUG_DOT_TICK, never CT/conviction-scaled
+      // (DoTs are never CT-multiplied, §Multipliers).
+      let heroDotDamage = 0;
+      for (const hd of s.heroDots) {
+        heroDotDamage += MIRROR_DEBUG_DOT_TICK;
+        hd.ticksLeft -= 1;
+      }
+      s.heroDots = s.heroDots.filter((hd) => hd.ticksLeft > 0);
+      const result = resolveImposterBossTurn(s.boss, s.ctTurns > 0, s.conviction);
+      s.boss = result.boss;
+      heroDamage = result.heroDamage + heroDotDamage;
+      if (result.mirroredDebug) {
+        s.heroMarked = true;
+        s.heroDots.push({ ticksLeft: MIRROR_DEBUG_DOT_TICKS });
+      }
       /* v8 ignore next 3 */
     } else {
       heroDamage = assertNever(s.boss);

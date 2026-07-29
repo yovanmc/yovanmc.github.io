@@ -174,7 +174,7 @@ describe("composeBoss reachability: the signed DoT-kill-while-vanished ruling ha
       hp: 4,
       marked: true,
     };
-    const s0: BattleState = { ...base, boss, dots: [{ batId: SF_TARGET_ID, ticksLeft: 2 }] };
+    const s0: BattleState = { ...base, boss, dots: [{ batId: SF_TARGET_ID, ticksLeft: 2, tick: 4 }] };
     const s1 = battleReduce(s0, { type: "ct" }); // no direct damage — only the DoT tick touches boss HP
     if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
     expect(s1.boss.hp).toBe(0);

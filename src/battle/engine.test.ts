@@ -13,6 +13,8 @@ import type { BattleState, Bat, BattleAction } from "./engine";
 import type { AlertStormBoss } from "./bosses/alertStorm";
 import { SF_TARGET_ID, spawnSilentFailure } from "./bosses/silentFailure";
 import type { SilentFailureBoss } from "./bosses/silentFailure";
+import { spawnImposter } from "./bosses/imposter";
+import type { ImposterBoss } from "./bosses/imposter";
 
 /** `BattleState.boss` is a discriminated union as of M6 PR-1b (Cascade joined
  * Alert Storm) — this file is the pre-M6 Alert Storm suite, so every state it
@@ -383,7 +385,7 @@ describe("victory", () => {
     const rigged = {
       ...s0,
       boss: { ...(s0.boss as AlertStormBoss), bats: bats(s0).map((b) => (b.id === realId ? { ...b, hp: 4 } : b)) },
-      dots: [{ batId: realId, ticksLeft: 1 }],
+      dots: [{ batId: realId, ticksLeft: 1, tick: 4 }],
     };
     const s = battleReduce(rigged, { type: "ct" });
     expect(s.status).toBe("victory");
@@ -619,7 +621,7 @@ describe("Cascade boot + dispatch (M6 PR-1b task 3)", () => {
     expect(s.boss.nodes.find((n) => n.id === 0)!.hp).toBe(22);
     expect(s.boss.nodes.find((n) => n.id === 0)!.marked).toBe(true);
     expect(s.events.some((e) => e.type === "mark" && e.batId === 0)).toBe(true);
-    expect(s.dots).toEqual([{ batId: 0, ticksLeft: 3 }]);
+    expect(s.dots).toEqual([{ batId: 0, ticksLeft: 3, tick: 4 }]); // tick stamped at push time (M6 PR-3 task 4)
   });
 
   it("DoT ticks on the carrier are halved by the shield too (the carrier shield applies from every source, not just direct hits)", () => {
@@ -628,7 +630,7 @@ describe("Cascade boot + dispatch (M6 PR-1b task 3)", () => {
     const rigged: BattleState = {
       ...s0,
       boss: { ...s0.boss, nodes: s0.boss.nodes.map((n) => (n.id === 0 ? { ...n, hp: 22, marked: true } : n)) },
-      dots: [{ batId: 0, ticksLeft: 3 }],
+      dots: [{ batId: 0, ticksLeft: 3, tick: 4 }],
     };
     const s = battleReduce(rigged, { type: "ct" }); // node 0 is still the (rigged, untouched) carrier
     if (s.boss.kind !== "cascade") throw new Error("unreachable");
@@ -644,7 +646,7 @@ describe("Cascade boot + dispatch (M6 PR-1b task 3)", () => {
     const rigged: BattleState = {
       ...s0,
       boss: { ...s0.boss, nodes: s0.boss.nodes.map((n) => (n.id === 1 ? { ...n, hp: 3 } : n)) },
-      dots: [{ batId: 1, ticksLeft: 1 }],
+      dots: [{ batId: 1, ticksLeft: 1, tick: 4 }],
     };
     const s = battleReduce(rigged, { type: "ct" }); // DoT ticks 4 >= 3, node 1 dies
     if (s.boss.kind !== "cascade") throw new Error("unreachable");
@@ -858,18 +860,18 @@ describe("Silent Failure engine wiring (M6 PR-2 task 4)", () => {
       if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
       expect(s1.boss.hp).toBe(140 - 6);
       expect(s1.boss.marked).toBe(true);
-      expect(s1.dots).toEqual([{ batId: SF_TARGET_ID, ticksLeft: 3 }]);
+      expect(s1.dots).toEqual([{ batId: SF_TARGET_ID, ticksLeft: 3, tick: 4 }]); // tick stamped at push time (M6 PR-3 task 4)
     });
 
     it("an existing DoT keeps ticking while vanished even though the boss is untargetable", () => {
       const s0 = silentFailureState(
         { phase: "vanished", phaseTurnsLeft: 2, hp: 100, marked: true },
-        { dots: [{ batId: SF_TARGET_ID, ticksLeft: 2 }] },
+        { dots: [{ batId: SF_TARGET_ID, ticksLeft: 2, tick: 4 }] },
       );
       const s1 = battleReduce(s0, { type: "ct" }); // untargeted, deals no direct damage — isolates the DoT tick
       if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
       expect(s1.boss.hp).toBe(96); // DOT_TICK 4
-      expect(s1.dots).toEqual([{ batId: SF_TARGET_ID, ticksLeft: 1 }]);
+      expect(s1.dots).toEqual([{ batId: SF_TARGET_ID, ticksLeft: 1, tick: 4 }]);
     });
   });
 
@@ -964,15 +966,23 @@ describe("Silent Failure engine wiring (M6 PR-2 task 4)", () => {
     });
   });
 
-  describe("victory: forge event is root-cause; no KIT_UNLOCKS entry lands yet (G1 — never a kit entry without an arm)", () => {
-    it("defeating Silent Failure emits forge: root-cause, rider, and unlock, but grants no rc ability", () => {
+  describe("victory: forge event is root-cause; rc unlock live since PR-3 (E3 task-4 reconciliation)", () => {
+    it("defeating Silent Failure emits forge: root-cause, rider, and unlock, and grants the rc ability", () => {
       const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2, hp: 5 });
       const s1 = battleReduce(s0, { type: "pt", target: SF_TARGET_ID }); // PT_DMG 28 >> 5, kills outright
       expect(s1.status).toBe("victory");
       expect(s1.events.some((e) => e.type === "forge" && e.ability === "root-cause")).toBe(true);
       expect(s1.events.some((e) => e.type === "unlock" && e.id === "silent-failure")).toBe(true);
-      // base four + fo (alert-storm) + rb (cascade) — no rc entry for silent-failure
-      expect(deriveKit([...s0.defeatedBosses, "silent-failure"])).toEqual(["attack", "ct", "pt", "debug", "fo", "rb"]);
+      // base four + fo (alert-storm) + rb (cascade) + rc (silent-failure, M6 PR-3 task 4)
+      expect(deriveKit([...s0.defeatedBosses, "silent-failure"])).toEqual([
+        "attack",
+        "ct",
+        "pt",
+        "debug",
+        "fo",
+        "rb",
+        "rc",
+      ]);
     });
   });
 
@@ -980,7 +990,7 @@ describe("Silent Failure engine wiring (M6 PR-2 task 4)", () => {
     it("vanished: forceBodyForDeath becomes true", () => {
       const s0 = silentFailureState(
         { phase: "vanished", phaseTurnsLeft: 2, hp: 4, marked: true },
-        { dots: [{ batId: SF_TARGET_ID, ticksLeft: 2 }] },
+        { dots: [{ batId: SF_TARGET_ID, ticksLeft: 2, tick: 4 }] },
       );
       const s1 = battleReduce(s0, { type: "ct" }); // no direct damage — only the DoT tick touches boss HP
       if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
@@ -993,7 +1003,7 @@ describe("Silent Failure engine wiring (M6 PR-2 task 4)", () => {
     it("embodied: forceBodyForDeath stays false (already showing the body)", () => {
       const s0 = silentFailureState(
         { phase: "embodied", phaseTurnsLeft: 2, hp: 4, marked: true },
-        { dots: [{ batId: SF_TARGET_ID, ticksLeft: 2 }] },
+        { dots: [{ batId: SF_TARGET_ID, ticksLeft: 2, tick: 4 }] },
       );
       const s1 = battleReduce(s0, { type: "ct" });
       if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
@@ -1082,8 +1092,368 @@ describe("Silent Failure boot + engine-generated win line (M6 PR-2 task 5)", () 
       expect(s.events.some((e) => e.type === "forge" && e.ability === "root-cause")).toBe(true);
       expect(s.events.some((e) => e.type === "unlock" && e.id === "silent-failure")).toBe(true);
       expect(s.defeatedBosses).toEqual(["alert-storm", "cascade", "silent-failure"]);
-      // no rc ability/KIT_UNLOCKS entry ships this PR (G1 — PR-3 adds the arm)
-      expect(deriveKit(s.defeatedBosses)).not.toContain("rc");
+      // rc ability/KIT_UNLOCKS entry ships THIS PR (M6 PR-3 task 4) — SF
+      // defeat now unlocks Root Cause (E3 task-4 reconciliation).
+      expect(deriveKit(s.defeatedBosses)).toContain("rc");
+      // Conviction still gains NO KIT_UNLOCKS entry (N10) — this input never
+      // defeated Imposter, so the kit gate keeps a live guard here.
+      expect(deriveKit(s.defeatedBosses)).not.toContain("conv");
     });
+  });
+});
+
+// ---- M6 PR-3 task 4: Imposter engine wiring (rc/conv, mirror hookups, ------
+// ---- Conviction conversion sites, E8 clone-pop overlay) -------------------
+function imposterState(
+  bossOverrides: Partial<ImposterBoss> = {},
+  stateOverrides: Partial<BattleState> = {},
+): BattleState {
+  // Hero arrives 130/16 with Root Cause (N-table) — defeatedBosses grants
+  // fo/rb/rc; imposter-syndrome itself is NOT in this list (IMPLEMENTED_BOSSES
+  // doesn't carry it until task 5), matching the real pre-task-5 shape.
+  const base = initBattle({ seed: 42, defeatedBosses: ["alert-storm", "cascade", "silent-failure"] });
+  const boss: ImposterBoss = { ...spawnImposter(0, (r) => r).boss, ...bossOverrides };
+  return { ...base, boss, ...stateOverrides };
+}
+
+describe("Root Cause (rc) — new ability this task: 4 MP (N1)", () => {
+  it("costs 4 MP", () => {
+    const s0 = imposterState();
+    const s1 = battleReduce(s0, { type: "rc", target: 0 });
+    expect(s1.hero.mp).toBe(16 - 4 + 1); // 4 MP cost, +1 end-of-turn regen
+  });
+
+  it("deals 22 unmarked, 33 vs a marked Imposter (N-table)", () => {
+    const s0 = imposterState();
+    const s1 = battleReduce(s0, { type: "rc", target: 0 });
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(180 - 22);
+
+    const marked = imposterState({ marked: true });
+    const s2 = battleReduce(marked, { type: "rc", target: 0 });
+    if (s2.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s2.boss.hp).toBe(180 - 33);
+  });
+
+  it('always hits the real clone regardless of which slot is targeted, and never pops (N-table: "hits real clone")', () => {
+    const s0 = imposterState({ realIndex: 2 }); // the real boss is slot 2
+    const s1 = battleReduce(s0, { type: "rc", target: 0 }); // targets the WRONG slot
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(180 - 22); // lands anyway — ignores the illusion
+    const dmg = s1.events.find((e) => e.type === "damage");
+    expect(dmg).toEqual({ type: "damage", batId: 2, amount: 22 }); // reported against the REAL slot id
+  });
+
+  it("rips a VANISH phase back immediately: full hit lands and the phase ends early (N5)", () => {
+    const s0 = imposterState({ phase: "vanish", phaseTurnsLeft: 2 });
+    const s1 = battleReduce(s0, { type: "rc", target: 0 });
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(180 - 22);
+    // Ends at "clones", not "mirror": ripBackVanish advances vanish -> mirror
+    // (non-degenerate nextPhase), but MIRROR_TURNS is always exactly 1 and
+    // the mirror phase resolves-and-advances unconditionally the INSTANT the
+    // boss-turn dispatch (later in this same reduce call) sees it — so the
+    // rip-back cascades through mirror's own immediate resolution too, same
+    // hero turn, landing on "clones". Verified against the fastest-line's H6
+    // (where the SAME rip-back, already degenerate there, lands on "clones"
+    // directly with no intermediate mirror stop — this test is the
+    // non-degenerate case, which passes THROUGH mirror instead of skipping
+    // it, but still lands on the phase after mirror in one reduce call).
+    expect(s1.boss.phase).toBe("clones");
+  });
+
+  it("against a non-Imposter boss (fallback): plain flat-22 hit, no marked bonus, no vanish interaction", () => {
+    const s0 = initBattle({ seed: 42, defeatedBosses: ["alert-storm", "cascade", "silent-failure"] });
+    const real = bats(s0).find((b) => b.real)!;
+    const s1 = battleReduce(s0, { type: "rc", target: real.id });
+    const dmg = s1.events.find((e) => e.type === "damage");
+    expect(dmg?.amount).toBe(22);
+  });
+});
+
+describe("Conviction (conv) — new ability this task: 5 MP, the hp*4 <= maxHp gate (N10)", () => {
+  it("is invalid when hp*4 > maxHp, even with the mid-fight forge already unlocked", () => {
+    const s0 = imposterState({ forgeFired: true }, { hero: { hp: 33, maxHp: 130, mp: 16, maxMp: 16 } }); // 33*4=132>130
+    const s1 = battleReduce(s0, { type: "conv" });
+    expect(s1.events).toEqual([{ type: "invalid", reason: "conviction gate not met" }]);
+  });
+
+  it("is castable exactly at the hp*4 == maxHp boundary (integer-exact, N10)", () => {
+    const s0 = imposterState({ forgeFired: true }, { hero: { hp: 32, maxHp: 128, mp: 16, maxMp: 16 } }); // 32*4=128
+    const s1 = battleReduce(s0, { type: "conv" });
+    expect(s1.conviction).toBe(true);
+  });
+
+  it("is invalid outside both unlock paths (kit lacks conv, forge not yet fired)", () => {
+    const s0 = imposterState({ forgeFired: false }, { hero: { hp: 10, maxHp: 130, mp: 16, maxMp: 16 } });
+    const s1 = battleReduce(s0, { type: "conv" });
+    expect(s1.events).toEqual([{ type: "invalid", reason: "not in kit" }]);
+  });
+
+  it("costs 5 MP and sets conviction true once the mid-fight forge has unlocked it (N10 path a)", () => {
+    const s0 = imposterState({ forgeFired: true }, { hero: { hp: 20, maxHp: 130, mp: 16, maxMp: 16 } });
+    const s1 = battleReduce(s0, { type: "conv" });
+    expect(s1.conviction).toBe(true);
+    expect(s1.hero.mp).toBe(16 - 5 + 1);
+  });
+
+  it("persists once active even after healing back above the threshold (N10)", () => {
+    const s0 = imposterState({ forgeFired: true }, { hero: { hp: 20, maxHp: 130, mp: 16, maxMp: 16 } });
+    const s1 = battleReduce(s0, { type: "conv" });
+    expect(s1.conviction).toBe(true);
+    const s2 = battleReduce(s1, { type: "rb" }); // heals well past the 32-hp threshold
+    expect(s2.hero.hp).toBeGreaterThan(32);
+    expect(s2.conviction).toBe(true); // still persists
+  });
+});
+
+describe("N5: the mid-fight Conviction forge (dissect pass 2)", () => {
+  it("fires forge: conviction exactly on the turn hp crosses <=50%, not on a later hit", () => {
+    const s0 = imposterState({ hp: 100 }); // 100 > 90 (half of 180)
+    const s1 = battleReduce(s0, { type: "rc", target: 0 }); // 22 dmg -> 78, crosses <=90
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(78);
+    expect(s1.boss.forgeFired).toBe(true);
+    expect(s1.events.some((e) => e.type === "forge" && e.ability === "conviction")).toBe(true);
+
+    const s2 = battleReduce(s1, { type: "rc", target: 0 });
+    expect(s2.events.some((e) => e.type === "forge" && e.ability === "conviction")).toBe(false);
+  });
+});
+
+describe("conviction doubles every ability's constant (§Multipliers) — reducer level", () => {
+  it("PT under both CT and conviction deals 112 (reducer level — a helper-level test is exactly what let this gap hide)", () => {
+    const s0 = imposterState({}, { ctTurns: 3, conviction: true, hero: { hp: 130, maxHp: 130, mp: 16, maxMp: 16 } });
+    const s1 = battleReduce(s0, { type: "pt", target: 0 }); // 0 is real (default seed)
+    const dmg = s1.events.find((e) => e.type === "damage");
+    expect(dmg?.amount).toBe(112); // 28 * 2 (conviction) * 2.0 (ct+conviction) = 112
+  });
+
+  it("Rollback heals 60 under conviction (doubled constant, no CT interaction)", () => {
+    const s0 = imposterState({}, { conviction: true, hero: { hp: 50, maxHp: 130, mp: 16, maxMp: 16 } });
+    const s1 = battleReduce(s0, { type: "rb" });
+    // 50 + 60 = 110, then the boss's own clones-phase slash (14, un-CT'd) lands
+    expect(s1.hero.hp).toBe(110 - 14);
+  });
+
+  it("a DoT already running before Conviction activates keeps ticking 4, not 8, even after activation (carried-forward from task 3)", () => {
+    const s0 = imposterState(
+      { forgeFired: true },
+      { hero: { hp: 30, maxHp: 130, mp: 16, maxMp: 16 }, dots: [{ batId: 0, ticksLeft: 3, tick: 4 }] },
+    );
+    // Activates conviction mid-call; the PRE-EXISTING dot still ticks THIS
+    // same call, at its stamped value — never recomputed from the flag that
+    // just flipped.
+    const s1 = battleReduce(s0, { type: "conv" });
+    expect(s1.conviction).toBe(true);
+    const dot1 = s1.events.find((e) => e.type === "dot");
+    expect(dot1).toEqual({ type: "dot", batId: 0, amount: 4 });
+
+    const s2 = battleReduce(s1, { type: "attack", target: 0 }); // one more turn, conviction now active throughout
+    const dot2 = s2.events.find((e) => e.type === "dot");
+    expect(dot2).toEqual({ type: "dot", batId: 0, amount: 4 }); // still 4 — stamped at push time, never recomputed
+  });
+
+  it("a DoT started AFTER Conviction activates ticks 8 (stamped at push time)", () => {
+    const s0 = imposterState({}, { conviction: true, hero: { hp: 130, maxHp: 130, mp: 16, maxMp: 16 } });
+    const s1 = battleReduce(s0, { type: "debug", target: 0 });
+    expect(s1.dots).toEqual([{ batId: 0, ticksLeft: 3, tick: 8 }]);
+  });
+});
+
+describe("E8: CLONES pop vs a real hit — wasPop derived at the call site, never inferred from amount===0", () => {
+  it("a hit against a non-real slot pops it: wasPop true, zero damage, no mark, no DoT (N6)", () => {
+    const s0 = imposterState({ realIndex: 0 });
+    const s1 = battleReduce(s0, { type: "debug", target: 1 }); // slot 1 is NOT real
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(180); // untouched
+    expect(s1.boss.marked).toBe(false); // no mark applied
+    expect(s1.dots).toEqual([]); // no DoT started
+    const dmg = s1.events.find((e) => e.type === "damage");
+    expect(dmg).toEqual({ type: "damage", batId: 1, amount: 0, wasPop: true });
+  });
+
+  it("a hit against the real slot lands normally: wasPop false, damage applied, mark + DoT started", () => {
+    const s0 = imposterState({ realIndex: 0 });
+    const s1 = battleReduce(s0, { type: "debug", target: 0 });
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(180 - 6);
+    expect(s1.boss.marked).toBe(true);
+    expect(s1.dots).toEqual([{ batId: 0, ticksLeft: 3, tick: 4 }]);
+    const dmg = s1.events.find((e) => e.type === "damage");
+    expect(dmg).toEqual({ type: "damage", batId: 0, amount: 6, wasPop: false });
+  });
+
+  it("Fan Out vs clones hits all three: both non-real slots pop (wasPop true, zero), the real slot takes 8 (pass-2 G8, DECIDED not accidental)", () => {
+    const s0 = imposterState({ realIndex: 1 });
+    const s1 = battleReduce(s0, { type: "fo" });
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(180 - 8);
+    const damageEvents = s1.events.filter((e) => e.type === "damage");
+    expect(damageEvents).toEqual([
+      { type: "damage", batId: 0, amount: 0, wasPop: true },
+      { type: "damage", batId: 1, amount: 8 },
+      { type: "damage", batId: 2, amount: 0, wasPop: true },
+    ]);
+  });
+
+  it("Fan Out against Imposter outside CLONES deals a plain 8 to the single target", () => {
+    const s0 = imposterState({ phase: "pulse", phaseTurnsLeft: 2, pulseCharged: false });
+    const s1 = battleReduce(s0, { type: "fo" });
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(180 - 8);
+    const damageEvents = s1.events.filter((e) => e.type === "damage");
+    expect(damageEvents).toEqual([{ type: "damage", batId: 0, amount: 8 }]);
+  });
+});
+
+describe("N4: Debug during an unfired PULSE charge breaks it, consuming the mark", () => {
+  it("breaks the pulse: the mark is consumed and the remaining turn fizzles to the plain slash", () => {
+    const s0 = imposterState({ phase: "pulse", phaseTurnsLeft: 1, pulseCharged: true, marked: true });
+    const s1 = battleReduce(s0, { type: "debug", target: 0 });
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.marked).toBe(false); // consumed by the break, even though this same cast just re-marked it
+    expect(s1.boss.phase).toBe("vanish"); // the fizzle turn still counts down and crosses the phase boundary
+    const heroDmg = s1.events.find((e) => e.type === "heroDamage");
+    expect(heroDmg?.amount).toBe(14); // fizzles to the plain glitch slash, not the 26 pulse fire
+  });
+});
+
+describe("E6: hero-side mark/DoT from the Imposter's mirrored Debug", () => {
+  it("MIRROR mirrors Debug: hero takes 3 dmg, gets marked, and a hero DoT starts (ticks next turn, not this one)", () => {
+    const s0 = imposterState({ phase: "mirror", phaseTurnsLeft: 1, lastSpecial: null });
+    const s1 = battleReduce(s0, { type: "debug", target: 0 }); // this same cast is what MIRROR mirrors
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.phase).toBe("clones"); // mirror always resolves and advances
+    expect(s1.heroMarked).toBe(true);
+    expect(s1.heroDots).toEqual([{ ticksLeft: 3 }]);
+    const heroDmg = s1.events.find((e) => e.type === "heroDamage");
+    expect(heroDmg?.amount).toBe(3); // half of Debug's 6, never mirror-CT-boosted
+  });
+
+  it("the hero DoT ticks on subsequent boss turns, flat 2 dmg, never CT/conviction-scaled", () => {
+    const s0 = imposterState({ phase: "mirror", phaseTurnsLeft: 1, lastSpecial: null });
+    const s1 = battleReduce(s0, { type: "debug", target: 0 });
+    expect(s1.heroDots).toEqual([{ ticksLeft: 3 }]);
+    const s2 = battleReduce(s1, { type: "attack", target: 0 }); // clones now — attack never updates lastSpecial
+    if (s2.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s2.heroDots).toEqual([{ ticksLeft: 2 }]);
+    const heroDmg = s2.events.find((e) => e.type === "heroDamage");
+    expect(heroDmg?.amount).toBe(16); // 14 (clones slash) + 2 (hero DoT tick)
+  });
+
+  it("Rollback cleanses the hero mark and DoT together", () => {
+    const s0 = imposterState({ phase: "mirror", phaseTurnsLeft: 1, lastSpecial: null });
+    const s1 = battleReduce(s0, { type: "debug", target: 0 });
+    expect(s1.heroMarked).toBe(true);
+    expect(s1.heroDots).toEqual([{ ticksLeft: 3 }]);
+    const s2 = battleReduce(s1, { type: "rb" });
+    expect(s2.heroMarked).toBe(false);
+    expect(s2.heroDots).toEqual([]);
+  });
+});
+
+describe("E8: DoT anchoring crosses CLONES phase boundaries — reducer level (carried-forward from task 3)", () => {
+  it("a DoT already running keeps ticking as the boss transitions INTO clones", () => {
+    const s0 = imposterState(
+      { phase: "mirror", phaseTurnsLeft: 1, lastSpecial: null },
+      { dots: [{ batId: 0, ticksLeft: 3, tick: 4 }] },
+    );
+    const s1 = battleReduce(s0, { type: "attack", target: 0 }); // mirror resolves this turn -> advances to clones
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.phase).toBe("clones");
+    expect(s1.events.find((e) => e.type === "dot")).toEqual({ type: "dot", batId: 0, amount: 4 });
+    expect(s1.dots).toEqual([{ batId: 0, ticksLeft: 2, tick: 4 }]);
+
+    // second turn: now IN clones — the dot keeps ticking exactly the same
+    // way, never popped or otherwise treated specially by the illusion.
+    const s2 = battleReduce(s1, { type: "attack", target: s1.boss.realIndex ?? 0 });
+    if (s2.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s2.boss.phase).toBe("clones");
+    expect(s2.events.find((e) => e.type === "dot")).toEqual({ type: "dot", batId: 0, amount: 4 });
+    expect(s2.dots).toEqual([{ batId: 0, ticksLeft: 1, tick: 4 }]);
+  });
+
+  it("a DoT anchored during CLONES keeps ticking after the phase leaves CLONES", () => {
+    const s0 = imposterState({ phase: "clones", phaseTurnsLeft: 1 }, { dots: [{ batId: 0, ticksLeft: 3, tick: 4 }] });
+    const s1 = battleReduce(s0, { type: "attack", target: 0 }); // clones boundary -> advances to pulse
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.phase).toBe("pulse");
+    expect(s1.events.find((e) => e.type === "dot")).toEqual({ type: "dot", batId: 0, amount: 4 });
+
+    const s2 = battleReduce(s1, { type: "ct" });
+    if (s2.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s2.boss.phase).toBe("pulse"); // still charging (a 2-turn phase)
+    expect(s2.events.find((e) => e.type === "dot")).toEqual({ type: "dot", batId: 0, amount: 4 });
+    expect(s2.dots).toEqual([{ batId: 0, ticksLeft: 1, tick: 4 }]);
+  });
+});
+
+describe("Imposter victory: no forge ability (the rush order ends here); unlock + rider still fire", () => {
+  it("defeating the Imposter emits victory + unlock + rider, but no forge event", () => {
+    const s0 = imposterState({ hp: 5 }); // any lethal hit finishes it
+    const s1 = battleReduce(s0, { type: "rc", target: 0 }); // 22 >> 5
+    expect(s1.status).toBe("victory");
+    expect(s1.events.some((e) => e.type === "unlock" && e.id === "imposter-syndrome")).toBe(true);
+    expect(s1.events.some((e) => e.type === "rider")).toBe(true);
+    expect(s1.events.some((e) => e.type === "forge")).toBe(false);
+  });
+});
+
+describe("engine.ts real coverage gaps (Imposter) — E2 discipline: every new branch this task added gets a test", () => {
+  it("an invalid target id (findTarget's undefined branch) is rejected", () => {
+    const s0 = imposterState({ phase: "pulse" }); // livingTargets = [0] only
+    const s1 = battleReduce(s0, { type: "pt", target: 5 });
+    expect(s1.events).toEqual([{ type: "invalid", reason: "invalid target" }]);
+  });
+
+  it("attack whiffs against a vanished (untargetable) Imposter: 0 dealt, no MP gain (D2)", () => {
+    const s0 = imposterState({ phase: "vanish" });
+    const s1 = battleReduce(s0, { type: "attack", target: 0 });
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(180); // whiffed
+    const dmg = s1.events.find((e) => e.type === "damage");
+    expect(dmg).toEqual({ type: "damage", batId: 0, amount: 0, wasPop: false });
+    expect(s1.hero.mp).toBe(16); // no +1-on-hit (it whiffed); end-of-turn regen caps back at max
+  });
+
+  it("a lethal Debug hit through dealSingleTarget fires batDown (not just rc's own bypass path)", () => {
+    const s0 = imposterState({ hp: 5 });
+    const s1 = battleReduce(s0, { type: "debug", target: 0 });
+    expect(s1.status).toBe("victory");
+    expect(s1.events.some((e) => e.type === "batDown" && e.batId === 0)).toBe(true);
+  });
+
+  it("rc falls back to the targeted slot id when realIndex is null (defensive — never null in practice)", () => {
+    const s0 = imposterState({ realIndex: null });
+    const s1 = battleReduce(s0, { type: "rc", target: 1 });
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(180 - 22);
+    const dmg = s1.events.find((e) => e.type === "damage");
+    expect(dmg).toEqual({ type: "damage", batId: 1, amount: 22 });
+  });
+
+  it("fo falls back to slot 0 when realIndex is null during CLONES (defensive — never null in practice)", () => {
+    const s0 = imposterState({ realIndex: null });
+    const s1 = battleReduce(s0, { type: "fo" });
+    if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(180 - 8);
+    const real = s1.events.find((e) => e.type === "damage" && e.amount === 8);
+    if (!real || real.type !== "damage") throw new Error("unreachable");
+    expect(real.batId).toBe(0);
+  });
+
+  it("a lethal Fan Out fires batDown on the real slot", () => {
+    const s0 = imposterState({ hp: 5, realIndex: 1 });
+    const s1 = battleReduce(s0, { type: "fo" });
+    expect(s1.status).toBe("victory");
+    expect(s1.events.some((e) => e.type === "batDown" && e.batId === 1)).toBe(true);
+  });
+
+  it("a lethal DoT tick fires batDown from the tick loop", () => {
+    const s0 = imposterState({ hp: 3 }, { dots: [{ batId: 0, ticksLeft: 2, tick: 4 }] });
+    const s1 = battleReduce(s0, { type: "ct" }); // untargeted, isolates the tick
+    expect(s1.status).toBe("victory");
+    expect(s1.events.some((e) => e.type === "batDown" && e.batId === 0)).toBe(true);
   });
 });

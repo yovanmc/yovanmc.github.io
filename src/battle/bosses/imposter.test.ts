@@ -453,6 +453,22 @@ describe("resolveImposterBossTurn — rotation script (N3/N4/N5/N7/N8)", () => {
     expect(resolveImposterBossTurn(boss, false, false).heroDamage).toBe(14);
   });
 
+  it("MIRROR dispatch — RC arm: half of 22 = 11, NOT the 14 glitch-slash default (M6 PR-3 task 4, carried forward from task 3)", () => {
+    const boss = fresh({ phase: "mirror", lastSpecial: "rc" });
+    const result = resolveImposterBossTurn(boss, false, false);
+    expect(result.outcome).toBe("mirror");
+    expect(result.heroDamage).toBe(11);
+    expect(result.heroDamage).not.toBe(14);
+    expect(result.mirroredDebug).toBe(false);
+  });
+
+  it('MIRROR dispatch — Conviction arm: glitch slash 14 ("the imposter cannot mirror belief")', () => {
+    const boss = fresh({ phase: "mirror", lastSpecial: "conv" });
+    const result = resolveImposterBossTurn(boss, false, false);
+    expect(result.heroDamage).toBe(14);
+    expect(result.mirroredDebug).toBe(false);
+  });
+
   it("N8: mirrorCtTurns boosts the NEXT boss turns' slash/ambush/pulse dealt by 1.25x, never the mirror turn itself", () => {
     const mirrorTurn = fresh({ phase: "mirror", lastSpecial: "ct", mirrorCtTurns: 0 });
     const afterMirror = resolveImposterBossTurn(mirrorTurn, false, false);

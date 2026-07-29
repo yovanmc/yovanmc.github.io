@@ -43,10 +43,15 @@ function copyStringsFor(scene: (typeof SCENE_MODULES)[string]): { label: string;
   if (scene.plate.labelFor) {
     const boot = initBattle({ seed: 42, boss: scene.id, defeatedBosses: ["alert-storm", "cascade"] });
     out.push({ label: "plate.labelFor(embodied)", value: scene.plate.labelFor(boot) });
-    // "phase" narrows across the BossState union to exactly the boss kinds
-    // that have a vanish cycle (Silent Failure today); other kinds pass
-    // through unchanged, so this stays generic for future labelFor modules.
-    const vanishedBoss = "phase" in boot.boss ? { ...boot.boss, phase: "vanished" as const } : boot.boss;
+    // Named on the `kind` discriminant, not the generic `"phase" in boot.boss`
+    // structural check this used to be: with a 4th BossState member
+    // (Imposter, M6 PR-3) ALSO carrying a `phase` field (a different enum
+    // entirely - "clones"/"pulse"/"vanish"/"mirror", never "vanished"),
+    // the structural check stopped pinning the spread to SilentFailureBoss
+    // unambiguously. Only Silent Failure implements `labelFor` today, so
+    // this is a pure type-narrowing fix, not a behavior change.
+    const vanishedBoss =
+      boot.boss.kind === "silent-failure" ? { ...boot.boss, phase: "vanished" as const } : boot.boss;
     const vanished = { ...boot, boss: vanishedBoss };
     out.push({ label: "plate.labelFor(vanished)", value: scene.plate.labelFor(vanished) });
   }
