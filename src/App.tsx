@@ -5,7 +5,7 @@ import { parseActions, parseBoss, parseDefeatedBosses } from "./battle/bootParam
 import { deriveFightChoice, nextUndefeatedBoss, type FightRow } from "./battle/fight";
 import { BOSS_NAMES } from "./battle/rushOrder";
 import { clearProgress, readProgress, writeProgress, type ProgressStore } from "./progress/store";
-import { isGateable, unlockedSlugs } from "./progress/unlocks";
+import { UNLOCK_BY_BOSS, isGateable, unlockedSlugs } from "./progress/unlocks";
 import { Station } from "./components/Station";
 import { Atmosphere } from "./components/Atmosphere";
 import { CaseStudyPage, type PageRef } from "./components/CaseStudyPage";
@@ -584,6 +584,22 @@ export default function App() {
 
   const onBattleVictory = useCallback(
     (final: BattleState) => {
+      // M4 task B4 (dissect pass 1 BLOCKER): "previous" must come from
+      // stateRef.current, NOT the `defeatedBosses` state variable this
+      // callback would otherwise close over. onBattleVictory's only dep is
+      // `goPhase` (useCallback(..., []), referentially stable forever), so
+      // it is created once on mount and any `defeatedBosses` read directly
+      // here would be frozen at its mount-time value ([]) forever — beat
+      // Alert Storm, then rematch it, and the frozen [] would make
+      // !prev.includes("alert-storm") true again, firing a spurious unlock
+      // toast on a victory lap. stateRef is reassigned every render, so at
+      // the moment this handler fires it holds the committed pre-victory
+      // value. Declined `final.events` (the engine's own unlock event) as
+      // the source per the plan: its lifetime between the killing reduce
+      // and this handler firing (an Enter press on the victory overlay)
+      // was never verified.
+      const prevDefeated = stateRef.current.defeatedBosses;
+      const newlyDefeated = final.defeatedBosses.filter((id) => !prevDefeated.includes(id));
       setDefeatedBosses(final.defeatedBosses);
       // The only write site (claim 4) — persist immediately alongside the
       // in-memory state update so a reload never loses a just-earned win.
@@ -591,8 +607,18 @@ export default function App() {
       setBattleBoot(null);
       setCol("root");
       goPhase("play");
+      if (newlyDefeated.length > 0) {
+        // Title read through the existing CATS lookup, never duplicated as
+        // a separate string (plan requirement).
+        const titles = newlyDefeated
+          .map((bossId) => UNLOCK_BY_BOSS[bossId])
+          .filter((slug): slug is string => !!slug)
+          .map((slug) => CATS.find((c) => c.key === "projects")?.items.find((it) => it.slug === slug)?.title)
+          .filter((t): t is string => !!t);
+        if (titles.length > 0) showToast("Unlocked: " + titles.join(", "));
+      }
     },
-    [goPhase],
+    [goPhase, showToast],
   );
 
   const onBattleForfeit = useCallback(() => {
