@@ -14,6 +14,11 @@
 
 export const ALERT_STORM_ID = "alert-storm";
 export const CASCADE_ID = "cascade";
+/** M6 PR-2 task 3 (pass-2 J5): landed here, not task 4 — bosses/silentFailure.ts
+ * re-exports this the way bosses/cascade.ts re-exports CASCADE_ID, so deferring
+ * it to task 4 would fail task 3's own `npx tsc -b` gate on an unresolved
+ * export. Only the IMPLEMENTED_BOSSES append stays in task 4. */
+export const SILENT_FAILURE_ID = "silent-failure";
 
 /** Pinned boss-rush order (M6 plan §Cross-boss architecture). Fixed forever —
  * later PRs only ever read this, never reorder it. */
