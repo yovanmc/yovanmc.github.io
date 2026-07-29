@@ -57,3 +57,17 @@ full `content.ts` diff on 2026-07-03 before merge.
 For anything not covered above (art direction, confidentiality rules, declined
 items, cross-cutting gotchas), see the Decision log & gotchas section in
 `ROADMAP.md` directly — those are living/current, not archival, and were not moved.
+
+## M3a — Station canon swap (PR #15, merged)
+
+PR-A of the M3 split. The site hero renders the locked v1 Station canon; added the
+extraction tooling (`tools/extract-canon.mjs`) and the `verify:canon` CI step that
+byte-compares committed generated modules against a fresh extraction. `og-station.png`
+regenerated. This is the pipeline every later boss extraction depends on.
+
+## M3b — Game/portfolio separation + intro integration (PR #16, merged)
+
+Phase machine intro -> gate -> play | browse, the `/browse` path, and a path-preserving
+404. Superseded S5's "v1 faked dive" line by the owner's 2026-07-28 ruling: the dive
+ships here. Archived from the main ROADMAP table in the M6 PR-3 hygiene pass
+(2026-07-29) once M6 shipped and the table exceeded the last-3-shipped cap.
