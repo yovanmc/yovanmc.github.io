@@ -53,6 +53,15 @@ export interface ScenePlate {
    * the HP bar itself stays visible throughout (`revealBoss` is always true
    * for this boss — there is no label/HP coupling to decouple, per D3). */
   labelFor?(state: BattleState): string;
+  /** M7 task A2 — OPTIONAL, additive (the D3/E4/E9 pattern). `BattleScene`
+   * renders `plate.footerFor?.(state) ?? plate.footer(livingCount)`. The
+   * static `footer(livingCount)` signature can't express a phase-dependent
+   * DENOMINATOR (the Imposter has 3 targetable clone slots during CLONES and
+   * 1 in every other phase), and the denominator is scene knowledge that must
+   * not leak into the shared shell. Alert Storm, Cascade and Silent Failure do
+   * not implement this, so their rendered output and all four existing
+   * `plate.footer(n)` tests stay byte-identical. */
+  footerFor?(state: BattleState): string;
 }
 
 /** One module per boss id (§Scene generalization). */

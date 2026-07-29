@@ -856,7 +856,7 @@ export default function BattleScene(props: Props) {
           )}
         </div>
         <div style={{ fontFamily: MONO, fontSize: "10px", color: "#b9a8d8", marginTop: 5, letterSpacing: ".12em" }}>
-          {scene.plate.footer(livingCount)}
+          {scene.plate.footerFor?.(state) ?? scene.plate.footer(livingCount)}
         </div>
       </div>
 

@@ -11,6 +11,7 @@ import {
   erosionStage as bossErosionStage,
   IMPOSTER_ID,
   isImposterDefeated,
+  livingTargets,
   type ImposterBoss,
 } from "../bosses/imposter";
 import { deathFrame } from "./silentFailure";
@@ -207,6 +208,13 @@ function arenaFor(bossState: BossState): [Grid, Grid] {
   return EROSION_ARENA[bossErosionStage(bossState)];
 }
 
+/** Slots that EXIST in this phase, alive or not: the clone spread shows three
+ * targetable positions during CLONES, one entity in every other phase. The
+ * plate footer's denominator. */
+function targetSlots(boss: ImposterBoss): number {
+  return boss.phase === "clones" ? 3 : 1;
+}
+
 /** Defensive against non-imposter states (`punctuation.test.ts` calls every
  * registered module's `banner` against an ALERT-STORM state). The mid-fight
  * Conviction forge (N5) is the only banner moment this boss has — no
@@ -237,7 +245,13 @@ export const imposterScene: BossSceneModule = {
     // its phases, not its HP") — structural only, matching Cascade/SF's own
     // hiddenLabel note.
     hiddenLabel: "?? · WHICH ONE IS REAL",
+    // Never read at runtime once `footerFor` below is defined — structural
+    // only, the same accepted pattern as `arena` and `hiddenLabel` above.
     footer: (livingCount) => `${livingCount}/1 TARGET`,
+    footerFor: (state) =>
+      state.boss.kind === IMPOSTER_ID
+        ? `${livingTargets(state.boss).length}/${targetSlots(state.boss)} TARGET`
+        : `0/1 TARGET`,
   },
   banner: bannerFor,
   victoryCopy: {
