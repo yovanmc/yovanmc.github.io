@@ -17,7 +17,7 @@ import type { SilentFailureBoss } from "../bosses/silentFailure";
 import { SF_TARGET_ID, spawnSilentFailure } from "../bosses/silentFailure";
 import { EROWS, ECOLS, PIECES, SIL_ATK, SIL_BODY, SIL_DIE, SIL_EMPTY } from "../../generated/bossSilentFailure";
 import { SR, SC } from "../../generated/battlefieldScene";
-import { silentFailureScene } from "./silentFailure";
+import { deathFrame, silentFailureScene } from "./silentFailure";
 
 function bossOf(overrides: Partial<SilentFailureBoss> = {}): SilentFailureBoss {
   return { ...spawnSilentFailure(), ...overrides };
@@ -76,7 +76,7 @@ describe("silentFailureScene.composeBoss", () => {
     expect(g).toEqual(SIL_BODY[0]);
   });
 
-  it("selects a SIL_DIE frame once defeated, regardless of phase", () => {
+  it("selects a SIL_DIE frame once defeated, regardless of phase (fx={} -> deathFrame's frame 0, task 6c)", () => {
     const gEmbodiedDeath = silentFailureScene.composeBoss(bossOf({ phase: "embodied", hp: 0 }), false, 0, {});
     const gVanishedDeath = silentFailureScene.composeBoss(
       bossOf({ phase: "vanished", hp: 0, forceBodyForDeath: true }),
@@ -84,13 +84,11 @@ describe("silentFailureScene.composeBoss", () => {
       0,
       {},
     );
-    expect(gEmbodiedDeath).toEqual(SIL_DIE[SIL_DIE.length - 1][0]);
-    expect(gVanishedDeath).toEqual(SIL_DIE[SIL_DIE.length - 1][0]);
-  });
-
-  it("progresses the SIL_DIE reel with fx.ripple, same clamping as SIL_ATK", () => {
-    const g = silentFailureScene.composeBoss(bossOf({ hp: 0 }), false, 0, { ripple: 1 });
-    expect(g).toEqual(SIL_DIE[0][0]);
+    // fx={} is deathFrame's "no signal yet" case — frame 0 (the boss just
+    // died, still whole), NOT the sparse terminal frame the pre-task-6c
+    // code fell back to here (see deathFrame's own doc comment for why).
+    expect(gEmbodiedDeath).toEqual(SIL_DIE[0][0]);
+    expect(gVanishedDeath).toEqual(SIL_DIE[0][0]);
   });
 
   it("falls back to a blank grid for a non-silent-failure boss (defensive only — unreachable through the registry in practice)", () => {
@@ -182,7 +180,55 @@ describe("composeBoss reachability: the signed DoT-kill-while-vanished ruling ha
     expect(s1.boss.hp).toBe(0);
     expect(s1.boss.forceBodyForDeath).toBe(true);
 
+    // fx={} at the moment of death is deathFrame's frame-0 case (task 6c) —
+    // reachability at this instant is the point of this test, not the
+    // specific frame index (that's deathFrame's own describe block below).
     const g = silentFailureScene.composeBoss(s1.boss, false, 0, {});
-    expect(g).toEqual(SIL_DIE[SIL_DIE.length - 1][0]);
+    expect(g).toEqual(SIL_DIE[0][0]);
+  });
+});
+
+describe("deathFrame (M6 PR-2 task 6c, D5a follow-up — the fx.ripple dead-end bug)", () => {
+  it("maps the no-signal case (fx={}) to frame 0 — the boss just died, still whole", () => {
+    expect(deathFrame({})).toBe(0);
+  });
+
+  it("maps {ripple: 1} to frame 1", () => {
+    expect(deathFrame({ ripple: 1 })).toBe(1);
+  });
+
+  it("maps {ripple: 3} to frame 3 — never the same frame as ripple:1, and never the terminal frame", () => {
+    expect(deathFrame({ ripple: 3 })).toBe(3);
+  });
+
+  it("maps {fall: 4, dither: 2} to frame 4 — a substantial frame, not the sparse terminal one, even though fx.ripple is absent here", () => {
+    expect(deathFrame({ fall: 4, dither: 2 })).toBe(4);
+  });
+
+  it("maps {fall: 10, dither: 3} — the shell's actual LAST fx step before the victory overlay takes over — to the terminal frame 6, and only that step", () => {
+    expect(deathFrame({ fall: 10, dither: 3 })).toBe(6);
+  });
+
+  it("is monotonically increasing across the real victory-fx sequence in the order BattleScene.tsx actually produces it", () => {
+    const sequence = [{}, { ripple: 1 }, { ripple: 3 }, { fall: 4, dither: 2 }, { fall: 10, dither: 3 }];
+    const indices = sequence.map(deathFrame);
+    for (let i = 1; i < indices.length; i++) {
+      expect(indices[i]).toBeGreaterThan(indices[i - 1]);
+    }
+    expect(indices).toEqual([0, 1, 3, 4, 6]);
+  });
+
+  it("treats fall values below 10 the same as fall:4 (threshold, not exact-equality, so a slightly different shell constant still lands correctly)", () => {
+    expect(deathFrame({ fall: 5, dither: 2 })).toBe(4);
+    expect(deathFrame({ fall: 9 })).toBe(4);
+  });
+
+  it("treats fall values at or above 10 as the terminal step regardless of the exact number", () => {
+    expect(deathFrame({ fall: 10 })).toBe(6);
+    expect(deathFrame({ fall: 25 })).toBe(6);
+  });
+
+  it("never returns the terminal frame for a ripple-only fx, no matter how large", () => {
+    expect(deathFrame({ ripple: 999 })).toBe(3);
   });
 });
