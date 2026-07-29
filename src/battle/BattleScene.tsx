@@ -17,6 +17,8 @@ import { CASCADE_ID, type CascadeNode } from "./bosses/cascade";
 import { livingTargets, SF_TARGET_ID, SILENT_FAILURE_ID } from "./bosses/silentFailure";
 import { nodeBox } from "./scenes/cascadeCompose";
 import { PIECES as SF_PIECES } from "../generated/bossSilentFailure";
+import { shouldComposeBoss } from "./sceneGate";
+import type { ComposeGateMode } from "./sceneGate";
 import { PAL } from "../generated/diveTimeline";
 import {
   IDLE, ATK, ATK_MS, BUFF, BUFF_MS, CAST, CAST_MS, PWR, PWR_MS,
@@ -91,7 +93,12 @@ interface FloatNum {
   born: number;
 }
 
-type UiMode = "menu" | "target" | "anim" | "pause" | "victory" | "defeat";
+// M6 PR-2 task 6b: UiMode's literal set is identical to sceneGate.ts's
+// ComposeGateMode by construction (both name every state this component's
+// own `mode` can hold) — importing rather than re-declaring keeps the
+// predicate's input type and this component's actual state in lockstep, so
+// a future mode addition here can't silently desync from the gate.
+type UiMode = ComposeGateMode;
 
 interface Props {
   seed: number;
@@ -236,7 +243,19 @@ export default function BattleScene(props: Props) {
 
     const g = scene.arena[flutter].map((row) => row.slice());
     const screaming = isScreamTurn(shown) && shown.status === "active";
-    if (!descend && shown.status !== "victory") {
+    // M6 PR-2 task 6b (D5a — owner-ruled): gate on `mode`, not `shown.status`.
+    // `shown.status` flips to "victory" at the very first animation step
+    // after a killing blow, BEFORE any death-escalation fx step fires and
+    // well before the victory overlay itself takes over — the old gate blew
+    // out the boss layer at the instant of impact and left the arena empty
+    // for the whole death-animation window (SIL_DIE, Alert Storm's
+    // fall/dither, Cascade's CAS_DIE all authored, none ever rendering).
+    // `mode` stays "anim" through that entire window and only becomes
+    // "victory" once the overlay is actually up, so the boss layer now keeps
+    // composing (still showing `shown.boss`, whose hp/phase already reflect
+    // the kill, feeding composeBoss's death-frame selection) right up to
+    // that point.
+    if (shouldComposeBoss({ descend, mode })) {
       const bossGrid = scene.composeBoss(shown.boss, screaming, flutter, swarmFx);
       stampGrid(g, bossGrid, BOSS_AT[0], BOSS_AT[1]);
     }
@@ -256,7 +275,7 @@ export default function BattleScene(props: Props) {
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.drawImage(off, 0, 0, cv.width, cv.height);
-  }, [shown, flutter, swarmFx, heroReel, heroFrame, scene, descend, scale]);
+  }, [shown, flutter, swarmFx, heroReel, heroFrame, scene, descend, scale, mode]);
 
   // ---- action sequencing ----
   const schedule = useCallback((steps: Step[]) => {

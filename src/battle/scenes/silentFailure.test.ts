@@ -6,12 +6,15 @@
 // defeated (forceBodyForDeath documents why that's still correct for a
 // vanished-phase DoT kill), SIL_ATK on the vanished-phase ambush via the
 // shell's existing fx.ripple signal (the same field Alert Storm's own
-// boss-volley animation already drives — see composeBoss's own doc comment
-// for why this is live-reachable and SIL_HIT/SIL_DIE currently are not).
+// boss-volley animation already drives — see composeBoss's own doc comment).
+// SIL_DIE became reachable through the real shell render pipeline as of task
+// 6b's death-reel gate fix (plan §D5a); SIL_HIT still has no fx signal to
+// key off (see composeBoss's own comment) and stays unwired.
 import { describe, expect, it } from "vitest";
-import { initBattle } from "../engine";
+import { battleReduce, initBattle } from "../engine";
+import type { BattleState } from "../engine";
 import type { SilentFailureBoss } from "../bosses/silentFailure";
-import { spawnSilentFailure } from "../bosses/silentFailure";
+import { SF_TARGET_ID, spawnSilentFailure } from "../bosses/silentFailure";
 import { EROWS, ECOLS, PIECES, SIL_ATK, SIL_BODY, SIL_DIE, SIL_EMPTY } from "../../generated/bossSilentFailure";
 import { SR, SC } from "../../generated/battlefieldScene";
 import { silentFailureScene } from "./silentFailure";
@@ -156,5 +159,30 @@ describe("moteOverlay anchoring (uses PIECES[0], the helmet box, so motes read a
     expect(r1).toBeGreaterThanOrEqual(0); // sanity: PIECES[0] itself is in-bounds art data
     expect(g.length).toBe(EROWS);
     expect(g[0].length).toBe(ECOLS);
+  });
+});
+
+describe("composeBoss reachability: the signed DoT-kill-while-vanished ruling has a real render path now (M6 PR-2 task 6b)", () => {
+  it("a Silent Failure killed by a DoT while vanished reaches composeBoss with forceBodyForDeath true, and composeBoss selects SIL_DIE for it", () => {
+    // Same rig as engine.test.ts's own "vanished: forceBodyForDeath becomes
+    // true" test (battleReduce, not a hand-built boss) — this test's whole
+    // point is proving the ENGINE's output actually reaches this SCENE
+    // function end to end, not re-testing either piece in isolation again.
+    const base = initBattle({ seed: 42, defeatedBosses: ["alert-storm", "cascade"] });
+    const boss: SilentFailureBoss = {
+      ...spawnSilentFailure(),
+      phase: "vanished",
+      phaseTurnsLeft: 2,
+      hp: 4,
+      marked: true,
+    };
+    const s0: BattleState = { ...base, boss, dots: [{ batId: SF_TARGET_ID, ticksLeft: 2 }] };
+    const s1 = battleReduce(s0, { type: "ct" }); // no direct damage — only the DoT tick touches boss HP
+    if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
+    expect(s1.boss.hp).toBe(0);
+    expect(s1.boss.forceBodyForDeath).toBe(true);
+
+    const g = silentFailureScene.composeBoss(s1.boss, false, 0, {});
+    expect(g).toEqual(SIL_DIE[SIL_DIE.length - 1][0]);
   });
 });
