@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveFightChoice } from "./fight";
+import { deriveFightChoice, nextUndefeatedBoss } from "./fight";
 
 describe("deriveFightChoice (FIGHT submenu chooser derivation, defeatedBosses ∩ IMPLEMENTED_BOSSES)", () => {
   it("direct-launches Alert Storm for a fresh visitor (no defeats yet)", () => {
@@ -75,5 +75,25 @@ describe("deriveFightChoice (FIGHT submenu chooser derivation, defeatedBosses �
         { boss: "alert-storm", label: "Alert Storm", isRematch: true },
       ],
     });
+  });
+});
+
+describe("nextUndefeatedBoss (M4 D11 — shared by deriveFightChoice and the dive handoff, so the two can never disagree)", () => {
+  it("is alert-storm for a fresh visitor (0 bosses beaten)", () => {
+    expect(nextUndefeatedBoss([])).toBe("alert-storm");
+  });
+
+  it("is cascade once alert-storm alone is beaten (1 boss beaten)", () => {
+    expect(nextUndefeatedBoss(["alert-storm"])).toBe("cascade");
+  });
+
+  it("is imposter-syndrome once alert-storm, cascade, and silent-failure are beaten (3 bosses beaten)", () => {
+    expect(nextUndefeatedBoss(["alert-storm", "cascade", "silent-failure"])).toBe("imposter-syndrome");
+  });
+
+  it("is undefined once every IMPLEMENTED boss is beaten (4 bosses beaten — rush complete, D11)", () => {
+    expect(
+      nextUndefeatedBoss(["alert-storm", "cascade", "silent-failure", "imposter-syndrome"]),
+    ).toBeUndefined();
   });
 });
