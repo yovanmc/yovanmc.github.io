@@ -14,8 +14,9 @@ import {
 import { commandsForKit } from "./abilities";
 import { sceneFor } from "./scenes";
 import { CASCADE_ID, type CascadeNode } from "./bosses/cascade";
-import { livingTargets, SILENT_FAILURE_ID } from "./bosses/silentFailure";
+import { livingTargets, SF_TARGET_ID, SILENT_FAILURE_ID } from "./bosses/silentFailure";
 import { nodeBox } from "./scenes/cascadeCompose";
+import { PIECES as SF_PIECES } from "../generated/bossSilentFailure";
 import { PAL } from "../generated/diveTimeline";
 import {
   IDLE, ATK, ATK_MS, BUFF, BUFF_MS, CAST, CAST_MS, PWR, PWR_MS,
@@ -50,6 +51,24 @@ function cascadeNodes(boss: BossState): CascadeNode[] {
   if (boss.kind === SILENT_FAILURE_ID) return [];
   return assertNever(boss);
 }
+
+/**
+ * M6 PR-2 task 6 (D1, pass-2 J4): the Silent Failure's single static on-stage
+ * position, derived from `PIECES` (bossSilentFailure.js's armor-piece boxes,
+ * the same generated data scenes/silentFailure.ts's mote overlay reads) so
+ * this can't silently drift from the actual art. Unlike Cascade's six
+ * per-node positions (`nodeBox`), the armor never moves, so a single
+ * module-level bounding box is enough — no per-frame lookup needed.
+ */
+const SF_ARMOR_BOX = SF_PIECES.reduce(
+  (acc, [r1, , c1, c2]) => ({
+    top: Math.min(acc.top, r1),
+    left: Math.min(acc.left, c1),
+    right: Math.max(acc.right, c2),
+  }),
+  { top: Infinity, left: Infinity, right: -Infinity },
+);
+const SF_ARMOR_MID_COL = Math.floor((SF_ARMOR_BOX.left + SF_ARMOR_BOX.right) / 2);
 
 const MONO = "'JetBrains Mono',monospace";
 const SERIF = "'Marcellus',serif";
@@ -268,11 +287,12 @@ export default function BattleScene(props: Props) {
       return [BOSS_AT[0] + r, BOSS_AT[1] + c + 7];
     }
     if (s.boss.kind === SILENT_FAILURE_ID) {
-      // Stopgap anchor (M6 PR-2 task 4) — the single-entity boss has no
-      // per-boss placement of its own yet; task 6 (scene module + shell
-      // generalization) owns the real on-stage footprint via composeBoss.
-      // Unreachable in play until then (no initBattle/scene wiring exists).
-      return [BOSS_AT[0], BOSS_AT[1]];
+      // M6 PR-2 task 6: the real on-stage footprint — the armor's own
+      // bounding box (SF_ARMOR_BOX, derived from PIECES), top edge, mid
+      // column, same "float above the box, centered" convention Cascade
+      // uses against `nodeBox`. This is the D1/pass-2 J4 fix: batCell now
+      // returns a real, art-derived position instead of the BOSS_AT stopgap.
+      return [BOSS_AT[0] + SF_ARMOR_BOX.top, BOSS_AT[1] + SF_ARMOR_MID_COL];
     }
     return assertNever(s.boss);
   }, []);
@@ -293,10 +313,12 @@ export default function BattleScene(props: Props) {
       return [BOSS_AT[0] + r - 5, BOSS_AT[1] + c + 5];
     }
     if (s.boss.kind === SILENT_FAILURE_ID) {
-      // Stopgap anchor (M6 PR-2 task 4) — see batCell; task 6 owns the real
-      // cursor position via the SF scene module. Unreachable in play until
-      // then.
-      return [BOSS_AT[0] - 5, BOSS_AT[1] - 2];
+      // M6 PR-2 task 6: the D1/pass-2 J4 fix — the cursor arrow now sits
+      // above the armor's real bounding box (same 5-row/2-col arrow offset
+      // Cascade's arm uses against its own box), instead of the BOSS_AT
+      // stopgap task 4 shipped. Per D2 this is the fight's ONE cursor home,
+      // vanished or not — the boss stays selectable the whole fight.
+      return [BOSS_AT[0] + SF_ARMOR_BOX.top - 5, BOSS_AT[1] + SF_ARMOR_MID_COL - 2];
     }
     return assertNever(s.boss);
   }, []);
@@ -338,7 +360,12 @@ export default function BattleScene(props: Props) {
           for (const e of events) {
             if (e.type === "damage" || e.type === "dot") {
               const [r, c] = batCell(next, e.batId);
-              pushFloat(String(e.amount), e.type === "dot" ? "#c9a4ff" : "#ffe9a8", r, c);
+              // M6 PR-2 task 6 (D2, pass-2 J7): a zero-amount damage event is
+              // the vanished-phase attack whiff (D2's signed rule — turn
+              // consumed, 0 damage, no +1 MP) — floating a literal "0" would
+              // read as a bug, not a deliberate miss.
+              const text = e.type === "damage" && e.amount === 0 ? "MISS" : String(e.amount);
+              pushFloat(text, e.type === "dot" ? "#c9a4ff" : "#ffe9a8", r, c);
             }
             if (e.type === "mark") {
               const [r, c] = batCell(next, e.batId);
@@ -569,17 +596,24 @@ export default function BattleScene(props: Props) {
   } else if (state.boss.kind === SILENT_FAILURE_ID) {
     // Single-entity case: HP always shown (plan §Scene generalization — the
     // VANISHED/embodied swap is a plate-LABEL concern, D3's labelFor, not
-    // this HP-bar-vs-hiddenLabel reveal flag). cursorBatObj/cursorNodeObj
-    // are left both null here (M6 PR-2 task 4 stopgap): neither type fits a
-    // single-entity boss, and giving the cursor a real home is task 6's
-    // explicit job (D1, pass-2 J4 — the invisible-cursor finding). This is
-    // the SAME gap J4 already named, now compiler-visible instead of silent;
-    // unreachable in play until task 5/6 wire boot + scene.
+    // this HP-bar-vs-hiddenLabel reveal flag).
+    // M6 PR-2 task 6 (D1, pass-2 J4 fix): cursorNodeObj now carries a real
+    // object instead of the task-4 stopgap's unconditional null — reusing
+    // Cascade's variable/branch rather than adding a third one, because SF's
+    // display rule is IDENTICAL to Cascade's: no masking, HP shown as-is,
+    // regardless of alive/marked (cursorRead's cascade branch never checks
+    // either field). The literal below satisfies CascadeNode's shape
+    // structurally; it isn't a real cascade node, just the same read
+    // contract. Per D2 the boss stays the cursor's one selectable target for
+    // the whole fight, embodied or vanished.
     revealBoss = true;
     livingCount = state.boss.hp > 0 ? 1 : 0;
     plateHp = { hp: state.boss.hp, maxHp: state.boss.maxHp };
     cursorBatObj = null;
-    cursorNodeObj = null;
+    cursorNodeObj =
+      cursorBat !== null
+        ? { id: SF_TARGET_ID, hp: state.boss.hp, maxHp: state.boss.maxHp, alive: state.boss.hp > 0, marked: state.boss.marked }
+        : null;
   } else {
     assertNever(state.boss);
   }
@@ -710,7 +744,9 @@ export default function BattleScene(props: Props) {
 
       {/* boss plate (scene-owned label/hidden-copy/footer) */}
       <div style={{ ...panel, position: "absolute", right: isMobile ? 10 : 30, top: isMobile ? 10 : 26, padding: "10px 14px", zIndex: 11 }}>
-        <div style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".28em", color: "#ff9d8a" }}>{scene.plate.label}</div>
+        <div style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".28em", color: "#ff9d8a" }}>
+          {scene.plate.labelFor?.(state) ?? scene.plate.label}
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
           {revealBoss ? (
             bar(plateHp.hp, plateHp.maxHp, "linear-gradient(90deg,#e04838,#bd2421)", isMobile ? 110 : 150)
