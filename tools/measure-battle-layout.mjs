@@ -352,7 +352,7 @@ async function main() {
   } finally {
     if (client) client.close();
     killTree(devProc.pid, "vite dev server");
-    killTree(edgeProc.pid, "Edge headless");
+    killEdgeByProfile(userDataDir, "Edge headless");
     try {
       rmSync(userDataDir, { recursive: true, force: true });
     } catch {
@@ -414,6 +414,51 @@ function killTree(pid, label) {
     console.log(`measure-battle-layout: stopped ${label} (pid ${pid})`);
   } catch (e) {
     console.warn(`measure-battle-layout: could not stop ${label} (pid ${pid}): ${e.message}`);
+  }
+}
+
+/** B4-gate latent-bug fix (B6): `taskkill /pid X /T /F` on Edge's launcher
+ * PID does not reap its children on this machine — Edge's headless launcher
+ * re-execs into the real browser process, which then owns
+ * crashpad-handler/gpu-process/utility/renderer children outside the
+ * launcher PID's own process-tree, so `/T` never reaches them and every run
+ * leaked a full orphan subtree. Fix: enumerate `msedge.exe` processes via
+ * WMI (`Win32_Process`) and match each one's OWN command line against this
+ * run's unique `--user-data-dir` path (created fresh per run by
+ * `mkdtempSync`, so the match is unambiguous to this invocation), then kill
+ * each matched PID individually with `taskkill /PID <pid> /F`. Deliberately
+ * NEVER filters on image name alone — the owner routinely runs dozens of
+ * unrelated msedge.exe processes, and killing by name would be destructive. */
+function killEdgeByProfile(userDataDir, label) {
+  const psLiteral = userDataDir.replace(/'/g, "''");
+  const psScript =
+    `Get-CimInstance Win32_Process -Filter "Name = 'msedge.exe'" | ` +
+    `Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${psLiteral}') } | ` +
+    `Select-Object -ExpandProperty ProcessId`;
+  try {
+    const res = spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", psScript], {
+      encoding: "utf8",
+    });
+    const pids = (res.stdout || "")
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => /^\d+$/.test(s));
+    if (pids.length === 0) {
+      console.log(
+        `measure-battle-layout: ${label} — no msedge.exe processes matched profile ${userDataDir} (already exited?)`,
+      );
+      return;
+    }
+    for (const pid of pids) {
+      // Exact-PID kill only, never by image name. A non-zero exit here just
+      // means the process already exited between enumeration and kill.
+      spawnSync("taskkill", ["/PID", pid, "/F"], { stdio: "ignore" });
+    }
+    console.log(
+      `measure-battle-layout: ${label} — killed ${pids.length} PID(s) matched to profile ${userDataDir}: ${pids.join(", ")}`,
+    );
+  } catch (e) {
+    console.warn(`measure-battle-layout: could not enumerate/kill ${label} by profile: ${e.message}`);
   }
 }
 
