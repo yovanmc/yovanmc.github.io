@@ -655,6 +655,42 @@ message containing:
 
 Then **STOP** until the owner rules. State in plain text that you are blocked on him.
 
+### B4 gate — RENDERED EVIDENCE (orchestrator, 2026-07-29). Read this before B5.
+
+The owner correctly refused to rule from prose, so both live options were rendered as
+throwaway local edits (never committed, tree reverted, verified clean) and captured at
+1440x900, 800x600 and 360x640. Frames were written to a scratchpad, not the repo. What the
+renders established, beyond the measured table in the ROADMAP decision log:
+
+- **Option A, shorten the panel.** Achieved a measured **141.5px** rendered height by
+  tightening spacing only, with all 7 ability rows and the footer hint still legible: header
+  padding `11px 14px` to `2px 14px`, body wrapper `8px` to `1px`, row padding `10px 12px` to
+  `0px 10px`, row gap `10` to `6`, row font-size `14px` to `11px` plus `lineHeight: 1.15`,
+  footer-desc `7px 12px 3px` to `1px 12px 1px`. **Clears the collision at all three rendered
+  viewports with no regression anywhere.** The only cost is smaller panel text. Note this is
+  a flat reduction; a viewport-height-aware cap was NOT rendered, and the per-viewport height
+  thresholds needed to design one are still unmeasured (only 800x600's `<=151px` is known).
+- **Option B, shift the clones to origin column 88.** Clears 800x600. **Changes nothing at
+  360x640** — that collision is vertical, and moving art sideways cannot lift it off a
+  full-width bottom bar. At 1440x900 it closes the gap to the hero to 13 stage columns
+  (clones 96-171, hero 184-207 — no overlap, but visibly cramped where the pre-existing
+  defect was mild).
+- **Correction, recorded so nobody re-litigates it:** the mockup judge asserted 1440x900 had
+  no baseline collision. That is wrong. Its own `current-1440x900.png` is byte-identical
+  (SHA-256) to the committed `before/1440x900.png`, and the overlap there is 57 x 116.5 px —
+  hand-derived by the orchestrator, reproduced by the measurement run through the real seams,
+  and described by the first visual judge as the panel cutting across the clone's leg. Three
+  independent sources against one bad visual read.
+
+**LATENT BUG in the committed rig, must be fixed in B6.** `killTree()` in
+`tools/measure-battle-layout.mjs` does not reap Edge's child processes on this machine:
+`taskkill /pid X /T /F` kills only the top-level launcher, leaving a full orphan subtree
+(crashpad-handler, gpu-process, several utility/renderer processes) after **every** run. This
+is in the committed file, not just the throwaway mockup copy. Fix by enumerating the tree via
+`Win32_Process` parent-PID walk (or matching the rig's own unique `--user-data-dir` path) and
+killing each PID explicitly. Never kill by image name — the owner routinely has dozens of
+unrelated `msedge.exe` processes running, and killing by name is destructive.
+
 ### B5 — apply the ruled fix
 
 Re-enable the skipped invariant test from B2, apply the owner's ruling, and get it green
