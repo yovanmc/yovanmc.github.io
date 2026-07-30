@@ -212,6 +212,13 @@ export default function BattleScene(props: Props) {
     activeRowRef.current?.scrollIntoView({ block: "nearest" });
   }, [menu.level, currentCursor]);
 
+  // M12 plan PR-B task B1 item 7: scroll affordance (owner ruling 3, amended
+  // to all three levels at 800x600). `overflowing` drives the bottom
+  // fade+chevron below; the effect is declared after `cmdPanelMaxHeight`
+  // (further down) since it's part of the dependency array.
+  const scrollBodyRef = useRef<HTMLDivElement | null>(null);
+  const [overflowing, setOverflowing] = useState(false);
+
   // ---- geometry: contain-fit desktop, width-fit mobile (plan §Architecture 3) ----
   // M7 PR-B task B3: verbatim-ported into src/battle/layout.ts (a pure,
   // covered module — this .tsx file is not matched by the coverage globs).
@@ -231,6 +238,13 @@ export default function BattleScene(props: Props) {
     () => Math.round(menuPanelMaxHeight(vw, vh, vh, isMobile)),
     [vw, vh, isMobile],
   );
+
+  // M12 plan PR-B task B1 item 7 (continued): recompute whenever the body's
+  // content (level/rows) or the panel's own height budget could change.
+  useEffect(() => {
+    const el = scrollBodyRef.current;
+    setOverflowing(!!el && el.scrollHeight > el.clientHeight + 0.5);
+  }, [view, cmdPanelMaxHeight, isMobile, mode]);
 
   // ---- descend beat: swarm fades in, inputs unlock after ----
   const descendRef = useRef(true);
@@ -1029,7 +1043,10 @@ export default function BattleScene(props: Props) {
               </div>
             </div>
           ) : (
-            <div style={{ padding: "8px", overflowY: "auto", flex: "1 1 auto", minHeight: 0 }}>
+            <div
+              ref={scrollBodyRef}
+              style={{ position: "relative", padding: "8px", overflowY: "auto", flex: "1 1 auto", minHeight: 0 }}
+            >
               {view.rows.map((row, i) => {
                 const active = i === currentCursor;
                 const afford = row.kind === "ability" ? state.hero.mp >= row.cmd.mp : !row.locked;
@@ -1074,6 +1091,29 @@ export default function BattleScene(props: Props) {
                   </div>
                 );
               })}
+              {/* M12 plan PR-B task B1 item 7: bottom fade + chevron scroll
+                  affordance (owner ruling 3, amended 2026-07-30 to all three
+                  levels at 800x600 rather than Spells alone). Purely visual,
+                  pointer-events none so it never intercepts row clicks. */}
+              {overflowing && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 22,
+                    background: "linear-gradient(to bottom, rgba(20,14,32,0), rgba(14,10,26,.92))",
+                    pointerEvents: "none",
+                    display: "flex",
+                    alignItems: "flex-end",
+                    justifyContent: "center",
+                    paddingBottom: 2,
+                  }}
+                >
+                  <span style={{ fontFamily: MONO, fontSize: "12px", color: "#c9a4ff", textShadow: "0 0 6px #000" }}>▾</span>
+                </div>
+              )}
             </div>
           )}
           {mode === "menu" && (
