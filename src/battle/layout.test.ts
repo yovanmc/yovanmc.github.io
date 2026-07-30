@@ -8,6 +8,16 @@ import { describe, expect, it } from "vitest";
 import { cellRect, commandPanelRect, gridRect, paintedBounds, rectsIntersect, stageMetrics } from "./layout";
 import { MEASURED_LAYOUT } from "./__fixtures__/measuredLayout";
 import type { Grid } from "../generated/heroBattle";
+import { spawnImposter, type ImposterBoss } from "./bosses/imposter";
+import { imposterScene } from "./scenes/imposter";
+
+const identityDraw = (r: number) => r;
+
+/** Same idiom as scenes/imposter.test.ts's own `fresh` (ledger #29) —
+ * duplicated here rather than importing a .test.ts file across modules. */
+function fresh(overrides: Partial<ImposterBoss> = {}): ImposterBoss {
+  return { ...spawnImposter(0, identityDraw).boss, ...overrides };
+}
 
 describe("stageMetrics", () => {
   // 1a — the real oracle: hand-computed from the verbatim formula this
@@ -143,6 +153,50 @@ describe("rectsIntersect", () => {
     const b = { left: 10, top: 0, width: 10, height: 10 };
     expect(rectsIntersect(a, b)).toBe(false);
   });
+});
+
+describe("M7 clip invariant — leftmost clone vs COMMAND panel", () => {
+  // Task B2 test 4, the red step: for every sweep viewport, the leftmost
+  // clone's painted rect must not intersect the COMMAND panel rect. Derived
+  // through the REAL public seams (stampOrigin/composeBoss), never
+  // hardcoded numbers, so a fix in either candidate direction (B4) is
+  // picked up automatically. Currently fails at 5 of the 12 swept
+  // viewports (see commit body for the exact failure table) — that
+  // failure IS the defect this milestone exists to fix. Skipped after
+  // being observed failing; re-enabled in task B5.
+  //
+  // it.skip.each (not one it.skip looping all 12 rows): B5's plan text
+  // requires reporting per-viewport numbers if a ruled fix can't clear
+  // every viewport, and a single test with an internal loop only ever
+  // reports the FIRST failing row per run (the assertion throws and stops
+  // the loop) — five iterations to see all five failures. it.each gives
+  // one row per viewport in one run.
+  //
+  // boss/stampOrigin/grid are viewport-independent (CLONES-phase
+  // composition doesn't vary by viewport), so they're computed once here
+  // rather than per-row — still through the same real public seams.
+  const boss = fresh({ phase: "clones" });
+  const [r0, c0] = imposterScene.stampOrigin!(boss);
+  const grid = imposterScene.composeBoss(boss, false, 0, {});
+
+  it.skip.each(MEASURED_LAYOUT)(
+    "$vw x $vh — leftmost clone does not overlap the COMMAND panel",
+    (row) => {
+      const m = stageMetrics(row.vw, row.vh, row.isMobile);
+      const clone = gridRect(m, r0, c0, grid)!;
+      const panel = commandPanelRect(row.vw, row.containerHeight, row.isMobile, row.panelHeight);
+      // AABB overlap depth on each axis, independent of rectsIntersect's
+      // strict-inequality convention — reported in the failure message
+      // (via expect's message argument) without loosening the assertion
+      // itself, which still asserts the boolean, not the overlap amount.
+      const overlapX = Math.min(clone.left + clone.width, panel.left + panel.width) - Math.max(clone.left, panel.left);
+      const overlapY = Math.min(clone.top + clone.height, panel.top + panel.height) - Math.max(clone.top, panel.top);
+      expect(
+        rectsIntersect(clone, panel),
+        `${row.vw}x${row.vh}: overlap x=${overlapX.toFixed(2)}px y=${overlapY.toFixed(2)}px (negative = clear on that axis)`,
+      ).toBe(false);
+    },
+  );
 });
 
 describe("commandPanelRect", () => {
