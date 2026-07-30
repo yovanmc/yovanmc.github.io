@@ -23,6 +23,7 @@ import {
 import { imposterBatAnchor, imposterCursorAnchor } from "./scenes/imposter";
 import { nodeBox } from "./scenes/cascadeCompose";
 import { cellRect, stageMetrics } from "./layout";
+import { menuPanelMaxHeight } from "./panelBudget";
 import { PIECES as SF_PIECES } from "../generated/bossSilentFailure";
 import { shouldComposeBoss } from "./sceneGate";
 import type { ComposeGateMode } from "./sceneGate";
@@ -217,6 +218,17 @@ export default function BattleScene(props: Props) {
   // Same useMemo wrapper, same dependency array; only the body moved.
   const { scale, stageW, stageH, stageLeft, stageTop } = useMemo(
     () => stageMetrics(vw, vh, isMobile),
+    [vw, vh, isMobile],
+  );
+
+  // M12 plan PR-B task B1 item 5: the measured, viewport-aware cap
+  // (panelBudget.ts) replaces M7's flat `maxHeight: 150`. `containerHeight`
+  // is `[data-battle]`'s own rendered height — the M7 fixture showed
+  // containerHeight === vh at every swept viewport (B2's rig re-verifies the
+  // equality still holds against the regenerated fixture), so `vh` is passed
+  // directly with no measured container value in scope here.
+  const cmdPanelMaxHeight = useMemo(
+    () => Math.round(menuPanelMaxHeight(vw, vh, vh, isMobile)),
     [vw, vh, isMobile],
   );
 
@@ -972,9 +984,8 @@ export default function BattleScene(props: Props) {
             overflow: "hidden",
             // M7 PR-B task B5 (owner-ruled Option C) shipped a flat 150 here;
             // M12 plan PR-B task B1 item 5 replaces it with the measured,
-            // viewport-aware budget (panelBudget.ts) — see the maxHeight
-            // line below.
-            maxHeight: 150,
+            // viewport-aware budget (panelBudget.ts).
+            maxHeight: cmdPanelMaxHeight,
             display: "flex",
             flexDirection: "column",
           }}
@@ -983,7 +994,10 @@ export default function BattleScene(props: Props) {
             style={{
               display: "flex",
               justifyContent: "space-between",
-              padding: "11px 14px",
+              // M12 plan PR-B task B1 item 6: desktop-only chrome compaction
+              // (mobile keeps its roomier 11px/14px — its budget floor is 315,
+              // never tight).
+              padding: isMobile ? "11px 14px" : "7px 14px",
               borderBottom: "1px solid rgba(190,140,255,.2)",
               background: "linear-gradient(90deg, rgba(150,80,255,.14), transparent)",
               flex: "0 0 auto",
@@ -1036,13 +1050,19 @@ export default function BattleScene(props: Props) {
                       display: "flex",
                       alignItems: "center",
                       gap: 10,
-                      padding: "10px 12px",
+                      padding: isMobile ? "10px 12px" : "6px 12px",
                       borderRadius: 9,
                       cursor: afford ? "pointer" : "default",
                       color: !afford ? "#5f5576" : active ? "#f2ecff" : "#c2b4de",
                       background: active ? "linear-gradient(90deg, rgba(160,90,255,.3), rgba(160,90,255,.05))" : "transparent",
                       border: active ? "1px solid rgba(200,150,255,.4)" : "1px solid transparent",
-                      fontSize: "14px",
+                      // M12 plan PR-B task B1 item 6, shave order step 1 (row
+                      // font 14 -> 13, desktop only): the 800x600 3-row
+                      // budget (148) still missed after the padding
+                      // compaction alone — owner-ruled 2026-07-30 to accept
+                      // the residual scroll at 800x600 for all three levels
+                      // rather than shave further (see plan ruling 3 amendment).
+                      fontSize: isMobile ? "14px" : "13px",
                       fontFamily: "'Sora',sans-serif",
                     }}
                   >
@@ -1059,13 +1079,17 @@ export default function BattleScene(props: Props) {
           {mode === "menu" && (
             <div
               style={{
-                padding: "7px 12px 3px",
+                padding: isMobile ? "7px 12px 3px" : "5px 12px 3px",
                 fontFamily: MONO,
-                fontSize: "10px",
+                // M12 plan PR-B task B1 item 6, shave order step 2 (footer
+                // font 10 -> 9, desktop only) — applied alongside step 1;
+                // owner-ruled 2026-07-30 to accept the residual 800x600
+                // scroll on all three levels rather than shave further.
+                fontSize: isMobile ? "10px" : "9px",
                 color: "#8a7ba8",
                 letterSpacing: ".08em",
                 borderTop: "1px solid rgba(190,140,255,.14)",
-                marginTop: 4,
+                marginTop: isMobile ? 4 : 2,
                 marginLeft: 8,
                 marginRight: 8,
                 flex: "0 0 auto",
