@@ -877,7 +877,7 @@ export default function BattleScene(props: Props) {
 
       {/* command menu */}
       {(mode === "menu" || mode === "target") && (
-        <div style={{ ...panel, position: "absolute", left: isMobile ? 10 : 38, bottom: isMobile ? 10 : 38, width: isMobile ? "auto" : 262, right: isMobile ? 10 : "auto", zIndex: 11, overflow: "hidden" }}>
+        <div data-cmd-panel style={{ ...panel, position: "absolute", left: isMobile ? 10 : 38, bottom: isMobile ? 10 : 38, width: isMobile ? "auto" : 262, right: isMobile ? 10 : "auto", zIndex: 11, overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "11px 14px", borderBottom: "1px solid rgba(190,140,255,.2)", background: "linear-gradient(90deg, rgba(150,80,255,.14), transparent)" }}>
             <span style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".3em", color: "#c9a4ff" }}>
               {mode === "target" ? "TARGET" : "COMMAND"}
