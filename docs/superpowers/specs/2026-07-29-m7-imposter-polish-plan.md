@@ -162,9 +162,20 @@ A new `src/battle/layout.ts` **is** matched, and inherits the 95%-branches thres
 
 Every recheck is a pwsh one-liner run from the repo root; exit 0 = claim holds.
 
+**ORCHESTRATOR AMENDMENT (build session 2026-07-29): five rows were re-pointed after PR-A
+and tasks B1-B3 landed.** A ledger exists so a later session can prove the plan is still
+current, but this plan's own tasks deliberately invalidate part of it — B3's entire purpose
+is to *move* the formulas rows 18/19 pin, B1 adds the 4th `tools/*.mjs`, B2 creates the
+first `paintedBounds`, and the suite grows past the row-1 baseline. Left alone, the
+preflight for tasks B5-B7 would report five FAILs, and a FAIL is a hard stop that would
+send the next session off to re-plan a plan that is fine. So rows **1, 18, 19, 26 and 28**
+now carry post-B3 rechecks, with the original cf3e3d2 claim preserved in the Claim text
+rather than deleted. The "Verified at" cell names which stage the recheck targets. Rows
+2-17 and 20-25 are untouched and still assert their original cf3e3d2 facts.
+
 | # | Claim | Verified at (commit) | Recheck (pwsh, exit 0 = holds) |
 |---|-------|----------------------|--------------------------------|
-| 1 | Baseline: 526 tests / 18 files green (measured in-session 2026-07-29, not copied) | cf3e3d2 | `if (-not ((npm test 2>&1) -match 'Tests\s+526 passed')) { exit 1 }` |
+| 1 | Original baseline: 526 tests / 18 files green (measured in-session 2026-07-29, not copied). **Post-PR-A + B1-B3 the suite is 555 passed / 12 skipped (567) across 19 files**, measured independently by the orchestrator on branch `fix/m7-pr-b-clone-clip` at `2f607f1`. The 12 skips are the `it.skip.each` invariant rows, one per swept viewport, which **task B5 re-enables — after B5 the expected state is 567 passed / 0 skipped**, so re-point this row again then | 2f607f1 | `if (-not ((npm test 2>&1) -match 'Tests\s+555 passed \| 12 skipped')) { exit 1 }` |
 | 2 | `ScenePlate.footer` signature is `footer(livingCount: number): string;` | cf3e3d2 | `if (-not (Select-String -Path src/battle/scenes/types.ts -Pattern 'footer\(livingCount: number\): string;' -Quiet)) { exit 1 }` |
 | 3 | `types.ts` already imports `BattleState` (no new import needed) | cf3e3d2 | `if (-not (Select-String -Path src/battle/scenes/types.ts -Pattern 'import type \{ BattleState, BossState \} from "../engine";' -Quiet)) { exit 1 }` |
 | 4 | The optional-seam precedent `labelFor?(state: BattleState): string;` exists in `ScenePlate` | cf3e3d2 | `if (-not (Select-String -Path src/battle/scenes/types.ts -Pattern 'labelFor\?\(state: BattleState\): string;' -Quiet)) { exit 1 }` |
@@ -181,17 +192,17 @@ Every recheck is a pwsh one-liner run from the repo root; exit 0 = claim holds.
 | 15 | Clone canvas is `COLS + 2*CLONE_GAP` wide × `ROWS` tall (88 × 60); `COLS=48, ROWS=60` | cf3e3d2 | `$a = Select-String -Path src/battle/scenes/imposter.ts -Pattern 'const width = COLS \+ 2 \* CLONE_GAP;' -Quiet; $b = Select-String -Path src/generated/heroBattle.js -Pattern 'ROWS = 60, COLS = 48' -Quiet; if (-not ($a -and $b)) { exit 1 }` |
 | 16 | `BOSS_AT = [66, 34]`, stage grid `SR = 144, SC = 256` | cf3e3d2 | `$g = Get-Content src/generated/battlefieldScene.js -Raw; if (-not ($g -match 'BOSS_AT = \[66, ?34\]' -and $g -match 'SR = 144' -and $g -match 'SC = 256')) { exit 1 }` |
 | 17 | `stampGrid(g, art, r0, c0)` treats `[r0,c0]` as TOP-LEFT (`const rr = r0 + r;`) | cf3e3d2 | `if (-not (Select-String -Path src/battle/BattleScene.tsx -Pattern 'const rr = r0 \+ r;' -Quiet)) { exit 1 }` |
-| 18 | Stage metrics formula: `scale = isMobile ? vw/SC : Math.max(2, Math.floor(fit*2)/2)` | cf3e3d2 | `if (-not (Select-String -Path src/battle/BattleScene.tsx -Pattern 'Math.max\(2, Math.floor\(fit \* 2\) / 2\)' -Quiet)) { exit 1 }` |
-| 19 | `cellPx(r,c) = { left: stageLeft + c*scale, top: stageTop + r*scale }` | cf3e3d2 | `if (-not (Select-String -Path src/battle/BattleScene.tsx -Pattern 'left: stageLeft \+ c \* scale,' -Quiet)) { exit 1 }` |
+| 18 | Stage metrics formula: `scale = isMobile ? vw/SC : Math.max(2, Math.floor(fit*2)/2)`. **Post-B3 the formula lives in `src/battle/layout.ts`** (verbatim-ported out of `BattleScene.tsx` by task B3, which is the whole point of PR-B); recheck re-pointed there | cf3e3d2 claim, B3 location | `if (-not (Select-String -Path src/battle/layout.ts -Pattern 'Math.max\(2, Math.floor\(fit \* 2\) / 2\)' -Quiet)) { exit 1 }` |
+| 19 | `cellPx(r,c) = { left: stageLeft + c*scale, top: stageTop + r*scale }`. **Post-B3 this is `cellRect` in `src/battle/layout.ts`**, same arithmetic against a `StageMetrics` argument; recheck re-pointed there | cf3e3d2 claim, B3 location | `if (-not (Select-String -Path src/battle/layout.ts -Pattern 'left: m.stageLeft \+ c \* m.scale,' -Quiet)) { exit 1 }` |
 | 20 | COMMAND panel geometry: `left: isMobile ? 10 : 38, bottom: isMobile ? 10 : 38, width: isMobile ? "auto" : 262` | cf3e3d2 | `if (-not (Select-String -Path src/battle/BattleScene.tsx -Pattern 'left: isMobile \? 10 : 38, bottom: isMobile \? 10 : 38, width: isMobile \? "auto" : 262' -Quiet)) { exit 1 }` |
 | 21 | Panel renders only when `mode === "menu" \|\| mode === "target"` | cf3e3d2 | `if (-not (Select-String -Path src/battle/BattleScene.tsx -Pattern 'mode === "menu" .. mode === "target"' -Quiet)) { exit 1 }` |
 | 22 | `vw`/`vh`/`isMobile` are `BattleScene` **props**; `w`/`h` come from a real `resize` listener in `App.tsx`; `MOBILE_BREAKPOINT = 760` | cf3e3d2 | `$a = Select-String -Path src/App.tsx -Pattern 'window.addEventListener\("resize", onResize\)' -Quiet; $b = Select-String -Path src/App.tsx -Pattern 'const MOBILE_BREAKPOINT = 760;' -Quiet; if (-not ($a -and $b)) { exit 1 }` |
 | 23 | Dev boot params are gated on `import.meta.env.DEV \|\| loc.hostname === "localhost"` | cf3e3d2 | `if (-not (Select-String -Path src/App.tsx -Pattern 'import.meta.env.DEV .. loc.hostname === "localhost"' -Quiet)) { exit 1 }` |
 | 24 | `spawnImposter` seeds `phase: "clones"` — `?phase=battle&boss=imposter-syndrome` boots INSIDE the CLONES window with no `actions=` | cf3e3d2 | `if (-not (Select-String -Path src/battle/bosses/imposter.ts -Pattern 'phase: "clones",' -Quiet)) { exit 1 }` |
 | 25 | `vite.config.ts` sets no `base`, so the dev server serves the app at `/` | cf3e3d2 | `if (Select-String -Path vite.config.ts -Pattern '^\s*base:' -Quiet) { exit 1 }` |
-| 26 | No screenshot/browser-driving tool exists in the repo; `tools/` holds exactly 3 `.mjs` audit scripts | cf3e3d2 | `if ((Get-ChildItem tools -Filter *.mjs).Count -ne 3) { exit 1 }` |
+| 26 | Originally: no browser-driving tool existed and `tools/` held exactly 3 `.mjs` audit scripts. **Task B1 adds the 4th** (`measure-battle-layout.mjs`), so the count is 4 post-B1 and the original claim is spent by design | cf3e3d2 claim, B1 count | `if ((Get-ChildItem tools -Filter *.mjs).Count -ne 4) { exit 1 }` |
 | 27 | `Grid = (string \| null)[][]`; empty cell sentinel is `null` | cf3e3d2 | `if (-not (Select-String -Path src/generated/heroBattle.d.ts -Pattern 'export type Grid = \(string . null\)\[\]\[\];' -Quiet)) { exit 1 }` |
-| 28 | No painted-bounds / foot-row helper exists yet (this plan adds the first) | cf3e3d2 | `$g = (Get-ChildItem src/battle -Recurse -Include *.ts).FullName; if (Select-String -Path $g -Pattern 'paintedBounds' -Quiet) { exit 1 }` |
+| 28 | Originally: no painted-bounds / foot-row helper existed. **Task B2 adds the first**, exported from `src/battle/layout.ts`, so post-B2 the claim inverts by design and the recheck asserts its presence instead | cf3e3d2 claim, B2 presence | `if (-not (Select-String -Path src/battle/layout.ts -Pattern 'export function paintedBounds' -Quiet)) { exit 1 }` |
 | 29 | **Fixture seam (footer tests):** `fresh(overrides: Partial<ImposterBoss>)` at `scenes/imposter.test.ts:17-19` builds a phase-overridden boss; `initBattle({ seed, boss: IMPOSTER_ID })` builds a full `BattleState`. Both already used together in the `banner` describe block | cf3e3d2 | `$t = Get-Content src/battle/scenes/imposter.test.ts -Raw; if (-not ($t -match 'function fresh\(overrides: Partial<ImposterBoss> = \{\}\)' -and $t -match 'initBattle\(\{ seed: 1, boss: IMPOSTER_ID \}\)')) { exit 1 }` |
 | 30 | **Fixture seam (layout tests):** the measured panel-height fixture does NOT exist yet — task B1 creates it. Any B2 test needing it must consume B1's committed JSON, never a hardcoded guess. Unautomatable by design (asserts the absence of a file the milestone creates); enforced by task ordering and left to the critic | cf3e3d2 | — |
 
@@ -478,6 +489,34 @@ desktop → `{ left: 38, top: containerHeight - 38 - panelHeight, width: 262, he
 mobile → `{ left: 10, top: containerHeight - 10 - panelHeight, width: vw - 20, height: panelHeight }`
 (`left: 10` + `right: 10` + `width: "auto"` resolves to `vw - 20`).
 
+**ORCHESTRATOR AMENDMENT (build session 2026-07-29, at HEAD `acd7166`) — how B2 consumes
+B1's measurements.** The plan said B2's tests consume B1's committed `measured.json`
+(ledger #30) but did not say *how*, and all three obvious mechanisms are blocked in this
+repo. Measured this session:
+
+- `tsconfig.app.json` has no `resolveJsonModule`, so `import m from "….json"` fails `TS2732`.
+- `measured.json` lives in `docs/`, outside `tsconfig.app.json`'s `"include": ["src"]`, so
+  even with that flag the import escapes the project root.
+- `tsconfig.app.json` sets `"types": ["vite/client"]`. An explicit `types` array **excludes**
+  `@types/node` (it is installed, `^26.1.0`, but not visible here), so
+  `import { readFileSync } from "node:fs"` inside any `src/**/*.test.ts` fails to resolve —
+  and no existing test imports a node builtin, so there is no precedent to copy.
+
+**Binding resolution:** the B1 rig writes its measurements TWICE from the same run — the
+human-readable `docs/battle-prototypes/m7-clip/measured.json` the plan already requires,
+and a generated **TypeScript data module inside `src/battle/`** (e.g.
+`src/battle/__fixtures__/measuredLayout.ts`) exporting a typed array of
+`{ vw, vh, isMobile, containerHeight, panelHeight, canvasRect }`. B2's tests import the
+`.ts` module. Both files come from one rig run so they cannot diverge; add a file-header
+comment on the generated module naming the rig as its source and forbidding hand-edits.
+No `tsconfig` change, no new devDependency, no node-types import. A data-only module has no
+branches, so it cannot affect the 95% gate.
+
+Also verified this session so nobody re-derives it: `vitest.config.ts:7` already includes
+`src/battle/**/*.test.ts`, so `src/battle/layout.test.ts` is collected with **no config
+edit** (the ROADMAP's "new test directory is invisible" gotcha does not bite here), and
+`layout.ts` is matched by the coverage glob at `:12` exactly as ledger #10 claims.
+
 **Tests** in `src/battle/layout.test.ts`:
 
 1. **`stageMetrics` against an INDEPENDENT hand-computed oracle.** Dissect pass 1 flagged
@@ -661,7 +700,20 @@ The lens for this defect class is **already written** — the planning session a
 VIEWPORT-DEPENDENT...") to `~\.claude\skills\dissect\references\review-lenses.md`, since
 the class was caught during planning and the ratchet must not wait for the build.
 
-Your job is narrower: after B5/B6, re-read lens 127 against what actually happened and
+**ORCHESTRATOR AMENDMENT (2026-07-29, at the B4 gate): most of B7 is already done, and mind the
+numbering.** Two different lenses in that file are both numbered **127** (and 114 and 120 also
+collide — a pre-existing systemic issue in the file, flagged to the owner, deliberately NOT
+renumbered here because other plans cite these numbers). The one that matters is the **DOM-overlay-
+over-canvas** entry, not the per-unit-cost entry that shares its number. The orchestrator appended a
+measured REFINEMENT to it at this gate rather than deferring the ratchet to B7: severity is monotonic
+in `1/scale` so it is worst on the smallest viewport; the fix therefore belongs on the overlay rather
+than the art, provable up front by solving each art-side candidate for its clearing value and testing
+that against physical bounds; a candidate set must be feasibility-measured before it is offered as a
+decision, or it is a false choice; and a union-bbox invariant cannot say WHICH sprite is occluded, so
+it must be paired with a visual verdict. **B7's remaining job is genuinely narrow:** after B5/B6,
+check only whether the RULED FIX taught something none of that says.
+
+Your job is narrower: after B5/B6, re-read that lens against what actually happened and
 **refine it if the build taught you something it does not yet say** — in particular, if the
 ruled fix turned out to need per-slot rects rather than a whole-spread rect, or if the
 panel-height measurement behaved differently from how sub-check (c) describes. If the lens
