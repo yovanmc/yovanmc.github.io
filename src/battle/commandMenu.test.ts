@@ -8,9 +8,10 @@ import {
   menuReduce,
   type MenuState,
 } from "./commandMenu";
-import { commandsForKit } from "./abilities";
+import { ABILITY_ORDER, commandsForKit } from "./abilities";
 import { deriveKit } from "./engine";
 import { RUSH_ORDER } from "./rushOrder";
+import { SKILLS_IDS, SPELLS_IDS } from "./commandMenu";
 
 const EM_DASH = "\u2014";
 const EN_DASH = "\u2013";
@@ -229,6 +230,55 @@ describe("row cap guard: M8 tripwire (rule 5)", () => {
     const commands = commandsForKit(kit);
     for (const level of ["top", "skills", "spells"] as const) {
       expect(deriveMenuView(commands, level).rows.length).toBeLessThanOrEqual(4);
+    }
+  });
+});
+
+describe("partition completeness + full-kit reachability (coordinator gap, lens #127 shape)", () => {
+  // Rule 5's row-cap guard is an upper bound only (rows.length <= 4). Nothing
+  // elsewhere asserted that SKILLS_IDS union SPELLS_IDS union {"attack"}
+  // COVERS every id in ABILITY_ORDER. A 9th ability id landing in abilities.ts
+  // (M8 adds new bosses, and therefore new abilities) would show up in
+  // commandsForKit's output but match neither category constant, so it would
+  // render in NO menu level: silently unreachable to the player, with the
+  // rest of the suite still green. That is the same failure shape as this
+  // repo's lens #127 ("an invariant only guards the actors you named") and it
+  // defeats rule 5's stated intent of being the LOUD failure M8 hits.
+  it("every ABILITY_ORDER id is in exactly one of {attack} / SKILLS_IDS / SPELLS_IDS (no orphans, no phantoms)", () => {
+    for (const id of ABILITY_ORDER) {
+      const memberships = [id === "attack", SKILLS_IDS.includes(id), SPELLS_IDS.includes(id)];
+      const count = memberships.filter(Boolean).length;
+      expect(
+        count,
+        `ability id "${id}" belongs to ${count} of {attack, SKILLS_IDS, SPELLS_IDS}, expected exactly 1. ` +
+          `If this fires because a NEW ability id was just added to abilities.ts (M8), this is a categorization ` +
+          `decision for commandMenu.ts's SKILLS_IDS/SPELLS_IDS (or the row-cap guard in rule 5), not a test to relax.`,
+      ).toBe(1);
+    }
+    // Reverse direction: no category constant names an id that no longer
+    // exists in ABILITY_ORDER (a phantom left behind by a future removal).
+    for (const id of [...SKILLS_IDS, ...SPELLS_IDS]) {
+      expect(
+        ABILITY_ORDER.includes(id),
+        `commandMenu.ts's SKILLS_IDS/SPELLS_IDS names "${id}", which no longer exists in abilities.ts's ` +
+          `ABILITY_ORDER. Remove the stale id from the category constant, don't add it back to ABILITY_ORDER.`,
+      ).toBe(true);
+    }
+  });
+
+  it("every command in the full kit is reachable as an AbilityRow in exactly one menu level (acceptance criterion 1)", () => {
+    const topRows = deriveMenuView(FULL_KIT, "top").rows;
+    const skillsRows = deriveMenuView(FULL_KIT, "skills").rows;
+    const spellsRows = deriveMenuView(FULL_KIT, "spells").rows;
+    const idsIn = (rows: ReturnType<typeof deriveMenuView>["rows"]) =>
+      rows.filter((r) => r.kind === "ability").map((r) => r.cmd.id);
+    const byLevel = { top: idsIn(topRows), skills: idsIn(skillsRows), spells: idsIn(spellsRows) };
+    for (const cmd of FULL_KIT) {
+      const hits = (["top", "skills", "spells"] as const).filter((level) => byLevel[level].includes(cmd.id));
+      expect(
+        hits.length,
+        `"${cmd.id}" appeared as an ability row in ${hits.length} levels (${hits.join(", ") || "none"}), expected exactly 1.`,
+      ).toBe(1);
     }
   });
 });

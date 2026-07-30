@@ -15,8 +15,11 @@ export interface AbilityCommand {
   desc: string;
 }
 
-/** Fixed menu order; `commandsForKit` filters this down to the kit. */
-const ABILITY_ORDER: readonly AbilityId[] = ["attack", "ct", "pt", "debug", "fo", "rb", "rc", "conv"];
+/** Fixed menu order. `commandsForKit` filters this down to the kit. Exported
+ * for commandMenu.test.ts's partition-completeness guard (M12 plan PR-A Task
+ * A1 rule 5's row-cap upper bound has no coverage check of its own, this lets
+ * that test assert SKILLS_IDS/SPELLS_IDS/"attack" partition every id here). */
+export const ABILITY_ORDER: readonly AbilityId[] = ["attack", "ct", "pt", "debug", "fo", "rb", "rc", "conv"];
 
 const ABILITY_DEFS: Record<AbilityId, AbilityCommand> = {
   attack: { id: "attack", label: "Attack", mp: 0, needsTarget: true, desc: "12 dmg · +1 MP on hit" },
