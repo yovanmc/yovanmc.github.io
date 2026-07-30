@@ -125,3 +125,26 @@ export function commandPanelRect(vw: number, containerHeight: number, isMobile: 
 export function rectsIntersect(a: Rect, b: Rect): boolean {
   return a.left < b.left + b.width && a.left + a.width > b.left && a.top < b.top + b.height && a.top + a.height > b.top;
 }
+
+/** Max panel height (CSS px) that cannot intersect any actor rect, capped at
+ * MENU_PANEL_CEILING. Analytic inverse of the clip invariant: for each actor
+ * whose x-band overlaps the panel's x-band, the panel top must stay at or
+ * below the actor's bottom edge (rectsIntersect is strict, so touching is
+ * legal). M12 plan PR-A Task A2. */
+export const MENU_PANEL_CEILING = 320;
+export function panelMaxHeight(
+  vw: number,
+  containerHeight: number,
+  isMobile: boolean,
+  actors: Rect[],
+): number {
+  const probe = commandPanelRect(vw, containerHeight, isMobile, 1);
+  const bottomOffset = containerHeight - (probe.top + probe.height);
+  let max = MENU_PANEL_CEILING;
+  for (const a of actors) {
+    const xOverlap = a.left < probe.left + probe.width && probe.left < a.left + a.width;
+    if (!xOverlap) continue;
+    max = Math.min(max, containerHeight - bottomOffset - (a.top + a.height));
+  }
+  return Math.max(0, max);
+}

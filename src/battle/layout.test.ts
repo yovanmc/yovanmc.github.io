@@ -5,7 +5,16 @@
 // not matched by vitest.config.ts's `src/battle/**/*.ts` coverage globs,
 // ledger #10).
 import { describe, expect, it } from "vitest";
-import { cellRect, commandPanelRect, gridRect, paintedBounds, rectsIntersect, stageMetrics } from "./layout";
+import {
+  cellRect,
+  commandPanelRect,
+  gridRect,
+  MENU_PANEL_CEILING,
+  paintedBounds,
+  panelMaxHeight,
+  rectsIntersect,
+  stageMetrics,
+} from "./layout";
 import { MEASURED_LAYOUT } from "./__fixtures__/measuredLayout";
 import { IDLE, type Grid } from "../generated/heroBattle";
 import { HERO_AT } from "../generated/battlefieldScene";
@@ -224,6 +233,36 @@ describe("M7 clip invariant — leftmost clone AND hero vs COMMAND panel", () =>
       ).toBe(false);
     },
   );
+});
+
+describe("panelMaxHeight — unit cases (M12 plan PR-A Task A2, test 3)", () => {
+  // Desktop probe: commandPanelRect(vw, containerHeight, false, 1) -> left 38,
+  // width 262, top = containerHeight - 38 - 1. bottomOffset is always 38 on
+  // this arm regardless of panelHeight (the probe-then-subtract trick).
+  it("an actor entirely clear of the panel's x-band is ignored (ceiling wins)", () => {
+    // Panel x-band is [38, 300) at 1440x900 desktop. This actor sits to the
+    // right of it entirely (left 500), so it must not constrain the budget.
+    const clearActor = { left: 500, top: 0, width: 50, height: 900 };
+    expect(panelMaxHeight(1440, 900, false, [clearActor])).toBe(MENU_PANEL_CEILING);
+  });
+
+  it("an empty actor list returns the ceiling", () => {
+    expect(panelMaxHeight(1440, 900, false, [])).toBe(MENU_PANEL_CEILING);
+  });
+
+  it("result is never negative even when an actor overlaps the panel's whole x-band down to the floor", () => {
+    // Actor spans the full panel x-band and reaches all the way to the
+    // container's bottom edge — the tightest possible squeeze.
+    const floorActor = { left: 0, top: 0, width: 1440, height: 900 };
+    expect(panelMaxHeight(1440, 900, false, [floorActor])).toBe(0);
+  });
+
+  it("an overlapping actor above the panel constrains the budget below the ceiling", () => {
+    // Actor bottom edge at y=700, well above the container's bottom (900) —
+    // budget = containerHeight - bottomOffset(38) - actorBottom(700) = 162.
+    const actor = { left: 38, top: 650, width: 262, height: 50 };
+    expect(panelMaxHeight(1440, 900, false, [actor])).toBe(162);
+  });
 });
 
 describe("commandPanelRect", () => {
