@@ -991,6 +991,8 @@ export default function BattleScene(props: Props) {
                 letterSpacing: ".08em",
                 borderTop: "1px solid rgba(190,140,255,.14)",
                 marginTop: 4,
+                marginLeft: 8,
+                marginRight: 8,
                 flex: "0 0 auto",
               }}
             >
