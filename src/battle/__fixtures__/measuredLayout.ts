@@ -20,16 +20,16 @@ export interface MeasuredLayoutRow {
 }
 
 export const MEASURED_LAYOUT: readonly MeasuredLayoutRow[] = [
-  { vw: 1920, vh: 1080, isMobile: false, containerHeight: 1080, panelHeight: 362, canvasRect: {"left":320,"top":104.390625,"width":1280,"height":720} },
-  { vw: 1600, vh: 900, isMobile: false, containerHeight: 900, panelHeight: 362, canvasRect: {"left":224,"top":63,"width":1152,"height":648} },
-  { vw: 1440, vh: 900, isMobile: false, containerHeight: 900, panelHeight: 362, canvasRect: {"left":144,"top":63,"width":1152,"height":648} },
-  { vw: 1440, vh: 720, isMobile: false, containerHeight: 720, panelHeight: 362, canvasRect: {"left":272,"top":57.59375,"width":896,"height":504} },
-  { vw: 1280, vh: 800, isMobile: false, containerHeight: 800, panelHeight: 362, canvasRect: {"left":128,"top":56,"width":1024,"height":576} },
-  { vw: 1280, vh: 620, isMobile: false, containerHeight: 620, panelHeight: 362, canvasRect: {"left":256,"top":50.59375,"width":768,"height":432} },
-  { vw: 1024, vh: 768, isMobile: false, containerHeight: 768, panelHeight: 362, canvasRect: {"left":64,"top":78.234375,"width":896,"height":504} },
-  { vw: 800, vh: 600, isMobile: false, containerHeight: 600, panelHeight: 362, canvasRect: {"left":16,"top":42,"width":768,"height":432} },
-  { vw: 759, vh: 900, isMobile: true, containerHeight: 900, panelHeight: 362, canvasRect: {"left":0,"top":151.375,"width":759,"height":426.9375} },
-  { vw: 430, vh: 932, isMobile: true, containerHeight: 932, panelHeight: 362, canvasRect: {"left":0,"top":220.828125,"width":430,"height":241.875} },
-  { vw: 390, vh: 844, isMobile: true, containerHeight: 844, panelHeight: 362, canvasRect: {"left":0,"top":199.875,"width":390,"height":219.375} },
-  { vw: 360, vh: 640, isMobile: true, containerHeight: 640, panelHeight: 362, canvasRect: {"left":0,"top":140,"width":360,"height":202.5} },
+  { vw: 1920, vh: 1080, isMobile: false, containerHeight: 1080, panelHeight: 150, canvasRect: {"left":320,"top":104.390625,"width":1280,"height":720} },
+  { vw: 1600, vh: 900, isMobile: false, containerHeight: 900, panelHeight: 150, canvasRect: {"left":224,"top":63,"width":1152,"height":648} },
+  { vw: 1440, vh: 900, isMobile: false, containerHeight: 900, panelHeight: 150, canvasRect: {"left":144,"top":63,"width":1152,"height":648} },
+  { vw: 1440, vh: 720, isMobile: false, containerHeight: 720, panelHeight: 150, canvasRect: {"left":272,"top":57.59375,"width":896,"height":504} },
+  { vw: 1280, vh: 800, isMobile: false, containerHeight: 800, panelHeight: 150, canvasRect: {"left":128,"top":56,"width":1024,"height":576} },
+  { vw: 1280, vh: 620, isMobile: false, containerHeight: 620, panelHeight: 150, canvasRect: {"left":256,"top":50.59375,"width":768,"height":432} },
+  { vw: 1024, vh: 768, isMobile: false, containerHeight: 768, panelHeight: 150, canvasRect: {"left":64,"top":78.234375,"width":896,"height":504} },
+  { vw: 800, vh: 600, isMobile: false, containerHeight: 600, panelHeight: 150, canvasRect: {"left":16,"top":42,"width":768,"height":432} },
+  { vw: 759, vh: 900, isMobile: true, containerHeight: 900, panelHeight: 150, canvasRect: {"left":0,"top":151.375,"width":759,"height":426.9375} },
+  { vw: 430, vh: 932, isMobile: true, containerHeight: 932, panelHeight: 150, canvasRect: {"left":0,"top":220.828125,"width":430,"height":241.875} },
+  { vw: 390, vh: 844, isMobile: true, containerHeight: 844, panelHeight: 150, canvasRect: {"left":0,"top":199.875,"width":390,"height":219.375} },
+  { vw: 360, vh: 640, isMobile: true, containerHeight: 640, panelHeight: 150, canvasRect: {"left":0,"top":140,"width":360,"height":202.5} },
 ];

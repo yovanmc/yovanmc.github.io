@@ -191,6 +191,16 @@ export default function BattleScene(props: Props) {
   const stateRef = useRef({ mode, cmdIdx, cursorBat, state, shown, commands });
   stateRef.current = { mode, cmdIdx, cursorBat, state, shown, commands };
 
+  // M7 PR-B task B5: the COMMAND panel is now height-clamped and its ability
+  // list scrolls (see the `data-cmd-panel` block below), so the arrow-key
+  // cursor (`cmdIdx`, wrapping via `(i + dir + len) % len` above) can move
+  // outside the visible scroll area. Keep the active row in view on every
+  // cursor move, including the wrap.
+  const activeRowRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    activeRowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [cmdIdx]);
+
   // ---- geometry: contain-fit desktop, width-fit mobile (plan §Architecture 3) ----
   // M7 PR-B task B3: verbatim-ported into src/battle/layout.ts (a pure,
   // covered module — this .tsx file is not matched by the coverage globs).
@@ -882,25 +892,59 @@ export default function BattleScene(props: Props) {
 
       {/* command menu */}
       {(mode === "menu" || mode === "target") && (
-        <div data-cmd-panel style={{ ...panel, position: "absolute", left: isMobile ? 10 : 38, bottom: isMobile ? 10 : 38, width: isMobile ? "auto" : 262, right: isMobile ? 10 : "auto", zIndex: 11, overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "11px 14px", borderBottom: "1px solid rgba(190,140,255,.2)", background: "linear-gradient(90deg, rgba(150,80,255,.14), transparent)" }}>
+        <div
+          data-cmd-panel
+          style={{
+            ...panel,
+            position: "absolute",
+            left: isMobile ? 10 : 38,
+            bottom: isMobile ? 10 : 38,
+            width: isMobile ? "auto" : 262,
+            right: isMobile ? 10 : "auto",
+            zIndex: 11,
+            overflow: "hidden",
+            // M7 PR-B task B5 (owner-ruled Option C): the panel's UNCLAMPED
+            // content (362px measured pre-fix) clips the leftmost clone's
+            // foot at every swept viewport, worst at 800x600 where 151px is
+            // the binding threshold. A flat 150 clears every viewport
+            // (provable, not responsive) — see layout.test.ts's re-enabled
+            // invariant. The ability list scrolls inside; header/footer stay
+            // pinned via the flex children below.
+            maxHeight: 150,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              padding: "11px 14px",
+              borderBottom: "1px solid rgba(190,140,255,.2)",
+              background: "linear-gradient(90deg, rgba(150,80,255,.14), transparent)",
+              flex: "0 0 auto",
+            }}
+          >
             <span style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".3em", color: "#c9a4ff" }}>
               {mode === "target" ? "TARGET" : "COMMAND"}
             </span>
             <span style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".14em", color: "#8a7ba8" }}>TURN {state.turn}</span>
           </div>
-          <div style={{ padding: "8px" }}>
-            {mode === "target" ? (
+          {mode === "target" ? (
+            <div style={{ padding: "8px" }}>
               <div style={{ padding: "8px 10px", fontFamily: MONO, fontSize: "12px", color: "#d8ccf0", lineHeight: 1.6 }}>
                 {isMobile ? "Tap the swarm to cycle · " : "←→ cycle · "}⏎ confirm · ESC back
               </div>
-            ) : (
-              commands.map((c, i) => {
+            </div>
+          ) : (
+            <div style={{ padding: "8px", overflowY: "auto", flex: "1 1 auto", minHeight: 0 }}>
+              {commands.map((c, i) => {
                 const active = i === cmdIdx;
                 const afford = state.hero.mp >= c.mp;
                 return (
                   <div
                     key={c.id}
+                    ref={active ? activeRowRef : undefined}
                     role="button"
                     onClick={() => {
                       if (mode !== "menu" || descend) return;
@@ -934,14 +978,25 @@ export default function BattleScene(props: Props) {
                     </span>
                   </div>
                 );
-              })
-            )}
-            {mode === "menu" && (
-              <div style={{ padding: "7px 12px 3px", fontFamily: MONO, fontSize: "10px", color: "#8a7ba8", letterSpacing: ".08em", borderTop: "1px solid rgba(190,140,255,.14)", marginTop: 4 }}>
-                {commands[cmdIdx].desc}
-              </div>
-            )}
-          </div>
+              })}
+            </div>
+          )}
+          {mode === "menu" && (
+            <div
+              style={{
+                padding: "7px 12px 3px",
+                fontFamily: MONO,
+                fontSize: "10px",
+                color: "#8a7ba8",
+                letterSpacing: ".08em",
+                borderTop: "1px solid rgba(190,140,255,.14)",
+                marginTop: 4,
+                flex: "0 0 auto",
+              }}
+            >
+              {commands[cmdIdx].desc}
+            </div>
+          )}
         </div>
       )}
 

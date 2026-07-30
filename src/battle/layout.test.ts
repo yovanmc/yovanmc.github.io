@@ -7,7 +7,8 @@
 import { describe, expect, it } from "vitest";
 import { cellRect, commandPanelRect, gridRect, paintedBounds, rectsIntersect, stageMetrics } from "./layout";
 import { MEASURED_LAYOUT } from "./__fixtures__/measuredLayout";
-import type { Grid } from "../generated/heroBattle";
+import { IDLE, type Grid } from "../generated/heroBattle";
+import { HERO_AT } from "../generated/battlefieldScene";
 import { spawnImposter, type ImposterBoss } from "./bosses/imposter";
 import { imposterScene } from "./scenes/imposter";
 
@@ -155,31 +156,42 @@ describe("rectsIntersect", () => {
   });
 });
 
-describe("M7 clip invariant — leftmost clone vs COMMAND panel", () => {
+describe("M7 clip invariant — leftmost clone AND hero vs COMMAND panel", () => {
   // Task B2 test 4, the red step: for every sweep viewport, the leftmost
   // clone's painted rect must not intersect the COMMAND panel rect. Derived
   // through the REAL public seams (stampOrigin/composeBoss), never
   // hardcoded numbers, so a fix in either candidate direction (B4) is
-  // picked up automatically. Currently fails at 5 of the 12 swept
-  // viewports (see commit body for the exact failure table) — that
-  // failure IS the defect this milestone exists to fix. Skipped after
-  // being observed failing; re-enabled in task B5.
+  // picked up automatically.
   //
-  // it.skip.each (not one it.skip looping all 12 rows): B5's plan text
-  // requires reporting per-viewport numbers if a ruled fix can't clear
-  // every viewport, and a single test with an internal loop only ever
-  // reports the FIRST failing row per run (the assertion throws and stops
-  // the loop) — five iterations to see all five failures. it.each gives
-  // one row per viewport in one run.
+  // Task B5 (owner-ruled Option C, flat `maxHeight: 150` on the COMMAND
+  // panel): the invariant below was skipped after B2 observed it failing,
+  // and is now re-enabled (parameterized `it`, one case per row) now that
+  // `measured.json`/`measuredLayout.ts` have been regenerated post-fix
+  // (panelHeight 150 at every viewport, was 362). Passes at all 12 swept
+  // viewports — see the builder report for the full table.
   //
-  // boss/stampOrigin/grid are viewport-independent (CLONES-phase
-  // composition doesn't vary by viewport), so they're computed once here
-  // rather than per-row — still through the same real public seams.
+  // Also guards the PLAYER hero (dispatch follow-up to the original plan:
+  // the visual judge at the B4 gate found the panel clips the hero's legs
+  // at 360x640 too, not just the clones). `IDLE[0]` is the same real public
+  // seam BattleScene.tsx itself reads for the hero's idle pose
+  // (`IDLE[flutter]`, BattleScene.tsx `heroBase`), stamped at the real
+  // `HERO_AT` anchor — never a hardcoded rect.
+  //
+  // A parameterized case per row (not one test looping all 12 rows): a
+  // single test with an internal loop only ever reports the FIRST failing
+  // row per run (the assertion throws and stops the loop). A row-per-case
+  // run reports every failing viewport at once, not just the first.
+  //
+  // boss/stampOrigin/grid/heroGrid are viewport-independent (CLONES-phase
+  // composition and the hero's idle pose don't vary by viewport), so
+  // they're computed once here rather than per-row — still through the
+  // same real public seams.
   const boss = fresh({ phase: "clones" });
   const [r0, c0] = imposterScene.stampOrigin!(boss);
   const grid = imposterScene.composeBoss(boss, false, 0, {});
+  const heroGrid: Grid = IDLE[0];
 
-  it.skip.each(MEASURED_LAYOUT)(
+  it.each(MEASURED_LAYOUT)(
     "$vw x $vh — leftmost clone does not overlap the COMMAND panel",
     (row) => {
       const m = stageMetrics(row.vw, row.vh, row.isMobile);
@@ -193,6 +205,21 @@ describe("M7 clip invariant — leftmost clone vs COMMAND panel", () => {
       const overlapY = Math.min(clone.top + clone.height, panel.top + panel.height) - Math.max(clone.top, panel.top);
       expect(
         rectsIntersect(clone, panel),
+        `${row.vw}x${row.vh}: overlap x=${overlapX.toFixed(2)}px y=${overlapY.toFixed(2)}px (negative = clear on that axis)`,
+      ).toBe(false);
+    },
+  );
+
+  it.each(MEASURED_LAYOUT)(
+    "$vw x $vh — hero does not overlap the COMMAND panel",
+    (row) => {
+      const m = stageMetrics(row.vw, row.vh, row.isMobile);
+      const hero = gridRect(m, HERO_AT[0], HERO_AT[1], heroGrid)!;
+      const panel = commandPanelRect(row.vw, row.containerHeight, row.isMobile, row.panelHeight);
+      const overlapX = Math.min(hero.left + hero.width, panel.left + panel.width) - Math.max(hero.left, panel.left);
+      const overlapY = Math.min(hero.top + hero.height, panel.top + panel.height) - Math.max(hero.top, panel.top);
+      expect(
+        rectsIntersect(hero, panel),
         `${row.vw}x${row.vh}: overlap x=${overlapX.toFixed(2)}px y=${overlapY.toFixed(2)}px (negative = clear on that axis)`,
       ).toBe(false);
     },

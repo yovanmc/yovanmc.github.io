@@ -27,18 +27,18 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 680,
+      "top": 892,
       "width": 262,
-      "height": 362
+      "height": 150
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 680,
+      "top": 892,
       "width": 262,
-      "height": 362
+      "height": 150
     },
-    "panelHeight": 362,
-    "png": "before/1920x1080.png"
+    "panelHeight": 150,
+    "png": "after/1920x1080.png"
   },
   {
     "vw": 1600,
@@ -68,18 +68,18 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 500,
+      "top": 712,
       "width": 262,
-      "height": 362
+      "height": 150
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 500,
+      "top": 712,
       "width": 262,
-      "height": 362
+      "height": 150
     },
-    "panelHeight": 362,
-    "png": "before/1600x900.png"
+    "panelHeight": 150,
+    "png": "after/1600x900.png"
   },
   {
     "vw": 1440,
@@ -109,18 +109,18 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 500,
+      "top": 712,
       "width": 262,
-      "height": 362
+      "height": 150
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 500,
+      "top": 712,
       "width": 262,
-      "height": 362
+      "height": 150
     },
-    "panelHeight": 362,
-    "png": "before/1440x900.png"
+    "panelHeight": 150,
+    "png": "after/1440x900.png"
   },
   {
     "vw": 1440,
@@ -150,18 +150,18 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 320,
+      "top": 532,
       "width": 262,
-      "height": 362
+      "height": 150
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 320,
+      "top": 532,
       "width": 262,
-      "height": 362
+      "height": 150
     },
-    "panelHeight": 362,
-    "png": "before/1440x720.png"
+    "panelHeight": 150,
+    "png": "after/1440x720.png"
   },
   {
     "vw": 1280,
@@ -191,18 +191,18 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 400,
+      "top": 612,
       "width": 262,
-      "height": 362
+      "height": 150
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 400,
+      "top": 612,
       "width": 262,
-      "height": 362
+      "height": 150
     },
-    "panelHeight": 362,
-    "png": "before/1280x800.png"
+    "panelHeight": 150,
+    "png": "after/1280x800.png"
   },
   {
     "vw": 1280,
@@ -232,18 +232,18 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 220,
+      "top": 432,
       "width": 262,
-      "height": 362
+      "height": 150
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 220,
+      "top": 432,
       "width": 262,
-      "height": 362
+      "height": 150
     },
-    "panelHeight": 362,
-    "png": "before/1280x620.png"
+    "panelHeight": 150,
+    "png": "after/1280x620.png"
   },
   {
     "vw": 1024,
@@ -273,18 +273,18 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 368,
+      "top": 580,
       "width": 262,
-      "height": 362
+      "height": 150
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 368,
+      "top": 580,
       "width": 262,
-      "height": 362
+      "height": 150
     },
-    "panelHeight": 362,
-    "png": "before/1024x768.png"
+    "panelHeight": 150,
+    "png": "after/1024x768.png"
   },
   {
     "vw": 800,
@@ -314,18 +314,18 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 200,
+      "top": 412,
       "width": 262,
-      "height": 362
+      "height": 150
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 200,
+      "top": 412,
       "width": 262,
-      "height": 362
+      "height": 150
     },
-    "panelHeight": 362,
-    "png": "before/800x600.png"
+    "panelHeight": 150,
+    "png": "after/800x600.png"
   },
   {
     "vw": 759,
@@ -355,18 +355,18 @@
     },
     "panelRect": {
       "left": 10,
-      "top": 528,
+      "top": 740,
       "width": 739,
-      "height": 362
+      "height": 150
     },
     "panelRectContainerRelative": {
       "left": 10,
-      "top": 528,
+      "top": 740,
       "width": 739,
-      "height": 362
+      "height": 150
     },
-    "panelHeight": 362,
-    "png": "before/759x900.png"
+    "panelHeight": 150,
+    "png": "after/759x900.png"
   },
   {
     "vw": 430,
@@ -396,18 +396,18 @@
     },
     "panelRect": {
       "left": 10,
-      "top": 560,
+      "top": 772,
       "width": 410,
-      "height": 362
+      "height": 150
     },
     "panelRectContainerRelative": {
       "left": 10,
-      "top": 560,
+      "top": 772,
       "width": 410,
-      "height": 362
+      "height": 150
     },
-    "panelHeight": 362,
-    "png": "before/430x932.png"
+    "panelHeight": 150,
+    "png": "after/430x932.png"
   },
   {
     "vw": 390,
@@ -437,18 +437,18 @@
     },
     "panelRect": {
       "left": 10,
-      "top": 472,
+      "top": 684,
       "width": 370,
-      "height": 362
+      "height": 150
     },
     "panelRectContainerRelative": {
       "left": 10,
-      "top": 472,
+      "top": 684,
       "width": 370,
-      "height": 362
+      "height": 150
     },
-    "panelHeight": 362,
-    "png": "before/390x844.png"
+    "panelHeight": 150,
+    "png": "after/390x844.png"
   },
   {
     "vw": 360,
@@ -478,17 +478,17 @@
     },
     "panelRect": {
       "left": 10,
-      "top": 268,
+      "top": 480,
       "width": 340,
-      "height": 362
+      "height": 150
     },
     "panelRectContainerRelative": {
       "left": 10,
-      "top": 268,
+      "top": 480,
       "width": 340,
-      "height": 362
+      "height": 150
     },
-    "panelHeight": 362,
-    "png": "before/360x640.png"
+    "panelHeight": 150,
+    "png": "after/360x640.png"
   }
 ]
