@@ -7,6 +7,22 @@ step-by-step detail always lives in the linked plan docs under
 `docs/superpowers/plans/`; this file is the middle layer between the one-line
 table and the full plan.
 
+## M5 — Battle engine + the Alert Storm fight (PRs #19 #20 #21, merged)
+
+Plan: `docs/superpowers/specs/2026-07-28-be1-battle-engine-plan.md`
+
+Owner-ordered 2026-07-28; pierced the post-S3 freeze and superseded S5's
+placeholder-engine scope entirely. Three PRs: **A** a pure TDD'd turn-discrete
+reducer plus the vitest suite every later battle milestone is gated on (≥95%
+branch coverage, config kept in `vitest.config.ts` — a `test:` key in
+`vite.config.ts` fails `tsc -b`); **B** the lazy-loaded battle scene composed from
+the M1–M2 lab primitives, behind a FIGHT command; **C** the dive rerouted to land
+in the fight. The renderer decision recorded there — DOM/canvas composition on the
+M3 extraction pipeline rather than a canvas-vs-PixiJS spike — still binds, and that
+spike stays cancelled. Archived from the main table 2026-07-30 during the M7
+hygiene pass; the coverage gate, the `defeatedBosses` progression surface, and the
+canon extraction pipeline all survive as durable constraints in `ROADMAP.md`.
+
 ## M1–M2 — Battlefield system + Dive to the Heart design (PRs #12–#14, merged)
 
 Backlog: `docs/superpowers/specs/2026-07-25-milestones-backlog.md`
