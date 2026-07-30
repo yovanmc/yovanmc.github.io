@@ -15,11 +15,17 @@ import {
   rectsIntersect,
   stageMetrics,
 } from "./layout";
+import { menuPanelMaxHeight } from "./panelBudget";
 import { MEASURED_LAYOUT } from "./__fixtures__/measuredLayout";
 import { IDLE, type Grid } from "../generated/heroBattle";
-import { HERO_AT } from "../generated/battlefieldScene";
+import { BOSS_AT, HERO_AT } from "../generated/battlefieldScene";
 import { spawnImposter, type ImposterBoss } from "./bosses/imposter";
+import { spawnAlertStorm } from "./bosses/alertStorm";
+import { spawnCascade } from "./bosses/cascade";
+import { spawnSilentFailure } from "./bosses/silentFailure";
 import { imposterScene } from "./scenes/imposter";
+import { sceneFor } from "./scenes/index";
+import type { BossState } from "./engine";
 
 const identityDraw = (r: number) => r;
 
@@ -273,4 +279,66 @@ describe("commandPanelRect", () => {
   it("mobile arm: left 10, width vw-20 (right:10 + width:auto), top derived the same way", () => {
     expect(commandPanelRect(390, 844, true, 220)).toEqual({ left: 10, top: 844 - 10 - 220, width: 390 - 20, height: 220 });
   });
+});
+
+// M12 plan PR-B task B2 (docs/superpowers/specs/2026-07-30-m12-command-menu-plan.md).
+// The generated fixture now carries a per-level `levels.{top,skills,spells}`
+// breakdown (walked across every cursor position within each level, max kept
+// — owner-ruled amendment, 2026-07-30 build session: panel height is
+// cursor-dependent since the footer renders the active row's description and
+// long ones wrap a second line).
+describe("B2 item 4: rendered cap honored (per row, MEASURED_LAYOUT)", () => {
+  // ±0.5 for the known 1/64-px browser snap (same tolerance layout.ts's own
+  // doc comment and the M7 stageMetrics DOM cross-check use).
+  it.each(MEASURED_LAYOUT)("$vw x $vh — panelHeight (max over levels) <= menuPanelMaxHeight + 0.5", (row) => {
+    const budget = menuPanelMaxHeight(row.vw, row.vh, row.containerHeight, row.isMobile);
+    expect(row.panelHeight, `${row.vw}x${row.vh}: panelHeight=${row.panelHeight} budget=${budget}`).toBeLessThanOrEqual(
+      budget + 0.5,
+    );
+  });
+});
+
+describe("B2 item 4: scroll acceptance (ruling 3 AS AMENDED, 2026-07-30)", () => {
+  // Both directions are load-bearing (plan's explicit instruction): the
+  // "nothing else scrolls anywhere" half is what would catch a compaction
+  // regression leaking scroll onto a real viewport, so this is NOT weakened
+  // to a one-directional check.
+  it("the scrollable set is EXACTLY {(800x600,top), (800x600,skills), (800x600,spells)}", () => {
+    const actual = new Set<string>();
+    for (const row of MEASURED_LAYOUT) {
+      for (const level of ["top", "skills", "spells"] as const) {
+        if (row.levels[level].scrollable) actual.add(`${row.vw}x${row.vh}/${level}`);
+      }
+    }
+    const expected = new Set(["800x600/top", "800x600/skills", "800x600/spells"]);
+    expect([...actual].sort()).toEqual([...expected].sort());
+  });
+});
+
+describe("B2 item 4: per-boss clip invariant (lens-#127 institutionalized)", () => {
+  // Independently re-derived here (not imported from panelBudget.ts's own
+  // WORST_BOSSES), same idiom as panelBudget.test.ts's ALL_ACTORS — the test
+  // proves the fixture's panelHeight against the SAME real public seams
+  // panelBudget.ts uses, rather than trusting its internals.
+  const ALL_ACTORS: { label: string; boss: BossState }[] = [
+    { label: "alertStorm", boss: spawnAlertStorm(0, identityDraw).boss },
+    { label: "cascade", boss: spawnCascade() },
+    { label: "silentFailure", boss: spawnSilentFailure() },
+    { label: "imposter (clones)", boss: { ...spawnImposter(0, identityDraw).boss, phase: "clones" } as ImposterBoss },
+  ];
+
+  for (const { label, boss } of ALL_ACTORS) {
+    it.each(MEASURED_LAYOUT)(`$vw x $vh — ${label} does not overlap the COMMAND panel (fixture panelHeight)`, (row) => {
+      const m = stageMetrics(row.vw, row.vh, row.isMobile);
+      const scene = sceneFor(boss.kind);
+      const grid = scene.composeBoss(boss, false, 0, {});
+      const [r0, c0] = scene.stampOrigin?.(boss) ?? BOSS_AT;
+      const actorRect = gridRect(m, r0, c0, grid)!;
+      const panel = commandPanelRect(row.vw, row.containerHeight, row.isMobile, row.panelHeight);
+      expect(
+        rectsIntersect(actorRect, panel),
+        `${row.vw}x${row.vh}: ${label} overlaps the COMMAND panel at fixture panelHeight=${row.panelHeight}`,
+      ).toBe(false);
+    });
+  }
 });

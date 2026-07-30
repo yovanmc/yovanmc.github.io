@@ -1,5 +1,13 @@
 // M7 PR-B task B1 — CDP-over-headless-Edge measurement + capture rig
 // (docs/superpowers/specs/2026-07-29-m7-imposter-polish-plan.md, task B1).
+// Extended by M12 PR-B task B2
+// (docs/superpowers/specs/2026-07-30-m12-command-menu-plan.md) to measure
+// all three command-menu levels (top/skills/spells), walking every cursor
+// position within each level and keeping the max panel height per level
+// (owner-ruled amendment, 2026-07-30 build session: panel height is
+// cursor-dependent — the footer renders the active row's description, and a
+// long one wraps to a second line, so the landing cursor alone reports a
+// best case, not the worst case a player can actually hit).
 //
 // Why CDP, not the Browser pane, not `msedge --screenshot` (all recorded in
 // ROADMAP gotchas at planning time):
@@ -14,6 +22,13 @@
 //   - The battle is a single <canvas>, so pixels are the only visual
 //     evidence available for the B3 identical-port proof and the B4/B6
 //     owner review.
+//
+// CDP key-name note (M12 build session, 2026-07-30): always dispatch the
+// full key name ("ArrowDown"/"Enter"/"Escape"), never a short form like
+// "Down"/"Return" — short forms were observed to produce an EMPTY `e.key` on
+// this machine when replayed through some automation surfaces, silently
+// dropping the keystroke. This rig has always used full names (below); this
+// note exists so the next person doesn't lose time rediscovering it.
 //
 // Node-version note: this machine runs Node 20.13.1, where the global
 // WebSocket is undefined unless `--experimental-websocket` is passed; CI
@@ -64,6 +79,14 @@ const VIEWPORTS = [
   { vw: 390, vh: 844 },
   { vw: 360, vh: 640 },
 ];
+
+// M12 plan PR-B task B2: fixed row counts for the full 8-ability kit (the
+// boot URL below unlocks all of them). top = Attack/Skills/Spells (always
+// 3); skills = Critical Thinking/Power Through/Debug (3); spells = Fan
+// Out/Rollback/Root Cause/Conviction (4). If a future kit change makes this
+// wrong, the rig's own data-cmd-level mismatch check (below) fails loudly
+// rather than silently walking the wrong number of rows.
+const LEVEL_ROW_COUNTS = { top: 3, skills: 3, spells: 4 };
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -222,12 +245,12 @@ class CdpClient {
   }
 }
 
-/** Runs in-page via Runtime.evaluate. Returns viewport-relative and
- * container-relative rects, plus the raw signals the plan's B1 step 3
- * requires (window dims, mobile-chrome tell). `[data-cmd-panel]` is the
- * test-only attribute this task adds to BattleScene.tsx:880 for exactly
- * this selection (noted in the B1 commit). */
-const MEASURE_EXPR = `
+/** Base geometry snapshot: viewport-relative and container-relative rects,
+ * plus the raw signals the plan's B1 step 3 requires (window dims, mobile-
+ * chrome tell). Independent of command-menu state — the canvas never moves
+ * when the menu navigates. `[data-cmd-panel]` / `[data-cmd-level]` are the
+ * test-only attributes BattleScene.tsx carries for exactly this selection. */
+const BASE_MEASURE_EXPR = `
 (() => {
   const rectOf = (el) => {
     const r = el.getBoundingClientRect();
@@ -264,6 +287,91 @@ const MEASURE_EXPR = `
 })()
 `;
 
+/** M12 plan PR-B task B2: per-cursor level measurement. `panel.children[1]`
+ * is the scrollable row container in menu mode (children[0] = header,
+ * children[1] = row container, children[2] = footer when present) — a
+ * positional selector, safe here because this rig only ever measures menu
+ * mode (never target mode, which has a different children[1] shape). Also
+ * asserts `data-cmd-level` matches what the rig expects to be showing, per
+ * the plan's "fail loudly on mismatch" instruction — a silent wrong-level
+ * read is this rig's own failure mode, not a fixture-update chore. */
+const LEVEL_MEASURE_EXPR = `
+(() => {
+  const panel = document.querySelector('[data-cmd-panel]');
+  if (!panel) return { error: 'no panel' };
+  const level = panel.getAttribute('data-cmd-level');
+  const body = panel.children[1];
+  const panelHeight = panel.getBoundingClientRect().height;
+  const bodyScrollHeight = body ? body.scrollHeight : null;
+  const bodyClientHeight = body ? body.clientHeight : null;
+  return { level, panelHeight, bodyScrollHeight, bodyClientHeight };
+})()
+`;
+
+async function dispatchKey(client, type, key, code, keyCode) {
+  await client.send("Input.dispatchKeyEvent", {
+    type,
+    key,
+    code,
+    windowsVirtualKeyCode: keyCode,
+    nativeVirtualKeyCode: keyCode,
+  });
+}
+
+/** rawKeyDown + keyUp for a named key. ALWAYS pass the full key name
+ * ("ArrowDown", never "Down") — see the CDP key-name note at the top of
+ * this file. */
+async function pressKey(client, key, code, keyCode) {
+  await dispatchKey(client, "rawKeyDown", key, code, keyCode);
+  await dispatchKey(client, "keyUp", key, code, keyCode);
+  await sleep(60);
+}
+
+const KEY_CODES = {
+  ArrowDown: ["ArrowDown", 40],
+  ArrowUp: ["ArrowUp", 38],
+  ArrowLeft: ["ArrowLeft", 37],
+  ArrowRight: ["ArrowRight", 39],
+  Enter: ["Enter", 13],
+  Escape: ["Escape", 27],
+};
+async function press(client, name) {
+  const [code, kc] = KEY_CODES[name];
+  await pressKey(client, name, code, kc);
+}
+
+async function evalOn(client, expr) {
+  const res = await client.send("Runtime.evaluate", { expression: expr, returnByValue: true });
+  return res.result.value;
+}
+
+/** Walk every row of the CURRENTLY SHOWING level (cursor already at row 0),
+ * pressing ArrowDown between measurements, and return the max panelHeight
+ * plus whether any row was scrollable (M12 plan PR-B task B2, owner-ruled
+ * amendment: panel height is cursor-dependent because the footer renders
+ * the active row's description and long ones wrap, so only walking every
+ * row and keeping the max reports the true worst case). */
+async function walkLevel(client, expectedLevel, rowCount) {
+  let maxPanelHeight = -Infinity;
+  let scrollable = false;
+  for (let i = 0; i < rowCount; i++) {
+    const m = await evalOn(client, LEVEL_MEASURE_EXPR);
+    if (m.error) throw new Error(`level measurement failed at row ${i}: ${m.error}`);
+    if (m.level !== expectedLevel) {
+      throw new Error(
+        `rig walked to row ${i} expecting level "${expectedLevel}" but data-cmd-level reads "${m.level}" — ` +
+          `silent wrong-level measurement, failing loudly per the B2 plan rather than recording a bogus number`,
+      );
+    }
+    if (m.panelHeight > maxPanelHeight) maxPanelHeight = m.panelHeight;
+    if (m.bodyScrollHeight !== null && m.bodyClientHeight !== null && m.bodyScrollHeight > m.bodyClientHeight + 0.5) {
+      scrollable = true;
+    }
+    if (i < rowCount - 1) await press(client, "ArrowDown");
+  }
+  return { panelHeight: maxPanelHeight, scrollable };
+}
+
 async function main() {
   console.log(`measure-battle-layout: capture label = ${CAPTURE_LABEL}`);
   mkdirSync(FRAMES_DIR, { recursive: true });
@@ -291,7 +399,10 @@ async function main() {
     await client.send("Page.enable");
     await client.send("Runtime.enable");
 
-    const url = `http://localhost:${devPort}/?phase=battle&boss=imposter-syndrome&defeated=alert-storm,cascade,silent-failure`;
+    // M12 plan PR-B task B2 item 1: full rush so all 8 abilities exist.
+    const url =
+      `http://localhost:${devPort}/?phase=battle&boss=imposter-syndrome` +
+      `&defeated=alert-storm,cascade,silent-failure,imposter-syndrome`;
 
     for (const { vw, vh } of VIEWPORTS) {
       await client.send("Emulation.setDeviceMetricsOverride", {
@@ -308,45 +419,70 @@ async function main() {
       // finish before measuring/capturing.
       await sleep(1400);
 
-      const evalResult = await client.send("Runtime.evaluate", {
-        expression: MEASURE_EXPR,
-        returnByValue: true,
-      });
-      const m = evalResult.result.value;
-      if (m.error) {
+      // ---- base geometry (container/canvas/panel rects at TOP, cursor 0) ----
+      const base = await evalOn(client, BASE_MEASURE_EXPR);
+      if (base.error) {
         throw new Error(
-          `measurement failed at ${vw}x${vh}: ${m.error} (hasContainer=${m.hasContainer} hasCanvas=${m.hasCanvas} hasPanel=${m.hasPanel})`,
+          `measurement failed at ${vw}x${vh}: ${base.error} (hasContainer=${base.hasContainer} hasCanvas=${base.hasCanvas} hasPanel=${base.hasPanel})`,
         );
       }
 
-      const shot = await client.send("Page.captureScreenshot", { format: "png" });
       const label = `${vw}x${vh}`;
-      const pngPath = resolve(FRAMES_DIR, `${label}.png`);
-      writeFileSync(pngPath, Buffer.from(shot.data, "base64"));
+      const shot0 = await client.send("Page.captureScreenshot", { format: "png" });
+      writeFileSync(resolve(FRAMES_DIR, `${label}.png`), Buffer.from(shot0.data, "base64"));
+
+      // ---- M12 plan PR-B task B2 items 2/2-amendment: walk every level ----
+      // TOP: already showing, cursor at row 0 (fresh mount).
+      const top = await walkLevel(client, "top", LEVEL_ROW_COUNTS.top);
+      // TOP's cursor is now on its last row (Spells, index 2) after the walk.
+      const shotTop = await client.send("Page.captureScreenshot", { format: "png" });
+      writeFileSync(resolve(FRAMES_DIR, `${label}-top.png`), Buffer.from(shotTop.data, "base64"));
+
+      // Descend into Skills: move cursor from Spells(2) to Skills(1), Enter.
+      await press(client, "ArrowUp");
+      await press(client, "Enter");
+      const skills = await walkLevel(client, "skills", LEVEL_ROW_COUNTS.skills);
+      const shotSkills = await client.send("Page.captureScreenshot", { format: "png" });
+      writeFileSync(resolve(FRAMES_DIR, `${label}-skills.png`), Buffer.from(shotSkills.data, "base64"));
+
+      // Ascend (Escape -> back -> "top", cursor there still Skills(1)).
+      await press(client, "Escape");
+      // Descend into Spells: move cursor from Skills(1) to Spells(2), Enter.
+      await press(client, "ArrowDown");
+      await press(client, "Enter");
+      const spells = await walkLevel(client, "spells", LEVEL_ROW_COUNTS.spells);
+      const shotSpells = await client.send("Page.captureScreenshot", { format: "png" });
+      writeFileSync(resolve(FRAMES_DIR, `${label}-spells.png`), Buffer.from(shotSpells.data, "base64"));
 
       const isMobile = vw < 760;
-      const containerHeight = m.containerRect.height;
+      const containerHeight = base.containerRect.height;
       const containerEqualsVh = Math.abs(containerHeight - vh) < 0.5;
+      // Existing `panelHeight` column becomes the max over the three levels
+      // (the clip invariant consumes the worst case unchanged, per B2 item 3).
+      const panelHeight = Math.max(top.panelHeight, skills.panelHeight, spells.panelHeight);
 
       const record = {
         vw,
         vh,
         isMobile,
-        windowInnerWidth: m.windowInnerWidth,
-        windowInnerHeight: m.windowInnerHeight,
-        containerRect: m.containerRect,
+        windowInnerWidth: base.windowInnerWidth,
+        windowInnerHeight: base.windowInnerHeight,
+        containerRect: base.containerRect,
         containerHeight,
         containerEqualsVh,
-        canvasRect: m.canvasRect,
-        canvasRectContainerRelative: m.canvasRectContainerRelative,
-        panelRect: m.panelRect,
-        panelRectContainerRelative: m.panelRectContainerRelative,
-        panelHeight: m.panelRectContainerRelative.height,
+        canvasRect: base.canvasRect,
+        canvasRectContainerRelative: base.canvasRectContainerRelative,
+        panelRect: base.panelRect,
+        panelRectContainerRelative: base.panelRectContainerRelative,
+        panelHeight,
+        levels: { top, skills, spells },
         png: `${CAPTURE_LABEL}/${label}.png`,
       };
       results.push(record);
       console.log(
-        `measure-battle-layout: ${label} — containerH=${containerHeight.toFixed(2)} vh=${vh} equalsVh=${containerEqualsVh} panelH=${record.panelHeight.toFixed(2)} canvas(containerRel)=${JSON.stringify(record.canvasRectContainerRelative)}`,
+        `measure-battle-layout: ${label} — containerH=${containerHeight.toFixed(2)} vh=${vh} equalsVh=${containerEqualsVh} ` +
+          `panelH(max)=${panelHeight.toFixed(2)} top=${top.panelHeight.toFixed(2)}/${top.scrollable} ` +
+          `skills=${skills.panelHeight.toFixed(2)}/${skills.scrollable} spells=${spells.panelHeight.toFixed(2)}/${spells.scrollable}`,
       );
     }
   } finally {
@@ -370,16 +506,30 @@ async function main() {
   // node:fs would not resolve inside src either). This generated .ts module
   // is the one B2's tests import. DO NOT HAND-EDIT — regenerate by re-running
   // `npm run measure:layout`.
+  const levelLit = (l) => `{ panelHeight: ${l.panelHeight}, scrollable: ${l.scrollable} }`;
   const fixtureRows = results.map(
-    ({ vw, vh, isMobile, containerHeight, panelHeight, canvasRectContainerRelative }) =>
-      `  { vw: ${vw}, vh: ${vh}, isMobile: ${isMobile}, containerHeight: ${containerHeight}, panelHeight: ${panelHeight}, canvasRect: ${JSON.stringify(canvasRectContainerRelative)} },`,
+    ({ vw, vh, isMobile, containerHeight, panelHeight, canvasRectContainerRelative, levels }) =>
+      `  { vw: ${vw}, vh: ${vh}, isMobile: ${isMobile}, containerHeight: ${containerHeight}, panelHeight: ${panelHeight}, canvasRect: ${JSON.stringify(canvasRectContainerRelative)}, levels: { top: ${levelLit(levels.top)}, skills: ${levelLit(levels.skills)}, spells: ${levelLit(levels.spells)} } },`,
   );
-  const fixtureSrc = `// GENERATED by tools/measure-battle-layout.mjs (M7 PR-B task B1/B2) — DO NOT
-// HAND-EDIT. Regenerate with \`npm run measure:layout\`. Source of truth is
+  const fixtureSrc = `// GENERATED by tools/measure-battle-layout.mjs (M7 PR-B task B1/B2, extended
+// by M12 PR-B task B2) — DO NOT HAND-EDIT. Regenerate with
+// \`npm run measure:layout\`. Source of truth is
 // docs/battle-prototypes/m7-clip/measured.json, written by the same rig run.
 // Every row here comes from a real headless-Edge measurement at the
 // corresponding viewport (see that file for the full raw data, including
 // viewport-relative rects this module omits).
+export interface LevelMeasure {
+  /** Max rendered panel height (CSS px) across every cursor position within
+   * this level (M12 plan PR-B task B2, owner-ruled amendment: the footer
+   * renders the active row's description, and long ones wrap to a second
+   * line, so panel height is cursor-dependent — only walking every row and
+   * keeping the max reports the true worst case). */
+  panelHeight: number;
+  /** True if body.scrollHeight > body.clientHeight at ANY walked cursor
+   * position within this level. */
+  scrollable: boolean;
+}
+
 export interface MeasuredLayoutRow {
   vw: number;
   vh: number;
@@ -387,12 +537,16 @@ export interface MeasuredLayoutRow {
   /** [data-battle]'s own rendered height in CSS px (the B1 finding: compare
    * against vh — see measured.json's containerEqualsVh per row). */
   containerHeight: number;
-  /** The COMMAND panel's rendered height in CSS px — an input, not
+  /** The COMMAND panel's rendered height in CSS px — the MAX over the three
+   * levels' own \`levels.*.panelHeight\` (M12 plan PR-B task B2 item 3; the
+   * clip invariant consumes this worst case unchanged). An input, not
    * derivable; see layout.ts's commandPanelRect doc comment. */
   panelHeight: number;
   /** The <canvas> rect, CONTAINER-relative (matches layout.ts's own
    * coordinate system, not viewport-relative getBoundingClientRect()). */
   canvasRect: { left: number; top: number; width: number; height: number };
+  /** Per-level worst-case measurement (M12 plan PR-B task B2). */
+  levels: { top: LevelMeasure; skills: LevelMeasure; spells: LevelMeasure };
 }
 
 export const MEASURED_LAYOUT: readonly MeasuredLayoutRow[] = [
