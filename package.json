@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run --coverage",
     "verify:canon": "node tools/extract-canon.mjs --verify && node tools/audit-imposter-parity.mjs",
-    "measure:layout": "node tools/measure-battle-layout.mjs"
+    "measure:layout": "node tools/measure-battle-layout.mjs m12-menu"
   },
   "dependencies": {
     "react": "^18.3.1",

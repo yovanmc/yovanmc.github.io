@@ -27,18 +27,32 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 892,
+      "top": 880,
       "width": 262,
-      "height": 150
+      "height": 162
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 892,
+      "top": 880,
       "width": 262,
-      "height": 150
+      "height": 162
     },
-    "panelHeight": 150,
-    "png": "after/1920x1080.png"
+    "panelHeight": 205,
+    "levels": {
+      "top": {
+        "panelHeight": 162,
+        "scrollable": false
+      },
+      "skills": {
+        "panelHeight": 174,
+        "scrollable": false
+      },
+      "spells": {
+        "panelHeight": 205,
+        "scrollable": false
+      }
+    },
+    "png": "1920x1080.png"
   },
   {
     "vw": 1600,
@@ -68,18 +82,32 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 712,
+      "top": 700,
       "width": 262,
-      "height": 150
+      "height": 162
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 712,
+      "top": 700,
       "width": 262,
-      "height": 150
+      "height": 162
     },
-    "panelHeight": 150,
-    "png": "after/1600x900.png"
+    "panelHeight": 205,
+    "levels": {
+      "top": {
+        "panelHeight": 162,
+        "scrollable": false
+      },
+      "skills": {
+        "panelHeight": 174,
+        "scrollable": false
+      },
+      "spells": {
+        "panelHeight": 205,
+        "scrollable": false
+      }
+    },
+    "png": "1600x900.png"
   },
   {
     "vw": 1440,
@@ -109,18 +137,32 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 712,
+      "top": 700,
       "width": 262,
-      "height": 150
+      "height": 162
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 712,
+      "top": 700,
       "width": 262,
-      "height": 150
+      "height": 162
     },
-    "panelHeight": 150,
-    "png": "after/1440x900.png"
+    "panelHeight": 205,
+    "levels": {
+      "top": {
+        "panelHeight": 162,
+        "scrollable": false
+      },
+      "skills": {
+        "panelHeight": 174,
+        "scrollable": false
+      },
+      "spells": {
+        "panelHeight": 205,
+        "scrollable": false
+      }
+    },
+    "png": "1440x900.png"
   },
   {
     "vw": 1440,
@@ -150,18 +192,32 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 532,
+      "top": 520,
       "width": 262,
-      "height": 150
+      "height": 162
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 532,
+      "top": 520,
       "width": 262,
-      "height": 150
+      "height": 162
     },
-    "panelHeight": 150,
-    "png": "after/1440x720.png"
+    "panelHeight": 205,
+    "levels": {
+      "top": {
+        "panelHeight": 162,
+        "scrollable": false
+      },
+      "skills": {
+        "panelHeight": 174,
+        "scrollable": false
+      },
+      "spells": {
+        "panelHeight": 205,
+        "scrollable": false
+      }
+    },
+    "png": "1440x720.png"
   },
   {
     "vw": 1280,
@@ -191,18 +247,32 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 612,
+      "top": 600,
       "width": 262,
-      "height": 150
+      "height": 162
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 612,
+      "top": 600,
       "width": 262,
-      "height": 150
+      "height": 162
     },
-    "panelHeight": 150,
-    "png": "after/1280x800.png"
+    "panelHeight": 205,
+    "levels": {
+      "top": {
+        "panelHeight": 162,
+        "scrollable": false
+      },
+      "skills": {
+        "panelHeight": 174,
+        "scrollable": false
+      },
+      "spells": {
+        "panelHeight": 205,
+        "scrollable": false
+      }
+    },
+    "png": "1280x800.png"
   },
   {
     "vw": 1280,
@@ -232,18 +302,32 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 432,
+      "top": 420,
       "width": 262,
-      "height": 150
+      "height": 162
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 432,
+      "top": 420,
       "width": 262,
-      "height": 150
+      "height": 162
     },
-    "panelHeight": 150,
-    "png": "after/1280x620.png"
+    "panelHeight": 205,
+    "levels": {
+      "top": {
+        "panelHeight": 162,
+        "scrollable": false
+      },
+      "skills": {
+        "panelHeight": 174,
+        "scrollable": false
+      },
+      "spells": {
+        "panelHeight": 205,
+        "scrollable": false
+      }
+    },
+    "png": "1280x620.png"
   },
   {
     "vw": 1024,
@@ -273,18 +357,32 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 580,
+      "top": 568,
       "width": 262,
-      "height": 150
+      "height": 162
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 580,
+      "top": 568,
       "width": 262,
-      "height": 150
+      "height": 162
     },
-    "panelHeight": 150,
-    "png": "after/1024x768.png"
+    "panelHeight": 205,
+    "levels": {
+      "top": {
+        "panelHeight": 162,
+        "scrollable": false
+      },
+      "skills": {
+        "panelHeight": 174,
+        "scrollable": false
+      },
+      "spells": {
+        "panelHeight": 205,
+        "scrollable": false
+      }
+    },
+    "png": "1024x768.png"
   },
   {
     "vw": 800,
@@ -314,18 +412,32 @@
     },
     "panelRect": {
       "left": 38,
-      "top": 412,
+      "top": 414,
       "width": 262,
-      "height": 150
+      "height": 148
     },
     "panelRectContainerRelative": {
       "left": 38,
-      "top": 412,
+      "top": 414,
       "width": 262,
-      "height": 150
+      "height": 148
     },
-    "panelHeight": 150,
-    "png": "after/800x600.png"
+    "panelHeight": 148,
+    "levels": {
+      "top": {
+        "panelHeight": 148,
+        "scrollable": true
+      },
+      "skills": {
+        "panelHeight": 148,
+        "scrollable": true
+      },
+      "spells": {
+        "panelHeight": 148,
+        "scrollable": true
+      }
+    },
+    "png": "800x600.png"
   },
   {
     "vw": 759,
@@ -355,18 +467,32 @@
     },
     "panelRect": {
       "left": 10,
-      "top": 740,
+      "top": 688,
       "width": 739,
-      "height": 150
+      "height": 202
     },
     "panelRectContainerRelative": {
       "left": 10,
-      "top": 740,
+      "top": 688,
       "width": 739,
-      "height": 150
+      "height": 202
     },
-    "panelHeight": 150,
-    "png": "after/759x900.png"
+    "panelHeight": 242,
+    "levels": {
+      "top": {
+        "panelHeight": 202,
+        "scrollable": false
+      },
+      "skills": {
+        "panelHeight": 202,
+        "scrollable": false
+      },
+      "spells": {
+        "panelHeight": 242,
+        "scrollable": false
+      }
+    },
+    "png": "759x900.png"
   },
   {
     "vw": 430,
@@ -396,18 +522,32 @@
     },
     "panelRect": {
       "left": 10,
-      "top": 772,
+      "top": 720,
       "width": 410,
-      "height": 150
+      "height": 202
     },
     "panelRectContainerRelative": {
       "left": 10,
-      "top": 772,
+      "top": 720,
       "width": 410,
-      "height": 150
+      "height": 202
     },
-    "panelHeight": 150,
-    "png": "after/430x932.png"
+    "panelHeight": 242,
+    "levels": {
+      "top": {
+        "panelHeight": 202,
+        "scrollable": false
+      },
+      "skills": {
+        "panelHeight": 202,
+        "scrollable": false
+      },
+      "spells": {
+        "panelHeight": 242,
+        "scrollable": false
+      }
+    },
+    "png": "430x932.png"
   },
   {
     "vw": 390,
@@ -437,18 +577,32 @@
     },
     "panelRect": {
       "left": 10,
-      "top": 684,
+      "top": 632,
       "width": 370,
-      "height": 150
+      "height": 202
     },
     "panelRectContainerRelative": {
       "left": 10,
-      "top": 684,
+      "top": 632,
       "width": 370,
-      "height": 150
+      "height": 202
     },
-    "panelHeight": 150,
-    "png": "after/390x844.png"
+    "panelHeight": 242,
+    "levels": {
+      "top": {
+        "panelHeight": 202,
+        "scrollable": false
+      },
+      "skills": {
+        "panelHeight": 215,
+        "scrollable": false
+      },
+      "spells": {
+        "panelHeight": 242,
+        "scrollable": false
+      }
+    },
+    "png": "390x844.png"
   },
   {
     "vw": 360,
@@ -478,17 +632,31 @@
     },
     "panelRect": {
       "left": 10,
-      "top": 480,
+      "top": 428,
       "width": 340,
-      "height": 150
+      "height": 202
     },
     "panelRectContainerRelative": {
       "left": 10,
-      "top": 480,
+      "top": 428,
       "width": 340,
-      "height": 150
+      "height": 202
     },
-    "panelHeight": 150,
-    "png": "after/360x640.png"
+    "panelHeight": 255,
+    "levels": {
+      "top": {
+        "panelHeight": 202,
+        "scrollable": false
+      },
+      "skills": {
+        "panelHeight": 215,
+        "scrollable": false
+      },
+      "spells": {
+        "panelHeight": 255,
+        "scrollable": false
+      }
+    },
+    "png": "360x640.png"
   }
 ]

@@ -54,14 +54,36 @@ if (typeof WebSocket === "undefined") {
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const EDGE_PATH = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
-const OUT_DIR = resolve(root, "docs/battle-prototypes/m7-clip");
+
+// Per-milestone output root (fix, M12 build session 2026-07-30): this rig
+// used to hardcode "m7-clip" — running it for M12's Task B2 silently
+// overwrote all 12 of M7's pre-fix "before" baseline frames plus
+// measured.json with M12-era post-fix renders, because nothing here ever
+// asked which milestone it was writing for. Restored from git history
+// (commit 3caf611, the parent of the offending b6e2ce5); this parameter is
+// the actual fix so a future milestone can't repeat it silently. Pass the
+// milestone's docs/battle-prototypes/<dir> name as argv[2]; the default
+// below MUST be updated when a new milestone starts using this rig (do not
+// leave it pointing at a finished milestone — that is exactly how M7 got
+// clobbered).
+const MILESTONE_DIR = process.argv[2] || process.env.MEASURE_MILESTONE_DIR || "m12-menu";
+const OUT_DIR = resolve(root, "docs/battle-prototypes", MILESTONE_DIR);
 const MEASURED_JSON = resolve(OUT_DIR, "measured.json");
 const FIXTURE_TS = resolve(root, "src/battle/__fixtures__/measuredLayout.ts");
 
-// Which frame subdirectory this run captures into — "before" (B1/B3) or
-// "after" (B6). Defaults to "before"; pass "after" as argv[2].
-const CAPTURE_LABEL = process.argv[2] === "after" ? "after" : "before";
-const FRAMES_DIR = resolve(OUT_DIR, CAPTURE_LABEL);
+// Optional before/after capture-label subdirectory — M7's B1-(pre-fix) vs
+// B6-(post-fix) owner-review idiom, only meaningful when a milestone's rig
+// run happens BEFORE a fix lands and needs a second AFTER pass to prove it.
+// M12's Task B2 has no such split (every run happens against already-fixed
+// code), so its output goes flat into OUT_DIR by default. Pass "before" or
+// "after" as argv[3] to opt back into the subdir scheme for a milestone that
+// needs it (e.g. re-running for m7-clip).
+const CAPTURE_LABEL = process.argv[3] === "before" || process.argv[3] === "after" ? process.argv[3] : null;
+const FRAMES_DIR = CAPTURE_LABEL ? resolve(OUT_DIR, CAPTURE_LABEL) : OUT_DIR;
+
+console.log(
+  `measure-battle-layout: writing to ${OUT_DIR} (milestone=${MILESTONE_DIR}, label=${CAPTURE_LABEL ?? "flat, no before/after subdir"})`,
+);
 
 // Viewport sweep from the plan (task B1): both sides of MOBILE_BREAKPOINT
 // (760) and several distinct `scale` steps, since scale is a step function.
@@ -373,7 +395,6 @@ async function walkLevel(client, expectedLevel, rowCount) {
 }
 
 async function main() {
-  console.log(`measure-battle-layout: capture label = ${CAPTURE_LABEL}`);
   mkdirSync(FRAMES_DIR, { recursive: true });
   mkdirSync(dirname(FIXTURE_TS), { recursive: true });
 
@@ -476,7 +497,7 @@ async function main() {
         panelRectContainerRelative: base.panelRectContainerRelative,
         panelHeight,
         levels: { top, skills, spells },
-        png: `${CAPTURE_LABEL}/${label}.png`,
+        png: CAPTURE_LABEL ? `${CAPTURE_LABEL}/${label}.png` : `${label}.png`,
       };
       results.push(record);
       console.log(
