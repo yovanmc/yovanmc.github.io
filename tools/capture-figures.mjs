@@ -75,6 +75,7 @@ if (OUT_DIR.replace(/\\/g, "/").includes("/docs/battle-prototypes/")) {
   process.exit(1);
 }
 const GEOMETRY_JSON = resolve(OUT_DIR, "geometry.json");
+const FRAMES_JSON = resolve(OUT_DIR, "frames.json");
 
 console.log(`capture-figures: writing PNGs and geometry.json to ${OUT_DIR}`);
 
@@ -338,6 +339,94 @@ async function pollForFile(path, timeoutMs = 5000) {
   if (!existsSync(path)) throw new Error(`capture-figures: expected file never appeared: ${path}`);
 }
 
+// ---------------------------------------------------------------------------
+// Frame guard (fix pass): Page.captureScreenshot grabs only the current
+// viewport at the current scroll position. On mobile the figure sits below
+// the fold, so a capture taken without scrolling photographs the page header
+// and contains no figure — all 18 files came out byte-identical across a
+// change that provably altered the DOM, which is how this surfaced. Every
+// screenshot capture below must scroll the figure into frame AND verify,
+// from the figure's own measured rect, that it actually landed inside the
+// captured viewport before any PNG is written. A valid image of the wrong
+// region passes every other check this rig or Test-CaptureSane.ps1 runs, so
+// the element rect at capture time is the only place this class of bug is
+// visible at all.
+// ---------------------------------------------------------------------------
+
+// The case-study dialog (CaseStudyPage.tsx) scrolls its own internal
+// [data-scroll] div (position:absolute + overflowY:auto) — the outer window
+// never scrolls at all here, so window.scrollTo/scrollY are no-ops on this
+// page. getBoundingClientRect() is still viewport-relative regardless of
+// which element scrolls, so the rect measurement itself is unaffected; only
+// the *scroll adjustment* has to target the real scroll container.
+const MEASURE_FIGURE_EXPR = `
+(() => {
+  const fig = document.querySelector('[role="img"]');
+  if (!fig) return { error: "no [role=img] figure found on page" };
+  const scrollContainer = fig.closest('[data-scroll]') || document.scrollingElement || document.documentElement;
+  const rect = fig.getBoundingClientRect();
+  return {
+    rect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height },
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    scrollTop: scrollContainer.scrollTop,
+  };
+})()
+`;
+
+async function measureFigure(client) {
+  const res = await evalOn(client, MEASURE_FIGURE_EXPR);
+  if (res.error) throw new Error(res.error);
+  return res;
+}
+
+/** Centers the figure element in the viewport by computing an explicit
+ * scrollTop target on its real scroll container (the [data-scroll] dialog
+ * div, not window) from the figure's measured rect, then re-measuring to
+ * confirm where it actually landed — never trusts `scrollIntoView`'s own
+ * notion of "centered" without checking. Centering (rather than a tight crop
+ * of just the figure) is deliberate: the judge needs to see whether the
+ * figure reads as part of the page or as something pasted in, which requires
+ * surrounding page context to still be visible. */
+let DISABLE_FIGURE_CENTERING = false; // Fix-3 verification toggle only — must be false for every real capture run.
+async function centerFigureInViewport(client) {
+  if (DISABLE_FIGURE_CENTERING) return measureFigure(client);
+  const before = await measureFigure(client);
+  const targetScrollTop = before.scrollTop + before.rect.top - (before.viewport.height - before.rect.height) / 2;
+  await evalOn(
+    client,
+    `
+    (() => {
+      const fig = document.querySelector('[role="img"]');
+      const scrollContainer = fig.closest('[data-scroll]') || document.scrollingElement || document.documentElement;
+      scrollContainer.scrollTop = Math.max(0, ${targetScrollTop});
+    })()
+    `,
+  );
+  await sleep(50); // let the scroll (and any scroll-linked layout) settle before re-measuring.
+  return measureFigure(client);
+}
+
+/** The guard: after scrolling, before writing any PNG, assert the figure's
+ * measured rect is fully inside the captured viewport. Throws — and the
+ * caller must not write a file — rather than returning a boolean, so a
+ * missed call site fails loudly instead of silently capturing anyway. */
+function assertFigureInFrame(slug, width, measured) {
+  const { rect, viewport } = measured;
+  const inFrame =
+    rect.top >= 0 &&
+    rect.bottom <= viewport.height &&
+    rect.left >= 0 &&
+    rect.right <= viewport.width &&
+    rect.width > 0 &&
+    rect.height > 0;
+  if (!inFrame) {
+    throw new Error(
+      `capture-figures: figure out of frame for ${slug}@${width} — refusing to write a PNG. ` +
+        `rect=${JSON.stringify(rect)} viewport=${JSON.stringify(viewport)}`,
+    );
+  }
+}
+
 async function main() {
   mkdirSync(OUT_DIR, { recursive: true });
 
@@ -351,6 +440,7 @@ async function main() {
 
   const writtenFiles = [];
   const geometryResults = [];
+  const frameResults = [];
 
   let client;
   try {
@@ -372,11 +462,14 @@ async function main() {
       for (const slug of DESKTOP_SLUGS) {
         const url = `http://localhost:${previewPort}/work/${slug}/`;
         await navigateAndSettle(client, url);
+        const measured = await centerFigureInViewport(client);
+        assertFigureInFrame(slug, width, measured);
         const shot = await client.send("Page.captureScreenshot", { format: "png" });
         const filePath = resolve(OUT_DIR, `${slug}-${width}.png`);
         writeFileSync(filePath, Buffer.from(shot.data, "base64"));
         await pollForFile(filePath);
         writtenFiles.push(filePath);
+        frameResults.push({ slug, width, mode: "desktop", rect: measured.rect, viewport: measured.viewport });
         console.log(`capture-figures: wrote ${filePath}`);
       }
     }
@@ -398,11 +491,14 @@ async function main() {
         await navigateAndSettle(client, url);
 
         if (MOBILE_SCREENSHOT_SLUGS.includes(slug)) {
+          const measured = await centerFigureInViewport(client);
+          assertFigureInFrame(slug, width, measured);
           const shot = await client.send("Page.captureScreenshot", { format: "png" });
           const filePath = resolve(OUT_DIR, `${slug}-${width}-emulated.png`);
           writeFileSync(filePath, Buffer.from(shot.data, "base64"));
           await pollForFile(filePath);
           writtenFiles.push(filePath);
+          frameResults.push({ slug, width, mode: "mobile-emulated", rect: measured.rect, viewport: measured.viewport });
           console.log(`capture-figures: wrote ${filePath}`);
         }
 
@@ -465,6 +561,19 @@ async function main() {
   writeFileSync(GEOMETRY_JSON, JSON.stringify(geometryFixture, null, 2) + "\n");
   await pollForFile(GEOMETRY_JSON);
   console.log(`capture-figures: wrote ${GEOMETRY_JSON}`);
+
+  // ---- frames.json: the verified figure rect (post-scroll, pre-write) for
+  // every screenshot, so a reviewer can confirm the frame guard actually ran
+  // rather than trusting that it did. ----
+  const framesFixture = {
+    measuredAt: new Date().toISOString(),
+    tool: "tools/capture-figures.mjs",
+    task: "S3 PR-A task A6 (fix pass) — frame guard verification per capture",
+    frames: frameResults,
+  };
+  writeFileSync(FRAMES_JSON, JSON.stringify(framesFixture, null, 2) + "\n");
+  await pollForFile(FRAMES_JSON);
+  console.log(`capture-figures: wrote ${FRAMES_JSON}`);
   console.log(
     `capture-figures: worst-case ratio ${worst.ratio.toFixed(4)} (${worst.kind ?? "n/a"} on ${worst.slug ?? "n/a"}@${worst.width ?? "n/a"}), anyOverflow=${anyOverflow}`,
   );
