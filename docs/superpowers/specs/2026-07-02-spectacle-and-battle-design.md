@@ -23,7 +23,7 @@ End state: a visitor lands on the RPG command menu, can browse 7 curated case st
 
 1. **Owner voice.** All existing description prose in `content.ts` was written by Yovan deliberately, word by word. Agents NEVER rewrite, "improve", or re-tone it. New prose (Compass, Curio, Experience additions) is produced case-study-interview style: grill one question at a time, assemble ONLY from his own sentences, he approves every line before commit. Typo/mechanics fixes to published output are allowed (standing rule).
 2. **Confidentiality (public site + public repo).** EVERY new asset (prose, diagram, screenshot, sprite, spell name, slug, filename, commit message) passes the standing private confidentiality checklist (kept outside this repo) before commit — slugs and filenames are leak surfaces too. Named UWM products only with public citations (§4.4 rule). Screenshots of local apps must show sample/demo data only, never the owner's real library/personal data.
-3. **Career-roadmap coupling.** After S1–S3 ship, the site FREEZES until the C1 OA gate passes (`C:\Agent Zone\_career\ROADMAP.md`). S4–S6 execute in bounded chunks that never displace drill hours.
+3. ~~**Career-roadmap coupling.** After S1–S3 ship, the site FREEZES until the C1 OA gate passes (`C:\Agent Zone\_career\ROADMAP.md`). S4–S6 execute in bounded chunks that never displace drill hours.~~ **REMOVED 2026-07-30 (owner) — this is no longer a hard constraint.** There is no freeze and the career track gates nothing in this repo. Replaced by a priority ordering: the S-series outranks the M-series (site polish first, battle track yields). S4–S6 keep the bounded-chunk discipline as good practice, not as a coupling. Full rationale in `ROADMAP.md` North Star + decision log. Constraints 1, 2 and 4 are untouched and remain hard.
 4. Resume stays unpublished on the site (standing owner rule; under the differentiator framing the site doesn't need it).
 
 ## Roster (owner decision, locked — 7 entries)
@@ -86,7 +86,7 @@ OUT (owner decisions): PlotArmor ("not yet"), Reserve (private one-way door), an
 
 ## Sequencing & ownership
 
-S1 → S2 → S3 ship the spectacle (this week / early C1, then freeze). S4 independent. S5/S6 post-C1-gate in bounded chunks — planned via /roadmap with plans written to be executable by pinned sonnet builders under an Opus orchestrator (Fable leaves the plan ~2026-07-07; this spec + ROADMAP.md are the handoff).
+**Superseded 2026-07-30 — `ROADMAP.md` is the sequencing authority; this paragraph is kept for the ownership/tooling half only.** ~~S1 → S2 → S3 ship the spectacle (this week / early C1, then freeze). S4 independent. S5/S6 post-C1-gate in bounded chunks~~ — S1/S2 shipped, S3 is next, there is no freeze, and S5/S6 are simply lowest priority behind every ready S row. Still current: milestones are planned via /roadmap with plans written to be executable by pinned sonnet builders under a top-tier orchestrator (Fable left the plan ~2026-07-07; this spec + ROADMAP.md are the handoff).
 
 ## Out of scope (declined, with rationale — don't re-propose)
 
