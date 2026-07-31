@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-07-31T08:50:46.706Z",
+  "measuredAt": "2026-07-31T09:04:30.449Z",
   "tool": "tools/capture-figures.mjs",
   "task": "S3 PR-A task A6, item 6 (geometry probe)",
   "widths": [
@@ -23,8 +23,12 @@
             "clientWidth": 306
           },
           "lineWrapperOverflow": false,
-          "stackedValue": null,
-          "stackedValueOverflow": null
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "delivered"
+          },
+          "stackedValueOverflow": false
         },
         {
           "index": 1,
@@ -33,8 +37,12 @@
             "clientWidth": 306
           },
           "lineWrapperOverflow": false,
-          "stackedValue": null,
-          "stackedValueOverflow": null
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "attempt 1"
+          },
+          "stackedValueOverflow": false
         },
         {
           "index": 2,
@@ -43,8 +51,12 @@
             "clientWidth": 306
           },
           "lineWrapperOverflow": false,
-          "stackedValue": null,
-          "stackedValueOverflow": null
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "error 400 html body"
+          },
+          "stackedValueOverflow": false
         },
         {
           "index": 3,
@@ -53,8 +65,12 @@
             "clientWidth": 306
           },
           "lineWrapperOverflow": false,
-          "stackedValue": null,
-          "stackedValueOverflow": null
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "no entry"
+          },
+          "stackedValueOverflow": false
         },
         {
           "index": 4,
@@ -63,8 +79,12 @@
             "clientWidth": 306
           },
           "lineWrapperOverflow": false,
-          "stackedValue": null,
-          "stackedValueOverflow": null
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "no entry"
+          },
+          "stackedValueOverflow": false
         }
       ]
     },
