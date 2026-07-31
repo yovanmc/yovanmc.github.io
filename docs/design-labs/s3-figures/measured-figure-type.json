@@ -1,0 +1,14 @@
+{
+  "measuredAt": "2026-07-31T08:21:39.510Z",
+  "tool": "tools/measure-figure-type.mjs",
+  "task": "S3 PR-A task A2a",
+  "resolvedFontFamily": "JetBrains Mono",
+  "resolvedFontFamilies": [
+    "JetBrains Mono"
+  ],
+  "monoChPx": 7.480078125,
+  "nodeMinPx": 109.765625,
+  "narrowestContentPx": 238,
+  "observedBox": "content",
+  "notes": "monoChPx and nodeMinPx are getBoundingClientRect() widths on borderless box-sizing:border-box elements (node's width intentionally includes its own 9px 10px padding, per layout.ts's NODE_MIN_PX contract). narrowestContentPx is measured via ResizeObserver.contentRect, the same API the real Figure component reads, which excludes padding and border."
+}
