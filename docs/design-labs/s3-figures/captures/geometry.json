@@ -1,0 +1,331 @@
+{
+  "measuredAt": "2026-07-31T09:49:54.581Z",
+  "tool": "tools/capture-figures.mjs",
+  "task": "S3 PR-A task A6, item 6 (geometry probe)",
+  "widths": [
+    390,
+    320
+  ],
+  "logSlugs": [
+    "the-failure-that-left-no-logs",
+    "notification-dispatch"
+  ],
+  "results": [
+    {
+      "slug": "the-failure-that-left-no-logs",
+      "width": 390,
+      "count": 5,
+      "lines": [
+        {
+          "index": 0,
+          "lineWrapper": {
+            "scrollWidth": 306,
+            "clientWidth": 306
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "delivered"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 1,
+          "lineWrapper": {
+            "scrollWidth": 306,
+            "clientWidth": 306
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "attempt 1"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 2,
+          "lineWrapper": {
+            "scrollWidth": 306,
+            "clientWidth": 306
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "error 400 html body"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 3,
+          "lineWrapper": {
+            "scrollWidth": 306,
+            "clientWidth": 306
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "no entry"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 4,
+          "lineWrapper": {
+            "scrollWidth": 306,
+            "clientWidth": 306
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "no entry"
+          },
+          "stackedValueOverflow": false
+        }
+      ]
+    },
+    {
+      "slug": "notification-dispatch",
+      "width": 390,
+      "count": 5,
+      "lines": [
+        {
+          "index": 0,
+          "lineWrapper": {
+            "scrollWidth": 306,
+            "clientWidth": 306
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "queued"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 1,
+          "lineWrapper": {
+            "scrollWidth": 306,
+            "clientWidth": 306
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "attempt 1 failed"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 2,
+          "lineWrapper": {
+            "scrollWidth": 306,
+            "clientWidth": 306
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "attempt 2 failed"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 3,
+          "lineWrapper": {
+            "scrollWidth": 306,
+            "clientWidth": 306
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "held for inspection"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 4,
+          "lineWrapper": {
+            "scrollWidth": 306,
+            "clientWidth": 306
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 296,
+            "clientWidth": 296,
+            "text": "depth and lag exported"
+          },
+          "stackedValueOverflow": false
+        }
+      ]
+    },
+    {
+      "slug": "the-failure-that-left-no-logs",
+      "width": 320,
+      "count": 5,
+      "lines": [
+        {
+          "index": 0,
+          "lineWrapper": {
+            "scrollWidth": 236,
+            "clientWidth": 236
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 226,
+            "clientWidth": 226,
+            "text": "delivered"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 1,
+          "lineWrapper": {
+            "scrollWidth": 236,
+            "clientWidth": 236
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 226,
+            "clientWidth": 226,
+            "text": "attempt 1"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 2,
+          "lineWrapper": {
+            "scrollWidth": 236,
+            "clientWidth": 236
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 226,
+            "clientWidth": 226,
+            "text": "error 400 html body"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 3,
+          "lineWrapper": {
+            "scrollWidth": 236,
+            "clientWidth": 236
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 226,
+            "clientWidth": 226,
+            "text": "no entry"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 4,
+          "lineWrapper": {
+            "scrollWidth": 236,
+            "clientWidth": 236
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 226,
+            "clientWidth": 226,
+            "text": "no entry"
+          },
+          "stackedValueOverflow": false
+        }
+      ]
+    },
+    {
+      "slug": "notification-dispatch",
+      "width": 320,
+      "count": 5,
+      "lines": [
+        {
+          "index": 0,
+          "lineWrapper": {
+            "scrollWidth": 236,
+            "clientWidth": 236
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 226,
+            "clientWidth": 226,
+            "text": "queued"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 1,
+          "lineWrapper": {
+            "scrollWidth": 236,
+            "clientWidth": 236
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 226,
+            "clientWidth": 226,
+            "text": "attempt 1 failed"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 2,
+          "lineWrapper": {
+            "scrollWidth": 236,
+            "clientWidth": 236
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 226,
+            "clientWidth": 226,
+            "text": "attempt 2 failed"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 3,
+          "lineWrapper": {
+            "scrollWidth": 236,
+            "clientWidth": 236
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 226,
+            "clientWidth": 226,
+            "text": "held for inspection"
+          },
+          "stackedValueOverflow": false
+        },
+        {
+          "index": 4,
+          "lineWrapper": {
+            "scrollWidth": 236,
+            "clientWidth": 236
+          },
+          "lineWrapperOverflow": false,
+          "stackedValue": {
+            "scrollWidth": 226,
+            "clientWidth": 226,
+            "text": "depth and lag exported"
+          },
+          "stackedValueOverflow": false
+        }
+      ]
+    }
+  ],
+  "worstCaseRatio": {
+    "ratio": 1,
+    "slug": "the-failure-that-left-no-logs",
+    "width": 390,
+    "index": 0,
+    "kind": "lineWrapper"
+  },
+  "anyOverflow": false
+}

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import { CATS, type Link } from "../content";
 import { rng } from "../lib/rng";
+import { Figure } from "./Figure";
+import { figureFor } from "../figures/registry";
 
 export interface PageRef {
   ri: number;
@@ -41,8 +43,8 @@ export function CaseStudyPage({ page, isMobile, onClose }: CaseStudyPageProps) {
   const open = !!page;
   const cat = page ? CATS[page.ri] : null;
   const item = page && cat ? cat.items[page.si] : null;
-  const isProject = cat ? cat.key === "projects" : false;
   const showPeriod = !!(item && cat && cat.key !== "projects" && item.stat);
+  const fig = figureFor(item?.slug);
   const metrics = item?.metrics ?? [];
   const tags = item?.tags ?? [];
   const ext: Link | null = item?.repo
@@ -131,30 +133,6 @@ export function CaseStudyPage({ page, isMobile, onClose }: CaseStudyPageProps) {
           </div>
         </div>
 
-        {isProject && (
-          <div
-            style={{
-              position: "relative",
-              width: "100%",
-              height: "clamp(200px,46vw,340px)",
-              borderRadius: "18px",
-              overflow: "hidden",
-              border: "1px solid rgba(140,185,255,.26)",
-              background:
-                "repeating-linear-gradient(45deg, rgba(120,170,255,.08) 0 12px, rgba(120,170,255,.02) 12px 24px), linear-gradient(160deg, rgba(20,40,78,.5), rgba(10,18,38,.5))",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "inset 0 0 80px rgba(60,120,220,.12)",
-              marginBottom: "clamp(30px,6vw,46px)",
-            }}
-          >
-            <span style={{ fontFamily: mono, fontSize: "12px", letterSpacing: ".24em", color: "#7f93b8" }}>
-              PROJECT SHOT / DIAGRAM
-            </span>
-          </div>
-        )}
-
         <div style={{ fontFamily: mono, fontSize: "12px", letterSpacing: ".32em", color: "#9fc0ec", marginBottom: "14px" }}>
           {item?.meta}
         </div>
@@ -217,6 +195,12 @@ export function CaseStudyPage({ page, isMobile, onClose }: CaseStudyPageProps) {
         <div style={{ color: "#c2cee2", fontSize: "17px", lineHeight: 1.78, maxWidth: "680px", marginBottom: "42px" }}>
           {item ? item.summary ?? item.body : ""}
         </div>
+
+        {fig && (
+          <div style={{ marginBottom: "46px" }}>
+            <Figure figure={fig} />
+          </div>
+        )}
 
         <div style={{ fontFamily: mono, fontSize: "11px", letterSpacing: ".34em", color: "#7fb0ff", marginBottom: "14px" }}>STACK</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "9px", marginBottom: "46px" }}>
