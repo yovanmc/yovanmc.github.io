@@ -97,3 +97,19 @@ Phase machine intro -> gate -> play | browse, the `/browse` path, and a path-pre
 404. Superseded S5's "v1 faked dive" line by the owner's 2026-07-28 ruling: the dive
 ships here. Archived from the main ROADMAP table in the M6 PR-3 hygiene pass
 (2026-07-29) once M6 shipped and the table exceeded the last-3-shipped cap.
+
+## M6 — Bosses 2-4: Cascade, Silent Failure, Imposter Syndrome (PRs #22 #23 #25 #28, merged)
+
+Plan: `docs/superpowers/specs/2026-07-28-m6-bosses-2-4-plan.md`
+
+Completed the four-boss rush, which is live. PR-3 shipped the Imposter finale, the Root Cause
+and Conviction abilities, HP-linked erosion, and mobile chooser tap-dismiss. 472 tests at ship.
+
+Archived from `ROADMAP.md`'s history table in the M12 hygiene pass (2026-07-30) under the
+keep-the-last-3-shipped rule. Nothing here is load-bearing for future work: M6's two open owner
+design calls (the clone/COMMAND panel overlap and the `1/1 TARGET` footer copy) were both ruled
+into **M7** and shipped there, and all four of M6's durable engineering lessons already live in
+`ROADMAP.md`'s "Cross-cutting lessons & gotchas" section rather than here — a green suite being
+blind to animation-window and layout defects, a fastest-line derivation that is arithmetically
+right but illegal to play, a `/* v8 ignore */` annotation swallowing a real uncovered branch,
+and a break-count going stale within the same PR.
