@@ -8,7 +8,13 @@
 
 1. **Menu shape:** 3-row top level `Attack / Skills▸ / Spells▸`. Skills = Critical Thinking, Power Through, Debug. Spells = Fan Out, Rollback, Root Cause, Conviction. Category labels are owner-overridable string edits later.
 2. **Locked Spells (zero spells unlocked):** greyed teaser row, visible but blocked, hint text in the footer. No spell names may leak while locked.
-3. **800×600 degradation:** Spells submenu keeps its description footer and scrolls inside the panel at 800×600 ONLY, with a visible fade + chevron affordance. Every other swept viewport: no scroll at any level. (This amends the ROADMAP's "removes the scroll entirely" — owner accepted the residual at the one synthetic viewport.)
+3. **800×600 degradation:** the panel keeps its description footer and may scroll inside the panel at 800×600 ONLY, with a visible fade + chevron affordance. Every other swept viewport: no scroll at any level. (This amends the ROADMAP's "removes the scroll entirely" — owner accepted the residual at the one synthetic viewport.)
+
+   **AMENDED 2026-07-30 (build session, owner-ruled after measurement).** The original ruling scoped the residual scroll to the **Spells level only**. Measurement at B1 item 6 refuted the plan's chrome arithmetic: after the full prescribed compaction *and* both authorized shave steps (row font 14→13, footer 10→9), the levels render at **top 162px / skills 174px / spells 193px**, so all three exceed the 148px budget at 800×600, not just Spells. The plan's "3-row levels fit ≤148" estimate was optimistic by ~14px, and long ability descriptions (Critical Thinking's is the offender) wrap the footer to a second line for a further ~12px.
+
+   The deviation is narrower than it first reads: the largest rendered level is 193px and the smallest budget outside 800×600 is **210px** (1280×800), so **every other swept viewport remains scroll-free exactly as ruled**. Only the one already-conceded synthetic viewport changes, and only in how many of its levels show the affordance. **Owner ruling: accept scrolling at all three levels at 800×600**, gated on the fade+chevron affordance being visible; no further compaction, no content edits, no budget change. Declined alternatives: an extra compaction pass (row gap 10→4, body padding 8→4) was projected to rescue only the top level while tightening rows at every desktop viewport; shortening the long ability descriptions was declined as visible-copy churn; hiding the footer at 800×600 was never offered, since ruling 3 had already chosen "keep the footer, accept the scroll."
+
+   Safety note (measured, not assumed): the `maxHeight` clamp means the panel can never clip a sprite regardless of description length — overflow only produces more scrolling. This ruling therefore moves no clip risk.
 
 ## Context
 
@@ -227,10 +233,12 @@ Extend `tools/measure-battle-layout.mjs` (keep the existing CDP client, dev-serv
 
 1. Boot URL gains the full rush so all 8 abilities exist: `defeated=alert-storm,cascade,silent-failure,imposter-syndrome` (valid full prefix, ledger #13), `boss=imposter-syndrome`.
 2. Per viewport, measure ALL THREE levels: after load, measure top; then drive the menu with `Input.dispatchKeyEvent` (rawKeyDown+keyUp for ArrowDown/Enter/Escape) — descend into Skills (cursor to row 1 → Enter), measure, Escape; descend into Spells (cursor to row 2 → Enter), measure. Read per-level `{panelHeight, bodyScrollHeight, bodyClientHeight}` plus `data-cmd-level` to confirm which level is actually showing (fail loudly on mismatch — a silent wrong-level measurement is the rig's failure mode).
+
+   **Measure every cursor position within each level and record the MAX (found at the B1 item 6 gate, 2026-07-30).** The footer renders the *active* row's description, and long descriptions wrap to a second line (~12px), so **panel height is cursor-dependent** — measuring only the landing cursor reports a best case and would let the scroll-acceptance test pass against a height the player never sees. This is not academic: the largest measured level (spells, 193px) sits only 17px under the 1280×800 budget of 210, and a single wrapped description consumes ~12 of those. Walk ArrowDown through every row of each level, take the max per level, and record that as the level's `panelHeight`. If the max at any non-800×600 viewport exceeds that viewport's budget, STOP and report — that is a real regression of ruling 3's second half, not a fixture-update chore.
 3. Fixture: `MeasuredLayoutRow` gains `levels: { top: LevelMeasure; skills: LevelMeasure; spells: LevelMeasure }` where `LevelMeasure = { panelHeight: number; scrollable: boolean }`; the existing `panelHeight` column becomes `max` over the three levels (the clip invariant consumes the worst case unchanged). Regenerate fixture + `measured.json`.
 4. New tests in `layout.test.ts` (all `it.each(MEASURED_LAYOUT)`):
    - `row.panelHeight <= menuPanelMaxHeight(row.vw, row.vh, row.containerHeight, row.isMobile) + 0.5` (rendered cap honored; ±0.5 for the known 1/64-px browser snap).
-   - **Scroll acceptance:** the set of `(viewport, level)` pairs with `scrollable === true` is EXACTLY `{(800×600, spells)}` — nothing else scrolls, and that one does (proves both halves of owner ruling 3).
+   - **Scroll acceptance (per ruling 3 AS AMENDED):** the set of `(viewport, level)` pairs with `scrollable === true` is EXACTLY `{(800×600, top), (800×600, skills), (800×600, spells)}` — every 800×600 level scrolls, and **nothing at any other viewport scrolls at any level**. Both halves are load-bearing: the second half is the one that would catch a compaction regression leaking scroll onto a real viewport, so do not weaken it to a one-directional check.
    - The existing clone/hero clip invariants re-run against the regenerated fixture unchanged and pass.
    - **Per-boss clip invariant** (lens-#127 institutionalized): a new `it.each` family over `MEASURED_LAYOUT × {alertStorm fresh, cascade fresh, silentFailure fresh, imposter clones}` asserting the fixture's `panelHeight` never intersects that boss's fresh composed rect at its real stamp origin (`stampOrigin?.() ?? BOSS_AT`) — the same derivation `panelBudget.ts` uses, recomputed independently in the test.
 
@@ -253,7 +261,7 @@ Deliverable: builder report with the measured per-level table, judge verdicts ve
 ## Acceptance criteria (milestone-level)
 
 1. Every ability reachable in ≤2 confirms from the top level; all 8 visible across the two submenus at full kit.
-2. No scroll at any swept viewport/level EXCEPT 800×600 Spells, which shows a visible affordance (fixture-proved by B2's scroll-acceptance test).
+2. No scroll at any swept viewport/level EXCEPT at 800×600, where all three levels may scroll and each shows a visible affordance (ruling 3 as amended; fixture-proved by B2's scroll-acceptance test, measured at worst-case cursor position per level).
 3. Clip invariants green across the regenerated fixture — hero + ALL FOUR bosses' fresh compositions (12 viewports each), not just imposter clones.
 4. Locked-Spells teaser leaks no spell names (visual judge + the model's own derive test).
 5. Keyboard parity: everything reachable by keys alone; Escape semantics unchanged at top level. Replay rig unaffected.
