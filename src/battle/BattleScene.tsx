@@ -11,7 +11,8 @@ import {
   type BattleState,
   type BossState,
 } from "./engine";
-import { commandsForKit } from "./abilities";
+import { commandsForKit, type AbilityCommand } from "./abilities";
+import { deriveMenuView, initialMenuState, menuReduce, type MenuInput, type MenuState } from "./commandMenu";
 import { sceneFor } from "./scenes";
 import { CASCADE_ID, type CascadeNode } from "./bosses/cascade";
 import { livingTargets, SF_TARGET_ID, SILENT_FAILURE_ID } from "./bosses/silentFailure";
@@ -22,6 +23,7 @@ import {
 import { imposterBatAnchor, imposterCursorAnchor } from "./scenes/imposter";
 import { nodeBox } from "./scenes/cascadeCompose";
 import { cellRect, stageMetrics } from "./layout";
+import { menuPanelMaxHeight } from "./panelBudget";
 import { PIECES as SF_PIECES } from "../generated/bossSilentFailure";
 import { shouldComposeBoss } from "./sceneGate";
 import type { ComposeGateMode } from "./sceneGate";
@@ -168,7 +170,8 @@ export default function BattleScene(props: Props) {
   const [mode, setMode] = useState<UiMode>(() =>
     state.status === "victory" ? "victory" : state.status === "defeat" ? "defeat" : "menu",
   );
-  const [cmdIdx, setCmdIdx] = useState(0);
+  const [menu, setMenu] = useState<MenuState>(initialMenuState);
+  const [pendingCmd, setPendingCmd] = useState<AbilityCommand | null>(null);
   const [cursorBat, setCursorBat] = useState<number | null>(null);
   const [floats, setFloats] = useState<FloatNum[]>([]);
   const [flutter, setFlutter] = useState(0);
@@ -184,22 +187,37 @@ export default function BattleScene(props: Props) {
     () => commandsForKit(deriveKit(state.defeatedBosses)),
     [state.defeatedBosses],
   );
+  // M12 plan PR-B task B1 item 1: the nested top/skills/spells view, derived
+  // from the pure commandMenu.ts model (PR-A Task A1). Replaces the flat
+  // `commands` list the panel used to render directly.
+  const view = useMemo(() => deriveMenuView(commands, menu.level), [commands, menu.level]);
+  const currentCursor = menu.cursor[menu.level];
+  const activeRow = view.rows[currentCursor];
+  const footerDesc = activeRow ? (activeRow.kind === "ability" ? activeRow.cmd.desc : activeRow.desc) : "";
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offRef = useRef<HTMLCanvasElement | null>(null);
   const timers = useRef<number[]>([]);
-  const stateRef = useRef({ mode, cmdIdx, cursorBat, state, shown, commands });
-  stateRef.current = { mode, cmdIdx, cursorBat, state, shown, commands };
+  const stateRef = useRef({ mode, menu, pendingCmd, cursorBat, state, shown, commands });
+  stateRef.current = { mode, menu, pendingCmd, cursorBat, state, shown, commands };
 
   // M7 PR-B task B5: the COMMAND panel is now height-clamped and its ability
   // list scrolls (see the `data-cmd-panel` block below), so the arrow-key
-  // cursor (`cmdIdx`, wrapping via `(i + dir + len) % len` above) can move
-  // outside the visible scroll area. Keep the active row in view on every
-  // cursor move, including the wrap.
+  // cursor can move outside the visible scroll area. Keep the active row in
+  // view on every cursor move, including the wrap and level changes (M12 plan
+  // PR-B task B1 item 7 — each level keeps its own cursor, so a level switch
+  // must re-scroll too).
   const activeRowRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     activeRowRef.current?.scrollIntoView({ block: "nearest" });
-  }, [cmdIdx]);
+  }, [menu.level, currentCursor]);
+
+  // M12 plan PR-B task B1 item 7: scroll affordance (owner ruling 3, amended
+  // to all three levels at 800x600). `overflowing` drives the bottom
+  // fade+chevron below; the effect is declared after `cmdPanelMaxHeight`
+  // (further down) since it's part of the dependency array.
+  const scrollBodyRef = useRef<HTMLDivElement | null>(null);
+  const [overflowing, setOverflowing] = useState(false);
 
   // ---- geometry: contain-fit desktop, width-fit mobile (plan §Architecture 3) ----
   // M7 PR-B task B3: verbatim-ported into src/battle/layout.ts (a pure,
@@ -209,6 +227,24 @@ export default function BattleScene(props: Props) {
     () => stageMetrics(vw, vh, isMobile),
     [vw, vh, isMobile],
   );
+
+  // M12 plan PR-B task B1 item 5: the measured, viewport-aware cap
+  // (panelBudget.ts) replaces M7's flat `maxHeight: 150`. `containerHeight`
+  // is `[data-battle]`'s own rendered height — the M7 fixture showed
+  // containerHeight === vh at every swept viewport (B2's rig re-verifies the
+  // equality still holds against the regenerated fixture), so `vh` is passed
+  // directly with no measured container value in scope here.
+  const cmdPanelMaxHeight = useMemo(
+    () => Math.round(menuPanelMaxHeight(vw, vh, vh, isMobile)),
+    [vw, vh, isMobile],
+  );
+
+  // M12 plan PR-B task B1 item 7 (continued): recompute whenever the body's
+  // content (level/rows) or the panel's own height budget could change.
+  useEffect(() => {
+    const el = scrollBodyRef.current;
+    setOverflowing(!!el && el.scrollHeight > el.clientHeight + 0.5);
+  }, [view, cmdPanelMaxHeight, isMobile, mode]);
 
   // ---- descend beat: swarm fades in, inputs unlock after ----
   const descendRef = useRef(true);
@@ -552,12 +588,21 @@ export default function BattleScene(props: Props) {
     return assertNever(s.boss);
   }, []);
 
-  const startTarget = useCallback(() => {
-    const living = livingByColumn(stateRef.current.state);
-    setCursorBat(living[0]?.id ?? null);
-    setMode("target");
-    props.playEnter();
-  }, [livingByColumn, props]);
+  /** Enter target mode for `cmd` (M12 plan PR-B task B1 item 1) — `cmd` is
+   * kept in `pendingCmd` so the keyboard/tap confirm sites in target mode
+   * (below) can look up which ability is being cast without a `cmdIdx` to
+   * index `commands` by (that flat cursor no longer exists once the menu
+   * nests). */
+  const startTarget = useCallback(
+    (cmd: AbilityCommand) => {
+      setPendingCmd(cmd);
+      const living = livingByColumn(stateRef.current.state);
+      setCursorBat(living[0]?.id ?? null);
+      setMode("target");
+      props.playEnter();
+    },
+    [livingByColumn, props],
+  );
 
   const cycleTarget = useCallback(
     (dir: number) => {
@@ -572,6 +617,58 @@ export default function BattleScene(props: Props) {
     [livingByColumn, props],
   );
 
+  /** Sound + mode/commit behavior for a `menuReduce` effect (M12 plan PR-B
+   * task B1 item 1's "single helper"). Shared by the stateRef-driven keyboard
+   * path (applyMenuInput, below) and the closure-driven row onClick (the
+   * command-panel JSX further down) so both stay in lockstep. */
+  const applyEffect = useCallback(
+    (effect: ReturnType<typeof menuReduce>["effect"]) => {
+      switch (effect.type) {
+        case "moved":
+          props.playMove();
+          break;
+        case "descend":
+          props.playEnter();
+          break;
+        case "ascend":
+          props.playBack();
+          break;
+        case "pause":
+          setMode("pause");
+          props.playBack();
+          break;
+        case "blocked":
+          props.playBack();
+          break;
+        case "cast":
+          if (effect.cmd.needsTarget) startTarget(effect.cmd);
+          else commit({ type: effect.cmd.id } as BattleAction);
+          break;
+        default:
+          assertNever(effect);
+      }
+    },
+    [props, startTarget, commit],
+  );
+
+  /** Keyboard entry point: reads current menu/commands/mp off `stateRef`
+   * (the keydown listener effect below only resubscribes on a small,
+   * mostly-stable dependency list, so it must read live values through the
+   * ref rather than stale closures — same pattern the old cmdIdx code used). */
+  const applyMenuInput = useCallback(
+    (input: MenuInput) => {
+      const { menu: nextMenu, effect } = menuReduce(
+        stateRef.current.menu,
+        input,
+        stateRef.current.commands,
+        stateRef.current.state.hero.mp,
+      );
+      setMenu(nextMenu);
+      applyEffect(effect);
+    },
+    [applyEffect],
+  );
+
   const retry = useCallback(() => {
     const nextAttempt = stateRef.current.state.attempt + 1;
     let s = initBattle({ seed, attempt: nextAttempt, defeatedBosses, boss });
@@ -582,7 +679,7 @@ export default function BattleScene(props: Props) {
     setHeroReel(null);
     setBanner("");
     setMode("menu");
-    setCmdIdx(0);
+    setMenu(initialMenuState);
     props.playEnter();
   }, [seed, defeatedBosses, boss, props]);
 
@@ -606,30 +703,25 @@ export default function BattleScene(props: Props) {
       const m = stateRef.current.mode;
 
       if (m === "menu") {
+        // M12 plan PR-B task B1 item 2: ArrowLeft is `back` ONLY inside a
+        // submenu (never an accidental pause at top — the top-level no-op is
+        // the new binding this milestone adds).
         if (k === "ArrowUp" || k === "ArrowDown") {
-          const dir = k === "ArrowUp" ? -1 : 1;
-          const len = stateRef.current.commands.length;
-          setCmdIdx((i) => (i + dir + len) % len);
-          props.playMove();
+          applyMenuInput(k === "ArrowUp" ? "up" : "down");
         } else if (k === "Enter" || k === " " || k === "ArrowRight") {
-          const cmd = stateRef.current.commands[stateRef.current.cmdIdx];
-          if (stateRef.current.state.hero.mp < cmd.mp) {
-            props.playBack();
-            return;
-          }
-          if (cmd.needsTarget) startTarget();
-          else commit({ type: cmd.id } as BattleAction);
+          applyMenuInput("confirm");
+        } else if (k === "ArrowLeft") {
+          if (stateRef.current.menu.level !== "top") applyMenuInput("back");
         } else if (k === "Escape" || k === "Backspace") {
-          setMode("pause");
-          props.playBack();
+          applyMenuInput("back");
         }
       } else if (m === "target") {
         if (k === "ArrowLeft" || k === "ArrowUp") cycleTarget(-1);
         else if (k === "ArrowRight" || k === "ArrowDown") cycleTarget(1);
         else if (k === "Enter" || k === " ") {
-          const cmd = stateRef.current.commands[stateRef.current.cmdIdx];
+          const cmd = stateRef.current.pendingCmd;
           const target = stateRef.current.cursorBat;
-          if (target !== null)
+          if (cmd && target !== null)
             commit({ type: cmd.id, target } as BattleAction);
         } else if (k === "Escape" || k === "Backspace") {
           setCursorBat(null);
@@ -653,7 +745,7 @@ export default function BattleScene(props: Props) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [commit, cycleTarget, onForfeit, onVictory, props, retry, startTarget]);
+  }, [applyMenuInput, commit, cycleTarget, onForfeit, onVictory, props, retry]);
 
   // ---- derived UI values ----
   // M6 PR-1b task 5: Cascade has no single "real" boss entity to mask/reveal
@@ -894,6 +986,7 @@ export default function BattleScene(props: Props) {
       {(mode === "menu" || mode === "target") && (
         <div
           data-cmd-panel
+          data-cmd-level={menu.level}
           style={{
             ...panel,
             position: "absolute",
@@ -903,14 +996,10 @@ export default function BattleScene(props: Props) {
             right: isMobile ? 10 : "auto",
             zIndex: 11,
             overflow: "hidden",
-            // M7 PR-B task B5 (owner-ruled Option C): the panel's UNCLAMPED
-            // content (362px measured pre-fix) clips the leftmost clone's
-            // foot at every swept viewport, worst at 800x600 where 151px is
-            // the binding threshold. A flat 150 clears every viewport
-            // (provable, not responsive) — see layout.test.ts's re-enabled
-            // invariant. The ability list scrolls inside; header/footer stay
-            // pinned via the flex children below.
-            maxHeight: 150,
+            // M7 PR-B task B5 (owner-ruled Option C) shipped a flat 150 here;
+            // M12 plan PR-B task B1 item 5 replaces it with the measured,
+            // viewport-aware budget (panelBudget.ts).
+            maxHeight: cmdPanelMaxHeight,
             display: "flex",
             flexDirection: "column",
           }}
@@ -919,14 +1008,31 @@ export default function BattleScene(props: Props) {
             style={{
               display: "flex",
               justifyContent: "space-between",
-              padding: "11px 14px",
+              // M12 plan PR-B task B1 item 6: desktop-only chrome compaction
+              // (mobile keeps its roomier 11px/14px — its budget floor is 315,
+              // never tight).
+              padding: isMobile ? "11px 14px" : "7px 14px",
               borderBottom: "1px solid rgba(190,140,255,.2)",
               background: "linear-gradient(90deg, rgba(150,80,255,.14), transparent)",
               flex: "0 0 auto",
             }}
           >
-            <span style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".3em", color: "#c9a4ff" }}>
-              {mode === "target" ? "TARGET" : "COMMAND"}
+            {/* M12 plan PR-B task B1 item 3: at top, unchanged "COMMAND"; in a
+                submenu, a clickable/tappable "◂ TITLE" breadcrumb (mobile back
+                affordance) that ascends via the same applyMenuInput("back")
+                the ArrowLeft binding uses. */}
+            <span
+              role={mode === "menu" && view.title ? "button" : undefined}
+              onClick={mode === "menu" && view.title ? () => applyMenuInput("back") : undefined}
+              style={{
+                fontFamily: MONO,
+                fontSize: "10px",
+                letterSpacing: ".3em",
+                color: "#c9a4ff",
+                cursor: mode === "menu" && view.title ? "pointer" : undefined,
+              }}
+            >
+              {mode === "target" ? "TARGET" : view.title ? `◂ ${view.title}` : "COMMAND"}
             </span>
             <span style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".14em", color: "#8a7ba8" }}>TURN {state.turn}</span>
           </div>
@@ -937,66 +1043,99 @@ export default function BattleScene(props: Props) {
               </div>
             </div>
           ) : (
-            <div style={{ padding: "8px", overflowY: "auto", flex: "1 1 auto", minHeight: 0 }}>
-              {commands.map((c, i) => {
-                const active = i === cmdIdx;
-                const afford = state.hero.mp >= c.mp;
+            <div
+              ref={scrollBodyRef}
+              style={{ position: "relative", padding: "8px", overflowY: "auto", flex: "1 1 auto", minHeight: 0 }}
+            >
+              {view.rows.map((row, i) => {
+                const active = i === currentCursor;
+                const afford = row.kind === "ability" ? state.hero.mp >= row.cmd.mp : !row.locked;
                 return (
                   <div
-                    key={c.id}
+                    key={row.kind === "ability" ? row.cmd.id : row.id}
                     ref={active ? activeRowRef : undefined}
                     role="button"
                     onClick={() => {
                       if (mode !== "menu" || descend) return;
-                      setCmdIdx(i);
-                      if (!afford) {
-                        props.playBack();
-                        return;
-                      }
-                      if (c.needsTarget) startTarget();
-                      else commit({ type: c.id } as BattleAction);
+                      const withCursor: MenuState = { ...menu, cursor: { ...menu.cursor, [menu.level]: i } };
+                      const { menu: nextMenu, effect } = menuReduce(withCursor, "confirm", commands, state.hero.mp);
+                      setMenu(nextMenu);
+                      applyEffect(effect);
                     }}
-                    onMouseEnter={() => setCmdIdx(i)}
+                    onMouseEnter={() => setMenu((m) => ({ ...m, cursor: { ...m.cursor, [m.level]: i } }))}
                     style={{
                       display: "flex",
                       alignItems: "center",
                       gap: 10,
-                      padding: "10px 12px",
+                      padding: isMobile ? "10px 12px" : "6px 12px",
                       borderRadius: 9,
                       cursor: afford ? "pointer" : "default",
                       color: !afford ? "#5f5576" : active ? "#f2ecff" : "#c2b4de",
                       background: active ? "linear-gradient(90deg, rgba(160,90,255,.3), rgba(160,90,255,.05))" : "transparent",
                       border: active ? "1px solid rgba(200,150,255,.4)" : "1px solid transparent",
-                      fontSize: "14px",
+                      // M12 plan PR-B task B1 item 6, shave order step 1 (row
+                      // font 14 -> 13, desktop only): the 800x600 3-row
+                      // budget (148) still missed after the padding
+                      // compaction alone — owner-ruled 2026-07-30 to accept
+                      // the residual scroll at 800x600 for all three levels
+                      // rather than shave further (see plan ruling 3 amendment).
+                      fontSize: isMobile ? "14px" : "13px",
                       fontFamily: "'Sora',sans-serif",
                     }}
                   >
                     <span style={{ width: 12, color: active ? "#c9a4ff" : "transparent" }}>▸</span>
-                    <span style={{ flex: 1 }}>{c.label}</span>
+                    <span style={{ flex: 1 }}>{row.kind === "ability" ? row.cmd.label : row.label}</span>
                     <span style={{ fontFamily: MONO, fontSize: "11px", color: afford ? "#9f8fd0" : "#5f5576" }}>
-                      {c.mp > 0 ? c.mp + " MP" : "FREE"}
+                      {row.kind === "ability" ? (row.cmd.mp > 0 ? row.cmd.mp + " MP" : "FREE") : "▸"}
                     </span>
                   </div>
                 );
               })}
+              {/* M12 plan PR-B task B1 item 7: bottom fade + chevron scroll
+                  affordance (owner ruling 3, amended 2026-07-30 to all three
+                  levels at 800x600 rather than Spells alone). Purely visual,
+                  pointer-events none so it never intercepts row clicks. */}
+              {overflowing && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 22,
+                    background: "linear-gradient(to bottom, rgba(20,14,32,0), rgba(14,10,26,.92))",
+                    pointerEvents: "none",
+                    display: "flex",
+                    alignItems: "flex-end",
+                    justifyContent: "center",
+                    paddingBottom: 2,
+                  }}
+                >
+                  <span style={{ fontFamily: MONO, fontSize: "12px", color: "#c9a4ff", textShadow: "0 0 6px #000" }}>▾</span>
+                </div>
+              )}
             </div>
           )}
           {mode === "menu" && (
             <div
               style={{
-                padding: "7px 12px 3px",
+                padding: isMobile ? "7px 12px 3px" : "5px 12px 3px",
                 fontFamily: MONO,
-                fontSize: "10px",
+                // M12 plan PR-B task B1 item 6, shave order step 2 (footer
+                // font 10 -> 9, desktop only) — applied alongside step 1;
+                // owner-ruled 2026-07-30 to accept the residual 800x600
+                // scroll on all three levels rather than shave further.
+                fontSize: isMobile ? "10px" : "9px",
                 color: "#8a7ba8",
                 letterSpacing: ".08em",
                 borderTop: "1px solid rgba(190,140,255,.14)",
-                marginTop: 4,
+                marginTop: isMobile ? 4 : 2,
                 marginLeft: 8,
                 marginRight: 8,
                 flex: "0 0 auto",
               }}
             >
-              {commands[cmdIdx].desc}
+              {footerDesc}
             </div>
           )}
         </div>
@@ -1017,9 +1156,9 @@ export default function BattleScene(props: Props) {
           role="button"
           onClick={(e) => {
             e.stopPropagation();
-            const cmd = stateRef.current.commands[stateRef.current.cmdIdx];
+            const cmd = stateRef.current.pendingCmd;
             const target = stateRef.current.cursorBat;
-            if (target !== null) commit({ type: cmd.id, target } as BattleAction);
+            if (cmd && target !== null) commit({ type: cmd.id, target } as BattleAction);
           }}
           style={{
             ...panel,

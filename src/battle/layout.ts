@@ -110,7 +110,7 @@ export function gridRect(m: StageMetrics, originRow: number, originCol: number, 
  * closed-form function of its numeric inputs; this one function is not, and
  * says so via its inputs rather than hiding it behind a global read. Both
  * values come from tools/measure-battle-layout.mjs's output
- * (docs/battle-prototypes/m7-clip/measured.json /
+ * (docs/battle-prototypes/m12-menu/measured.json /
  * src/battle/__fixtures__/measuredLayout.ts). */
 export function commandPanelRect(vw: number, containerHeight: number, isMobile: boolean, panelHeight: number): Rect {
   if (isMobile) {
