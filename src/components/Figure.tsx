@@ -67,38 +67,79 @@ export function Figure({ figure }: FigureProps) {
                 gap: "0px",
               }}
             >
-              {row.nodes.map((node, ni) => {
-                const tone = TONE_STYLES[node.tone];
-                const nodeStyle: CSSProperties = {
-                  borderRadius: "11px",
-                  fontFamily: mono,
-                  fontSize: "11px",
-                  letterSpacing: ".08em",
-                  padding: "9px 10px",
-                  textAlign: "center",
-                  background: tone.fill,
-                  border: `1px solid ${tone.border}`,
-                  color: tone.text,
-                  flex: orientation === "row" ? 1 : undefined,
-                };
-                return (
-                  <div key={ni} style={{ display: "flex", flexDirection: orientation === "row" ? "row" : "column", alignItems: "center" }}>
-                    <div style={nodeStyle}>{node.label}</div>
-                    {ni < row.nodes.length - 1 && (
-                      <span
-                        style={{
-                          color: "#7fb0ff",
-                          fontFamily: mono,
-                          fontSize: "12px",
-                          padding: orientation === "row" ? "0 11px" : "5px 0",
-                        }}
-                      >
-                        {orientation === "row" ? "▸" : "▾"}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+              {orientation === "row"
+                ? row.nodes.flatMap((node, ni) => {
+                    const tone = TONE_STYLES[node.tone];
+                    const nodeStyle: CSSProperties = {
+                      borderRadius: "11px",
+                      fontFamily: mono,
+                      fontSize: "11px",
+                      letterSpacing: ".08em",
+                      padding: "9px 10px",
+                      textAlign: "center",
+                      background: tone.fill,
+                      border: `1px solid ${tone.border}`,
+                      color: tone.text,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flex: 1,
+                    };
+                    const elements = [
+                      <div key={`node-${ni}`} style={nodeStyle}>
+                        {node.label}
+                      </div>,
+                    ];
+                    if (ni < row.nodes.length - 1) {
+                      elements.push(
+                        <span
+                          key={`conn-${ni}`}
+                          style={{
+                            color: "#7fb0ff",
+                            fontFamily: mono,
+                            fontSize: "12px",
+                            padding: "0 11px",
+                            flex: "0 0 auto",
+                            alignSelf: "center",
+                          }}
+                        >
+                          ▸
+                        </span>,
+                      );
+                    }
+                    return elements;
+                  })
+                : row.nodes.map((node, ni) => {
+                    const tone = TONE_STYLES[node.tone];
+                    const nodeStyle: CSSProperties = {
+                      borderRadius: "11px",
+                      fontFamily: mono,
+                      fontSize: "11px",
+                      letterSpacing: ".08em",
+                      padding: "9px 10px",
+                      textAlign: "center",
+                      background: tone.fill,
+                      border: `1px solid ${tone.border}`,
+                      color: tone.text,
+                    };
+                    return (
+                      <div key={ni} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                        <div style={nodeStyle}>{node.label}</div>
+                        {ni < row.nodes.length - 1 && (
+                          <span
+                            style={{
+                              color: "#7fb0ff",
+                              fontFamily: mono,
+                              fontSize: "12px",
+                              padding: "5px 0",
+                            }}
+                          >
+                            ▾
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
             </div>
           ))}
         </div>
