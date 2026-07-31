@@ -37,9 +37,9 @@ export const FIGURES: Record<string, Figure> = {
   "the-failure-that-left-no-logs": {
     kind: "log",
     lines: [
-      { channel: "topic.orders", value: "delivered", tone: "muted" },
-      { channel: "topic.orders.retry", value: "attempt 1", tone: "muted" },
-      { channel: "topic.orders.retry", value: "error 400 html body", tone: "fault" },
+      { channel: "topic.events", value: "delivered", tone: "muted" },
+      { channel: "topic.events.retry", value: "attempt 1", tone: "muted" },
+      { channel: "topic.events.retry", value: "error 400 html body", tone: "fault" },
       { channel: "app.ingress", value: "no entry", tone: "muted" },
       { channel: "app.handler", value: "no entry", tone: "muted" },
     ],
