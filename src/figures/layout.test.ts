@@ -64,12 +64,23 @@ describe("uniformRowThresholdPx", () => {
     expect(uniformRowThresholdPx([single])).toBe(0);
   });
 
-  it("gives every figure the same orientation at any given width", () => {
+  it("dominates every individual figure's own requirement (the registry-wide threshold is never smaller)", () => {
+    const combined = uniformRowThresholdPx(TEST_FIGURES);
+    for (const figure of TEST_FIGURES) {
+      expect(uniformRowThresholdPx([figure])).toBeLessThanOrEqual(combined);
+    }
+  });
+
+  it("never asks a figure to render a row in a space too small for it", () => {
     const threshold = uniformRowThresholdPx(TEST_FIGURES);
     const sweep = [threshold - 50, threshold - 1, threshold, threshold + 1, threshold + 50];
     for (const width of sweep) {
-      const orientations = new Set(TEST_FIGURES.map(() => orientationFor(threshold, width)));
-      expect(orientations.size).toBe(1);
+      for (const figure of TEST_FIGURES) {
+        if (orientationFor(threshold, width) !== "row") continue;
+        for (const row of figure.rows) {
+          expect(rowFits(row.nodes.length, width), `width=${width}`).toBe(true);
+        }
+      }
     }
   });
 });
@@ -112,8 +123,6 @@ describe("logModeFor", () => {
   });
 
   it("returns inline when the widest line exactly equals the text width", () => {
-    const contentPx = 300;
-    const textPx = logTextWidthPx(contentPx);
     const line = { channel: "chan", value: "value", tone: "muted" as const };
     const exactWidth = logLineWidthPx(line);
     // Build a synthetic content width where textPx exactly equals this line's width.
@@ -122,7 +131,6 @@ describe("logModeFor", () => {
     expect(logModeFor(fig, exactContentPx)).toBe("inline");
     // sanity: confirm the width really is exactly the text width at that content size
     expect(logTextWidthPx(exactContentPx)).toBeCloseTo(exactWidth, 6);
-    void textPx;
   });
 
   it("stacks for an unmeasured (non-finite) container, same rule as orientationFor", () => {
@@ -133,9 +141,16 @@ describe("logModeFor", () => {
 });
 
 describe("maxLabelWordChars / maxLogValueChars", () => {
-  it("are derived from the constants, not hardcoded", () => {
-    expect(maxLabelWordChars()).toBe(Math.floor((NODE_MIN_PX - 2 * 10) / MONO_CH_PX));
-    expect(maxLogValueChars(238)).toBe(Math.floor(logTextWidthPx(238) / MONO_CH_PX));
+  it("maxLabelWordChars() holds the registry's longest label word, ORCHESTRATOR (12 chars), with zero margin to spare", () => {
+    // Not "equals the implementation restated" (that passes for any constants
+    // — the registry.ts defect this replaces). ORCHESTRATOR is the actual
+    // 12-character boundary NODE_MIN_PX exists to guard; if this ever drops
+    // below 12 the registry's own label-cap test goes red for real content.
+    expect(maxLabelWordChars()).toBeGreaterThanOrEqual(12);
+  });
+
+  it("maxLogValueChars(238) holds the registry's longest log value, \"depth and lag exported\" (22 chars), with zero margin to spare", () => {
+    expect(maxLogValueChars(238)).toBeGreaterThanOrEqual(22);
   });
 });
 

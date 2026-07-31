@@ -4,10 +4,13 @@ import { FIGURES, figureFor } from "./registry";
 import type { Figure, FlowFigure, LogFigure } from "./types";
 import {
   contentWidthForViewport,
+  logLineWidthPx,
+  logModeFor,
   logTextWidthPx,
   maxLabelWordChars,
   maxLogValueChars,
   orientationFor,
+  rowFits,
   uniformRowThresholdPx,
 } from "./layout";
 import { MEASURED_FIGURE_TYPE } from "./__fixtures__/measuredFigureType";
@@ -114,25 +117,54 @@ describe("flow viewport sweep, in the container domain", () => {
   const flowFigures = Object.values(FIGURES).filter(isFlow);
   const threshold = uniformRowThresholdPx(flowFigures);
 
-  it("is column at 320, 360, 390 and row at 768 and above, uniformly across every flow figure", () => {
+  it("is column at 320, 360, 390 and row at 768 and above", () => {
     for (const vw of VIEWPORTS) {
       const contentPx = contentWidthForViewport(vw);
       const orientation = orientationFor(threshold, contentPx);
       if (vw <= 390) expect(orientation, `vw=${vw}`).toBe("column");
       if (vw >= 768) expect(orientation, `vw=${vw}`).toBe("row");
+    }
+  });
 
-      // Uniformity: every flow figure resolves to the same orientation at
-      // this width, because the threshold is derived once across all of them.
-      const orientations = new Set(flowFigures.map(() => orientationFor(threshold, contentPx)));
-      expect(orientations.size).toBe(1);
+  it("the registry-wide threshold dominates every individual figure's own requirement", () => {
+    for (const figure of flowFigures) {
+      expect(uniformRowThresholdPx([figure])).toBeLessThanOrEqual(threshold);
+    }
+  });
+
+  it("never asks a figure to render a row in a space too small for it, at any width in the sweep", () => {
+    for (const vw of VIEWPORTS) {
+      const contentPx = contentWidthForViewport(vw);
+      for (const figure of flowFigures) {
+        if (orientationFor(threshold, contentPx) !== "row") continue;
+        for (const row of figure.rows) {
+          expect(rowFits(row.nodes.length, contentPx), `vw=${vw}`).toBe(true);
+        }
+      }
     }
   });
 });
 
 describe("log viewport sweep, in the container domain", () => {
-  it("inline only when the widest line genuinely fits the text width, and every stacked value fits at 320", async () => {
-    const { logLineWidthPx, logModeFor } = await import("./layout");
-    const logFigures = Object.values(FIGURES).filter(isLog);
+  it("both log figures are stacked at a 320 viewport and inline at 1440 (a mode actually occurs at both ends)", () => {
+    // Real content, not a shape assertion: if logModeFor always returned
+    // "stacked" (or always "inline"), every `if (mode === "inline") ...`
+    // check below would still pass vacuously. Pin both actual endpoints
+    // instead. Verified against the registry's real strings: the widest
+    // lines are 39 chars ("the-failure-that-left-no-logs", ~292px) and 40
+    // chars ("notification-dispatch", ~300px) against a 226px text width at
+    // 320 (both exceed it: stacked) and an 818px text width at 1440 (both
+    // fit: inline).
+    const contentAt320 = contentWidthForViewport(320);
+    const contentAt1440 = contentWidthForViewport(1440);
+    for (const [slug, fig] of Object.entries(FIGURES)) {
+      if (!isLog(fig)) continue;
+      expect(logModeFor(fig, contentAt320), `"${slug}" at 320`).toBe("stacked");
+      expect(logModeFor(fig, contentAt1440), `"${slug}" at 1440`).toBe("inline");
+    }
+  });
+
+  it("inline only when the widest line genuinely fits the text width, and every stacked value fits at 320", () => {
     for (const [slug, fig] of Object.entries(FIGURES)) {
       if (!isLog(fig)) continue;
       for (const vw of VIEWPORTS) {
@@ -153,7 +185,6 @@ describe("log viewport sweep, in the container domain", () => {
         expect(line.value.length, `"${slug}" value "${line.value}" at 320px`).toBeLessThanOrEqual(capAt320);
       }
     }
-    void logFigures;
   });
 });
 
