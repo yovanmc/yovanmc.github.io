@@ -12,6 +12,7 @@ import {
   nodeWidthPx,
   orientationFor,
   rowFits,
+  uniformLogThresholdPx,
   uniformRowThresholdPx,
 } from "./layout";
 import type { FlowFigure, LogFigure } from "./types";
@@ -109,34 +110,62 @@ describe("measured constants", () => {
 });
 
 describe("logModeFor", () => {
-  const figureWithLine = (widthPx: number): LogFigure => ({
-    kind: "log",
-    caption: "log",
-    lines: [{ channel: "c".repeat(1), value: "v".repeat(Math.round(widthPx / MONO_CH_PX) - 3), tone: "muted" }],
-  });
-
-  it("returns stacked when the widest line exceeds the text width", () => {
+  it("returns stacked when the widest line (threshold) exceeds the text width", () => {
     const contentPx = 300;
     const textPx = logTextWidthPx(contentPx);
-    const fig = figureWithLine(textPx + MONO_CH_PX * 5);
-    expect(logModeFor(fig, contentPx)).toBe("stacked");
+    const thresholdPx = textPx + MONO_CH_PX * 5;
+    expect(logModeFor(thresholdPx, contentPx)).toBe("stacked");
   });
 
-  it("returns inline when the widest line exactly equals the text width", () => {
+  it("returns inline when the widest line (threshold) exactly equals the text width", () => {
     const line = { channel: "chan", value: "value", tone: "muted" as const };
     const exactWidth = logLineWidthPx(line);
     // Build a synthetic content width where textPx exactly equals this line's width.
     const exactContentPx = exactWidth + 12; // LOG_INDENT_PX inverse of logTextWidthPx
-    const fig: LogFigure = { kind: "log", caption: "log", lines: [line] };
-    expect(logModeFor(fig, exactContentPx)).toBe("inline");
+    expect(logModeFor(exactWidth, exactContentPx)).toBe("inline");
     // sanity: confirm the width really is exactly the text width at that content size
     expect(logTextWidthPx(exactContentPx)).toBeCloseTo(exactWidth, 6);
   });
 
   it("stacks for an unmeasured (non-finite) container, same rule as orientationFor", () => {
-    const fig: LogFigure = { kind: "log", caption: "log", lines: [{ channel: "c", value: "v", tone: "muted" }] };
-    expect(logModeFor(fig, NaN)).toBe("stacked");
-    expect(logModeFor(fig, Infinity)).toBe("stacked");
+    expect(logModeFor(500, NaN)).toBe("stacked");
+    expect(logModeFor(500, Infinity)).toBe("stacked");
+  });
+});
+
+describe("uniformLogThresholdPx", () => {
+  const SHORT_LINE: LogFigure = {
+    kind: "log",
+    caption: "short",
+    lines: [{ channel: "a", value: "v", tone: "muted" }],
+  };
+  const LONG_LINE: LogFigure = {
+    kind: "log",
+    caption: "long",
+    lines: [
+      { channel: "a", value: "v", tone: "muted" },
+      { channel: "channel.longer", value: "a much longer value here", tone: "fault" },
+    ],
+  };
+  const LOG_TEST_FIGURES: LogFigure[] = [SHORT_LINE, LONG_LINE];
+
+  it("equals the widest single line requirement across the figures", () => {
+    const expected = Math.max(
+      ...LONG_LINE.lines.map((l) => logLineWidthPx(l)),
+      ...SHORT_LINE.lines.map((l) => logLineWidthPx(l)),
+    );
+    expect(uniformLogThresholdPx(LOG_TEST_FIGURES)).toBe(expected);
+  });
+
+  it("dominates every individual figure's own requirement (the registry-wide threshold is never smaller)", () => {
+    const combined = uniformLogThresholdPx(LOG_TEST_FIGURES);
+    for (const figure of LOG_TEST_FIGURES) {
+      expect(uniformLogThresholdPx([figure])).toBeLessThanOrEqual(combined);
+    }
+  });
+
+  it("returns 0 for a figure list with no lines", () => {
+    expect(uniformLogThresholdPx([])).toBe(0);
   });
 });
 

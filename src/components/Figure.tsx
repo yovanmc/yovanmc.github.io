@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Figure as FigureData, Tone } from "../figures/types";
 import { FIGURES } from "../figures/registry";
-import { orientationFor, logModeFor, uniformRowThresholdPx } from "../figures/layout";
+import { orientationFor, logModeFor, uniformLogThresholdPx, uniformRowThresholdPx } from "../figures/layout";
 
 const mono = "'JetBrains Mono',monospace";
 
@@ -18,6 +18,8 @@ const TONE_STYLES: Record<Tone, { fill: string; border: string; text: string }> 
 
 const FLOW_FIGURES = Object.values(FIGURES).filter((f) => f.kind === "flow");
 const ROW_THRESHOLD_PX = uniformRowThresholdPx(FLOW_FIGURES);
+const LOG_FIGURES = Object.values(FIGURES).filter((f) => f.kind === "log");
+const LOG_THRESHOLD_PX = uniformLogThresholdPx(LOG_FIGURES);
 
 interface FigureProps {
   figure: FigureData;
@@ -39,7 +41,7 @@ export function Figure({ figure }: FigureProps) {
   }, []);
 
   const orientation = orientationFor(ROW_THRESHOLD_PX, contentWidthPx);
-  const logMode = figure.kind === "log" ? logModeFor(figure, contentWidthPx) : null;
+  const logMode = figure.kind === "log" ? logModeFor(LOG_THRESHOLD_PX, contentWidthPx) : null;
 
   return (
     <div

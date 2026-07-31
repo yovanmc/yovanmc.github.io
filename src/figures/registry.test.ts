@@ -11,6 +11,7 @@ import {
   maxLogValueChars,
   orientationFor,
   rowFits,
+  uniformLogThresholdPx,
   uniformRowThresholdPx,
 } from "./layout";
 import { MEASURED_FIGURE_TYPE } from "./__fixtures__/measuredFigureType";
@@ -146,6 +147,9 @@ describe("flow viewport sweep, in the container domain", () => {
 });
 
 describe("log viewport sweep, in the container domain", () => {
+  const logFigures = Object.values(FIGURES).filter(isLog);
+  const logThreshold = uniformLogThresholdPx(logFigures);
+
   it("both log figures are stacked at a 320 viewport and inline at 1440 (a mode actually occurs at both ends)", () => {
     // Real content, not a shape assertion: if logModeFor always returned
     // "stacked" (or always "inline"), every `if (mode === "inline") ...`
@@ -159,8 +163,37 @@ describe("log viewport sweep, in the container domain", () => {
     const contentAt1440 = contentWidthForViewport(1440);
     for (const [slug, fig] of Object.entries(FIGURES)) {
       if (!isLog(fig)) continue;
-      expect(logModeFor(fig, contentAt320), `"${slug}" at 320`).toBe("stacked");
-      expect(logModeFor(fig, contentAt1440), `"${slug}" at 1440`).toBe("inline");
+      expect(logModeFor(logThreshold, contentAt320), `"${slug}" at 320`).toBe("stacked");
+      expect(logModeFor(logThreshold, contentAt1440), `"${slug}" at 1440`).toBe("inline");
+    }
+  });
+
+  it("the registry-wide threshold dominates every individual figure's own requirement", () => {
+    for (const fig of logFigures) {
+      expect(uniformLogThresholdPx([fig])).toBeLessThanOrEqual(logThreshold);
+    }
+  });
+
+  it("resolves to the SAME mode for every log figure, at every width in the sweep — derived per figure from its own data, not from one shared call", () => {
+    // This is the defect the A6 geometry probe found: at 390px the widest
+    // lines in the registry are 39 chars (~292.1px, fits) and 40 chars
+    // (~299.6px, does not), so the old per-figure rule let
+    // "the-failure-that-left-no-logs" render inline while
+    // "notification-dispatch" rendered stacked, on the same device. A
+    // Set-of-one built from a single cached call would pass vacuously
+    // regardless of whether the threshold is actually shared, so each
+    // figure's own widest line is genuinely computed here (and checked
+    // against the shared threshold) before the mode itself is collected.
+    for (const vw of VIEWPORTS) {
+      const contentPx = contentWidthForViewport(vw);
+      const modes = new Set(
+        logFigures.map((fig) => {
+          const ownWidest = fig.lines.reduce((m, l) => Math.max(m, logLineWidthPx(l)), 0);
+          expect(ownWidest, `vw=${vw}`).toBeLessThanOrEqual(logThreshold);
+          return logModeFor(logThreshold, contentPx);
+        }),
+      );
+      expect(modes.size, `vw=${vw}`).toBe(1);
     }
   });
 
@@ -169,7 +202,7 @@ describe("log viewport sweep, in the container domain", () => {
       if (!isLog(fig)) continue;
       for (const vw of VIEWPORTS) {
         const contentPx = contentWidthForViewport(vw);
-        const mode = logModeFor(fig, contentPx);
+        const mode = logModeFor(logThreshold, contentPx);
         const widest = fig.lines.reduce((m, l) => Math.max(m, logLineWidthPx(l)), 0);
         if (mode === "inline") {
           expect(widest, `"${slug}" vw=${vw}`).toBeLessThanOrEqual(logTextWidthPx(contentPx));

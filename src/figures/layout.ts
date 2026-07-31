@@ -101,8 +101,30 @@ export function logLineWidthPx(line: { channel: string; value: string }): number
   return (line.channel.length + 2 + line.value.length) * MONO_CH_PX;
 }
 
-export function logModeFor(figure: LogFigure, availablePx: number): LogMode {
+/**
+ * The one width at which EVERY log figure in the registry flips mode.
+ * Mirrors `uniformRowThresholdPx`: deriving a single threshold across the
+ * whole registry is what makes the uniformity claim true. A per-figure
+ * "does this figure's own widest line fit" rule let one log figure render
+ * inline while another rendered stacked at the same viewport — concretely,
+ * at a 390px viewport the widest lines in the registry are 39 chars
+ * (~292.1px, fits the ~296px text width) and 40 chars (~299.6px, does not),
+ * so `the-failure-that-left-no-logs` rendered inline while
+ * `notification-dispatch` rendered stacked on the same device. That is the
+ * defect this function exists to fix, the same way `STACK_BELOW_PX` was
+ * replaced on the flow axis.
+ */
+export function uniformLogThresholdPx(figures: LogFigure[]): number {
+  let widest = 0;
+  for (const f of figures) {
+    for (const l of f.lines) {
+      widest = Math.max(widest, logLineWidthPx(l));
+    }
+  }
+  return widest;
+}
+
+export function logModeFor(thresholdPx: number, availablePx: number): LogMode {
   if (!Number.isFinite(availablePx)) return "stacked";
-  const widest = figure.lines.reduce((m, l) => Math.max(m, logLineWidthPx(l)), 0);
-  return widest <= logTextWidthPx(availablePx) ? "inline" : "stacked";
+  return logTextWidthPx(availablePx) >= thresholdPx ? "inline" : "stacked";
 }
