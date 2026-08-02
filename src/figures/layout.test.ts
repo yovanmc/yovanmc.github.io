@@ -24,12 +24,10 @@ import { MEASURED_FIGURE_TYPE } from "./__fixtures__/measuredFigureType";
 // it against the real six figures.
 const THREE_NODE: FlowFigure = {
   kind: "flow",
-  caption: "three",
   rows: [{ nodes: [{ label: "A", tone: "default" }, { label: "B", tone: "default" }, { label: "C", tone: "default" }] }],
 };
 const FOUR_NODE: FlowFigure = {
   kind: "flow",
-  caption: "four",
   rows: [
     { nodes: [{ label: "A", tone: "default" }, { label: "B", tone: "default" }, { label: "C", tone: "default" }, { label: "D", tone: "default" }] },
     { nodes: [{ label: "E", tone: "default" }, { label: "F", tone: "default" }] },
@@ -59,7 +57,6 @@ describe("uniformRowThresholdPx", () => {
   it("ignores single-node rows, which never gate on width", () => {
     const single: FlowFigure = {
       kind: "flow",
-      caption: "single",
       rows: [{ nodes: [{ label: "SOLO", tone: "default" }] }],
     };
     expect(uniformRowThresholdPx([single])).toBe(0);
@@ -136,12 +133,10 @@ describe("logModeFor", () => {
 describe("uniformLogThresholdPx", () => {
   const SHORT_LINE: LogFigure = {
     kind: "log",
-    caption: "short",
     lines: [{ channel: "a", value: "v", tone: "muted" }],
   };
   const LONG_LINE: LogFigure = {
     kind: "log",
-    caption: "long",
     lines: [
       { channel: "a", value: "v", tone: "muted" },
       { channel: "channel.longer", value: "a much longer value here", tone: "fault" },

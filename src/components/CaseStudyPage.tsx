@@ -198,7 +198,7 @@ export function CaseStudyPage({ page, isMobile, onClose }: CaseStudyPageProps) {
 
         {fig && (
           <div style={{ marginBottom: "46px" }}>
-            <Figure figure={fig} />
+            <Figure figure={fig} projectTitle={item!.title} />
           </div>
         )}
 

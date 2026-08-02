@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Figure as FigureData, Tone } from "../figures/types";
 import { FIGURES } from "../figures/registry";
 import { orientationFor, logModeFor, uniformLogThresholdPx, uniformRowThresholdPx } from "../figures/layout";
+import { accessibleNameFor } from "../figures/accessibleName";
 
 const mono = "'JetBrains Mono',monospace";
 
@@ -23,9 +24,11 @@ const LOG_THRESHOLD_PX = uniformLogThresholdPx(LOG_FIGURES);
 
 interface FigureProps {
   figure: FigureData;
+  /** the owning project's title (Item.title); the figure has no title of its own */
+  projectTitle: string;
 }
 
-export function Figure({ figure }: FigureProps) {
+export function Figure({ figure, projectTitle }: FigureProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [contentWidthPx, setContentWidthPx] = useState(0);
 
@@ -47,7 +50,7 @@ export function Figure({ figure }: FigureProps) {
     <div
       ref={containerRef}
       role="img"
-      aria-label={figure.caption}
+      aria-label={accessibleNameFor(projectTitle)}
       style={{
         border: "1px solid rgba(140,185,255,.22)",
         borderRadius: "13px",
@@ -173,7 +176,6 @@ export function Figure({ figure }: FigureProps) {
           })}
         </div>
       )}
-      <div style={{ fontFamily: mono, fontSize: "9.5px", color: "#7f93b8", marginTop: "11px" }}>{figure.caption}</div>
     </div>
   );
 }
