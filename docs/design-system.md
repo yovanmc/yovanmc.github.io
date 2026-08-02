@@ -26,7 +26,7 @@
 | body | `#c2cee2` | overview prose |
 | accent | `#7fb0ff` | section labels, glyphs, arrows |
 | accent-soft | `#9fc0ec` / `#aec6ee` / `#cfe0ff` | meta line, tags, control text |
-| muted | `#8ea0bd` / `#7f93b8` | metric labels, captions |
+| muted | `#8ea0bd` / `#7f93b8` | metric labels |
 | dim | `#5f7196` | secondary chrome, unreached state |
 
 ### Type
@@ -71,8 +71,8 @@ Two figure kinds, both data-driven.
 
 ## Binding rules for every figure
 
-1. **Captions and labels are not new prose.** Every caption must be a verbatim fragment of that item's own `summary` or `body` in `content.ts`. Every node label must be a bare technical noun, and every log channel and value must be synthetic technical output rather than a sentence. This keeps hard constraint 1 (owner voice) untriggered exactly the way M4 kept it untriggered: ship the mechanism over prose already approved. New sentences require an owner interview, not agent drafting.
+1. **Labels are not new prose.** Every node label must be a bare technical noun, and every log channel and value must be synthetic technical output rather than a sentence. This keeps hard constraint 1 (owner voice) untriggered exactly the way M4 kept it untriggered: ship the mechanism over prose already approved. New sentences require an owner interview, not agent drafting. **Figures no longer carry captions at all (owner ruling 2026-08-02, PR #49)** — the caption field, its six values, the rendered element and the caption-provenance test are gone, because the owner found the captions parroted the prose they were drawn from. The figure's bordered box is what closes the block visually, verified across 18 captures at four widths. A figure's accessible name is now derived from the project title (`accessibleNameFor` in `src/figures/`), never hand-written, so no per-figure string needs owner provenance. **Do not reintroduce a caption without an owner ruling**, and if one ever returns, the verbatim-fragment rule returns with it.
 2. **Punctuation rule applies.** No em dashes, no en dashes, no semicolons in any figure string, same as every other user-facing string on the site.
-3. **Confidentiality gate is per asset.** Every node label, log line, caption, screenshot and sigil passes the standing private checklist before commit. Node labels are a leak surface: internal service names, team names and service counts never appear. UWM-sourced figures stay at an altitude where the diagram would be true of any company.
+3. **Confidentiality gate is per asset.** Every node label, log line, screenshot and sigil passes the standing private checklist before commit. Node labels are a leak surface: internal service names, team names and service counts never appear. UWM-sourced figures stay at an altitude where the diagram would be true of any company.
 4. **Legibility rests on a measurement and a human, never on arithmetic.** The layout module owns the reflow decision, but its constants are measured against a real render of the site's real typeface and pinned to a committed fixture, because a test asserting "the node is at least as wide as the minimum" is an algebraic identity that passes for any value of the minimum. Both critique passes of S3 caught a version of that mistake. The chain that actually works is: measure the type metrics, derive every cap from them, sweep orientation in the container domain, and then look at the rendered result at desktop **and** emulated mobile widths. A geometry check proves nothing overflows. It cannot see whether the result is ugly.
 5. **Every width in the figure system is a content-box width**, because that is what `ResizeObserver` reports. Never subtract the figure's own padding inside a layout function.

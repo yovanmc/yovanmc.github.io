@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 coverage/
+
+# local editor/agent config (never publish)
+.claude/
