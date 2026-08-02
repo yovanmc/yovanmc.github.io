@@ -12,7 +12,6 @@ export const FIGURES: Record<string, Figure> = {
         ],
       },
     ],
-    caption: "You cannot do that with a shared short code",
   },
   "backend-harness": {
     kind: "flow",
@@ -32,7 +31,6 @@ export const FIGURES: Record<string, Figure> = {
         ],
       },
     ],
-    caption: "the implementer cannot pass by grading its own work",
   },
   "the-failure-that-left-no-logs": {
     kind: "log",
@@ -43,7 +41,6 @@ export const FIGURES: Record<string, Figure> = {
       { channel: "app.ingress", value: "no entry", tone: "muted" },
       { channel: "app.handler", value: "no entry", tone: "muted" },
     ],
-    caption: "just because every tool says everything is fine does not mean it is",
   },
   "observability-by-default": {
     kind: "flow",
@@ -63,7 +60,6 @@ export const FIGURES: Record<string, Figure> = {
         ],
       },
     ],
-    caption: "Observability became a one-button setup, realistic to roll out across many services.",
   },
   "notification-dispatch": {
     kind: "log",
@@ -74,7 +70,6 @@ export const FIGURES: Record<string, Figure> = {
       { channel: "stream.notify.dead", value: "held for inspection", tone: "fix" },
       { channel: "metrics.dispatch", value: "depth and lag exported", tone: "muted" },
     ],
-    caption: "routes anything that ultimately fails into a dead-letter queue",
   },
   curio: {
     kind: "flow",
@@ -88,7 +83,6 @@ export const FIGURES: Record<string, Figure> = {
         ],
       },
     ],
-    caption: "The desktop app self-hosts as the server for that companion.",
   },
 };
 

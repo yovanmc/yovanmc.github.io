@@ -1,0 +1,313 @@
+{
+  "measuredAt": "2026-08-02T20:18:13.177Z",
+  "tool": "tools/capture-figures.mjs",
+  "task": "S3 PR-A task A6 (fix pass) — frame guard verification per capture",
+  "frames": [
+    {
+      "slug": "backend-harness",
+      "width": 1440,
+      "mode": "desktop",
+      "rect": {
+        "top": 458.46875,
+        "bottom": 578.46875,
+        "left": 284,
+        "right": 1156,
+        "width": 872,
+        "height": 120
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "slug": "observability-by-default",
+      "width": 1440,
+      "mode": "desktop",
+      "rect": {
+        "top": 506.46875,
+        "bottom": 626.46875,
+        "left": 284,
+        "right": 1156,
+        "width": 872,
+        "height": 120
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "slug": "mia",
+      "width": 1440,
+      "mode": "desktop",
+      "rect": {
+        "top": 413.96875,
+        "bottom": 485.96875,
+        "left": 284,
+        "right": 1156,
+        "width": 872,
+        "height": 72
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "slug": "curio",
+      "width": 1440,
+      "mode": "desktop",
+      "rect": {
+        "top": 553.96875,
+        "bottom": 625.96875,
+        "left": 284,
+        "right": 1156,
+        "width": 872,
+        "height": 72
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "slug": "the-failure-that-left-no-logs",
+      "width": 1440,
+      "mode": "desktop",
+      "rect": {
+        "top": 478.21875,
+        "bottom": 626.21875,
+        "left": 284,
+        "right": 1156,
+        "width": 872,
+        "height": 148
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "slug": "notification-dispatch",
+      "width": 1440,
+      "mode": "desktop",
+      "rect": {
+        "top": 430.46875,
+        "bottom": 578.46875,
+        "left": 284,
+        "right": 1156,
+        "width": 872,
+        "height": 148
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    },
+    {
+      "slug": "backend-harness",
+      "width": 800,
+      "mode": "desktop",
+      "rect": {
+        "top": 458.46875,
+        "bottom": 578.46875,
+        "left": 40,
+        "right": 760,
+        "width": 720,
+        "height": 120
+      },
+      "viewport": {
+        "width": 800,
+        "height": 900
+      }
+    },
+    {
+      "slug": "observability-by-default",
+      "width": 800,
+      "mode": "desktop",
+      "rect": {
+        "top": 506.46875,
+        "bottom": 626.46875,
+        "left": 40,
+        "right": 760,
+        "width": 720,
+        "height": 120
+      },
+      "viewport": {
+        "width": 800,
+        "height": 900
+      }
+    },
+    {
+      "slug": "mia",
+      "width": 800,
+      "mode": "desktop",
+      "rect": {
+        "top": 413.96875,
+        "bottom": 485.96875,
+        "left": 40,
+        "right": 760,
+        "width": 720,
+        "height": 72
+      },
+      "viewport": {
+        "width": 800,
+        "height": 900
+      }
+    },
+    {
+      "slug": "curio",
+      "width": 800,
+      "mode": "desktop",
+      "rect": {
+        "top": 553.96875,
+        "bottom": 625.96875,
+        "left": 40,
+        "right": 760,
+        "width": 720,
+        "height": 72
+      },
+      "viewport": {
+        "width": 800,
+        "height": 900
+      }
+    },
+    {
+      "slug": "the-failure-that-left-no-logs",
+      "width": 800,
+      "mode": "desktop",
+      "rect": {
+        "top": 477.6875,
+        "bottom": 625.6875,
+        "left": 40,
+        "right": 760,
+        "width": 720,
+        "height": 148
+      },
+      "viewport": {
+        "width": 800,
+        "height": 900
+      }
+    },
+    {
+      "slug": "notification-dispatch",
+      "width": 800,
+      "mode": "desktop",
+      "rect": {
+        "top": 430.46875,
+        "bottom": 578.46875,
+        "left": 40,
+        "right": 760,
+        "width": 720,
+        "height": 148
+      },
+      "viewport": {
+        "width": 800,
+        "height": 900
+      }
+    },
+    {
+      "slug": "backend-harness",
+      "width": 390,
+      "mode": "mobile-emulated",
+      "rect": {
+        "top": 241.515625,
+        "bottom": 601.515625,
+        "left": 20,
+        "right": 370,
+        "width": 350,
+        "height": 360
+      },
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "slug": "observability-by-default",
+      "width": 390,
+      "mode": "mobile-emulated",
+      "rect": {
+        "top": 242.03125,
+        "bottom": 602.03125,
+        "left": 20,
+        "right": 370,
+        "width": 350,
+        "height": 360
+      },
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "slug": "the-failure-that-left-no-logs",
+      "width": 390,
+      "mode": "mobile-emulated",
+      "rect": {
+        "top": 293.28125,
+        "bottom": 551.28125,
+        "left": 20,
+        "right": 370,
+        "width": 350,
+        "height": 258
+      },
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "slug": "backend-harness",
+      "width": 320,
+      "mode": "mobile-emulated",
+      "rect": {
+        "top": 103.53125,
+        "bottom": 463.53125,
+        "left": 20,
+        "right": 300,
+        "width": 280,
+        "height": 360
+      },
+      "viewport": {
+        "width": 320,
+        "height": 568
+      }
+    },
+    {
+      "slug": "observability-by-default",
+      "width": 320,
+      "mode": "mobile-emulated",
+      "rect": {
+        "top": 103.53125,
+        "bottom": 463.53125,
+        "left": 20,
+        "right": 300,
+        "width": 280,
+        "height": 360
+      },
+      "viewport": {
+        "width": 320,
+        "height": 568
+      }
+    },
+    {
+      "slug": "the-failure-that-left-no-logs",
+      "width": 320,
+      "mode": "mobile-emulated",
+      "rect": {
+        "top": 155.28125,
+        "bottom": 413.28125,
+        "left": 20,
+        "right": 300,
+        "width": 280,
+        "height": 258
+      },
+      "viewport": {
+        "width": 320,
+        "height": 568
+      }
+    }
+  ]
+}

@@ -18,13 +18,11 @@ export interface LogLine {
 export interface FlowFigure {
   kind: "flow";
   rows: FlowRow[];
-  caption: string;
 }
 
 export interface LogFigure {
   kind: "log";
   lines: LogLine[];
-  caption: string;
 }
 
 export type Figure = FlowFigure | LogFigure;

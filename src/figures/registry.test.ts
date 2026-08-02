@@ -35,21 +35,10 @@ function isLog(fig: Figure): fig is LogFigure {
 
 function allStrings(fig: Figure): string[] {
   if (isFlow(fig)) {
-    return [fig.caption, ...fig.rows.flatMap((r) => r.nodes.map((n) => n.label))];
+    return fig.rows.flatMap((r) => r.nodes.map((n) => n.label));
   }
-  return [fig.caption, ...fig.lines.flatMap((l) => [l.channel, l.value])];
+  return fig.lines.flatMap((l) => [l.channel, l.value]);
 }
-
-describe("caption provenance", () => {
-  it("every figure caption is a verbatim substring of its item's summary (or body)", () => {
-    for (const [slug, fig] of Object.entries(FIGURES)) {
-      const item = allProjectItems.find((i) => i.slug === slug);
-      expect(item, `no CATS project item for slug "${slug}"`).toBeTruthy();
-      const prose = item!.summary ?? item!.body;
-      expect(prose.includes(fig.caption), `caption for "${slug}" is not a substring of its prose`).toBe(true);
-    }
-  });
-});
 
 describe("slug coverage", () => {
   it("every project item with a slug has a figure, and every figure key is a project slug", () => {
