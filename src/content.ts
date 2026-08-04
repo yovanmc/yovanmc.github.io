@@ -155,7 +155,7 @@ export const CATS: Category[] = [
   {
     key: "experience",
     label: "Experience",
-    blurb: "Where I have built systems and grown the teams around them.",
+    blurb: "Where I have built and maintained systems and libraries in production.",
     tag: "01",
     items: [
       {
@@ -163,9 +163,9 @@ export const CATS: Category[] = [
         slug: "software-engineer",
         meta: "United Wholesale Mortgage",
         stat: "2022 - present",
-        body: "Backend and platform engineering at United Wholesale Mortgage. I work on the messaging backbone behind the MIA assistant, observability automation, and cross-stack production debugging.",
+        body: "I build backend systems and libraries other teams depend on. I work on several mission-critical services while building new initiatives and services for the company.",
         summary:
-          "Software Engineer at United Wholesale Mortgage since 2022, working on backend and platform systems. I built the text channel and the per-user-number backbone behind MIA, the AI assistant UWM launched to its brokers. I automated golden-signal observability so any team could stand up reliability checks in seconds (work Dynatrace invited me to present to their global automation guild) and chased down the kind of cross-stack failures that never show up on a dashboard. To keep it simple, I build systems and libraries that others can trust and utilize without worrying about the specifics.",
+          "I build and maintain mission-critical systems at UWM. I work on major initiatives, service refactors and upgrades, and new functionality for developers. MIA was one of those projects: I built the text channel and the per-user-number backbone, then handed my piece off to a dedicated team once it launched. My observability automation work alongside an enterprise architect helped make the case for dedicated reliability engineering at UWM, and Dynatrace invited us to present it to their global automation guild.",
         tags: ["C#", "Distributed systems", "Observability", "SRE"],
         link: "",
         linkLabel: "",
@@ -175,7 +175,7 @@ export const CATS: Category[] = [
         slug: "arizona-state-university",
         meta: "B.S., Graphic Information Technology",
         stat: "Cum laude, Dec 2025",
-        body: "The Graphic Information Technology program was a lot of frontend and backend work but it had a distinct focus on presentation. I graduated cum laude while working full-time at UWM.",
+        body: "At Arizona State University I honed my skills in frontend and backend development. Graphic Information Technology specifically had a focus on presentation and communication, both of which refined my approach to software engineering and my ability to collaborate with other teams. I graduated cum laude while working full-time at UWM.",
         tags: ["Education", "Cum laude"],
         link: "",
         linkLabel: "",
