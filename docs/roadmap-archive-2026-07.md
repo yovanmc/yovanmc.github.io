@@ -113,3 +113,30 @@ into **M7** and shipped there, and all four of M6's durable engineering lessons 
 blind to animation-window and layout defects, a fastest-line derivation that is arithmetically
 right but illegal to play, a `/* v8 ignore */` annotation swallowing a real uncovered branch,
 and a break-count going stale within the same PR.
+
+## M4 — Lore: game-path unlock UI + localStorage progression (PRs #31 #32, merged)
+
+Plan: `docs/superpowers/specs/2026-07-29-m4-lore-unlock-plan.md`
+
+Versioned `yrpg.progress` envelope + D11 dive routing + player reset (PR-A); game-path
+gating over 4 of 6 projects (PR-B). 526 tests, browse path untouched. Retro and the
+schema-guard constraint are in `docs/LESSONS.md`. **Its two owner sign-off items remain
+open and stay in `ROADMAP.md`'s decision log** — archiving the row does not close them.
+
+## M7 — Imposter polish: clone/COMMAND clip + `1/1 TARGET` copy (PRs #35 #38, merged)
+
+Plan: `docs/superpowers/specs/2026-07-29-m7-imposter-polish-plan.md`
+
+Two PRs: a phase-aware `footerFor?(state)` seam, and the panel clamped to `maxHeight:150`
+with stage geometry extracted to a covered `layout.ts`, the clip asserted as an `it.each`
+invariant over 12 viewports. 579 tests. The measured candidate table and the clip lesson
+are in `docs/LESSONS.md`. The `0/3 TARGET` owner-overridable default stays in `ROADMAP.md`.
+
+## M12 — Battle command-menu redesign (PRs #41 #42, merged)
+
+Plan: `docs/superpowers/specs/2026-07-30-m12-command-menu-plan.md`
+
+Nested Attack/Skills/Spells over a measured viewport-aware budget, replacing M7's flat 150
+clamp; locked-Spells teaser leaks no names. 805 tests. The 148px panel budget, the
+mid-build ruling amendment, and the per-milestone-output-dir lesson are in
+`docs/LESSONS.md`.
