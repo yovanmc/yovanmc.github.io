@@ -63,3 +63,6 @@ export const readAnyway = "Read it anyway";
  * runs the full cinematic instead of the 2.5 second cross-fade. Never
  * persisted. */
 export const playFullIntro = "Play the full intro";
+
+/** Battle screen exit control: leaves the fight for the landing page. */
+export const battleExit = "Exit";

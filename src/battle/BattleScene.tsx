@@ -37,7 +37,7 @@ import {
 import type { Grid } from "../generated/heroBattle";
 import { SWARM } from "../generated/bossAlertStorm";
 import { SR, SC, BOSS_AT, HERO_AT } from "../generated/battlefieldScene";
-import { skipToWork } from "../landingCopy";
+import { battleExit, skipToWork } from "../landingCopy";
 
 /**
  * `BattleState.boss` is a discriminated union over the boss kinds.
@@ -127,6 +127,8 @@ interface Props {
   defeatedBosses: string[];
   onVictory: (s: BattleState) => void;
   onForfeit: () => void;
+  /** Leaves the fight for the landing page. Always visible, mouse and touch. */
+  onExit: () => void;
   vw: number;
   vh: number;
   isMobile: boolean;
@@ -158,7 +160,7 @@ interface Step {
 let floatSeq = 1;
 
 export default function BattleScene(props: Props) {
-  const { seed, attempt = 1, boss, replayActions, defeatedBosses, onVictory, onForfeit, vw, vh, isMobile } = props;
+  const { seed, attempt = 1, boss, replayActions, defeatedBosses, onVictory, onForfeit, onExit, vw, vh, isMobile } = props;
 
   const [state, setState] = useState<BattleState>(() => {
     let s = initBattle({ seed, attempt, defeatedBosses, boss });
@@ -947,6 +949,35 @@ export default function BattleScene(props: Props) {
         <div style={{ fontFamily: MONO, fontSize: "10px", color: "#b9a8d8", marginTop: 5, letterSpacing: ".12em" }}>
           {scene.plate.footerFor?.(state) ?? scene.plate.footer(livingCount)}
         </div>
+      </div>
+
+      {/* exit control: above every overlay so it works mid-fight, paused, or beaten */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onExit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            onExit();
+          }
+        }}
+        style={{
+          ...panel,
+          position: "absolute",
+          left: isMobile ? 10 : 30,
+          top: isMobile ? 10 : 26,
+          padding: "9px 14px",
+          zIndex: 15,
+          cursor: "pointer",
+          fontFamily: MONO,
+          fontSize: "11px",
+          letterSpacing: ".2em",
+          color: "#b9a8d8",
+        }}
+      >
+        <span style={{ color: "#c9a4ff" }}>◂</span> {battleExit}
       </div>
 
       {/* hero plate */}
