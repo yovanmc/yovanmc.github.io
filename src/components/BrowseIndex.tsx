@@ -2,7 +2,7 @@ import { CATS } from "../content";
 import { rowHref } from "../router";
 import { shouldRouteInApp } from "../site/linkClick";
 import { nameLine } from "../landingCopy";
-import { buildEntryTitle, buildEntryMeta } from "../buildCopy";
+import { buildEntryTitle, buildEntryMeta, backLabel } from "../buildCopy";
 
 const MONO = "'JetBrains Mono',monospace";
 const SERIF = "'Marcellus',serif";
@@ -23,9 +23,12 @@ interface BrowseIndexProps {
    * click routes in-app via goPhase("build"); when absent the anchor still
    * hard-navigates to /build/, so it never no-ops. */
   onBuild?: () => void;
+  /** Back to the landing page. Optional for the same reason as onBuild: the
+   * anchor hard-navigates to / when no handler is given. */
+  onBack?: () => void;
 }
 
-export function BrowseIndex({ isMobile, onItem, onBuild }: BrowseIndexProps) {
+export function BrowseIndex({ isMobile, onItem, onBuild, onBack }: BrowseIndexProps) {
   // The /build/ page's entry row, listed with the projects. Same row anatomy
   // as the category items.
   const buildRow = (
@@ -123,6 +126,28 @@ export function BrowseIndex({ isMobile, onItem, onBuild }: BrowseIndexProps) {
               BACKEND SOFTWARE ENGINEER
             </div>
           </div>
+          <a
+            href="/"
+            onClick={(e) => {
+              if (!shouldRouteInApp(e)) return;
+              e.preventDefault();
+              onBack?.();
+            }}
+            style={{
+              fontFamily: MONO,
+              fontSize: "11.5px",
+              letterSpacing: ".1em",
+              color: "#b9d2f8",
+              padding: "9px 14px",
+              borderRadius: "9px",
+              cursor: "pointer",
+              background: "rgba(80,150,255,.1)",
+              border: "1px solid rgba(140,185,255,.3)",
+              textDecoration: "none",
+            }}
+          >
+            <span style={{ color: "#9fc4ff" }}>▸</span> {backLabel}
+          </a>
         </div>
 
         {CATS.map((cat, ri) => (

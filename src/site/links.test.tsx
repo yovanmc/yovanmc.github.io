@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { BrowseIndex } from "../components/BrowseIndex";
 import { CaseStudyPage } from "../components/CaseStudyPage";
 import { CATS } from "../content";
-import { buildEntryTitle, buildEntryMeta } from "../buildCopy";
+import { buildEntryTitle, buildEntryMeta, backLabel } from "../buildCopy";
 
 function count(html: string, tagOpen: RegExp): number {
   return (html.match(tagOpen) ?? []).length;
@@ -50,8 +50,10 @@ describe("BrowseIndex static markup", () => {
     expect(checked).toBeGreaterThan(0);
   });
 
-  it("no slugless item ever renders an anchor with href=\"/\"", () => {
-    expect(html).not.toMatch(/<a[^>]*\shref="\/"/);
+  it("the only anchor to / is the back control, never a slugless item falling back to the root", () => {
+    const rootAnchors = html.match(/<a[^>]*\shref="\/"[^>]*>[\s\S]*?<\/a>/g) ?? [];
+    expect(rootAnchors.length).toBe(1);
+    expect(rootAnchors[0]).toContain(backLabel);
   });
 
   it("the build page renders as a full entry row: an anchor to /build/ carrying its title", () => {
@@ -106,4 +108,14 @@ describe("CaseStudyPage static markup", () => {
       });
     });
   }
+});
+
+describe("BrowseIndex back control", () => {
+  const html = renderToStaticMarkup(<BrowseIndex isMobile={false} onItem={() => {}} />);
+
+  it("renders a real anchor back to the landing page carrying the back label", () => {
+    const anchor = html.match(/<a[^>]*href="\/"[^>]*>[\s\S]*?<\/a>/);
+    expect(anchor).not.toBeNull();
+    expect(anchor![0]).toContain(backLabel);
+  });
 });
