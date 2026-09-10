@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Yovan Collins, Backend Software Engineer</title>
+<script>
+  // Path-preserving SPA fallback: stash the requested path so the app can
+  // restore it after the redirect, a recovered deep link bypasses the intro,
+  // same as a direct one.
+  try {
+    sessionStorage.setItem("dl", location.pathname + location.search);
+  } catch (e) {}
+  location.replace("/");
+</script>
