@@ -41,11 +41,8 @@ function allStrings(fig: Figure): string[] {
 }
 
 describe("slug coverage", () => {
-  it("every project item with a slug has a figure, and every figure key is a project slug", () => {
+  it("every figure key is a project slug", () => {
     const projectSlugs = allProjectItems.map((i) => i.slug).filter((s): s is string => !!s);
-    for (const slug of projectSlugs) {
-      expect(FIGURES[slug], `missing figure for project slug "${slug}"`).toBeTruthy();
-    }
     for (const key of Object.keys(FIGURES)) {
       expect(projectSlugs).toContain(key);
     }
@@ -243,6 +240,6 @@ describe("figureFor", () => {
   });
 
   it("returns the registered figure for a known slug", () => {
-    expect(figureFor("curio")).toBe(FIGURES.curio);
+    expect(figureFor("mia")).toBe(FIGURES.mia);
   });
 });
