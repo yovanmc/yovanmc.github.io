@@ -830,6 +830,7 @@ export default function App() {
           isMobile={isMobile}
           onItem={(ri, si) => activate(ri, si)}
           onBuild={() => goPhase("build")}
+          onBack={() => goPhase("gate")}
         />
       )}
 
