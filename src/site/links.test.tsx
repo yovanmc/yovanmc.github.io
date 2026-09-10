@@ -18,7 +18,7 @@ const H1 = /<h1[ >]/g;
 const H2 = /<h2[ >]/g;
 
 describe("BrowseIndex static markup", () => {
-  const html = renderToStaticMarkup(<BrowseIndex isMobile={false} onItem={() => {}} onEnterGame={() => {}} />);
+  const html = renderToStaticMarkup(<BrowseIndex isMobile={false} onItem={() => {}} />);
 
   it("renders exactly one h1", () => {
     expect(count(html, H1)).toBe(1);

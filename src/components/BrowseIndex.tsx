@@ -19,14 +19,67 @@ interface BrowseIndexProps {
   isMobile: boolean;
   /** Reuses App.activate(ri, si), the single source of item semantics. */
   onItem: (ri: number, si: number) => void;
-  onEnterGame: () => void;
   /** Optional so every caller keeps compiling unchanged. When present, a
    * click routes in-app via goPhase("build"); when absent the anchor still
    * hard-navigates to /build/, so it never no-ops. */
   onBuild?: () => void;
 }
 
-export function BrowseIndex({ isMobile, onItem, onEnterGame, onBuild }: BrowseIndexProps) {
+export function BrowseIndex({ isMobile, onItem, onBuild }: BrowseIndexProps) {
+  // The /build/ page's entry row, listed with the projects. Same row anatomy
+  // as the category items.
+  const buildRow = (
+    <a
+      href="/build/"
+      onClick={(e) => {
+        if (!shouldRouteInApp(e)) return;
+        e.preventDefault();
+        onBuild?.();
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "rgba(80,150,255,.1)";
+        e.currentTarget.style.borderColor = "rgba(150,190,255,.4)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "rgba(255,255,255,.02)";
+        e.currentTarget.style.borderColor = "rgba(140,185,255,.14)";
+      }}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "14px",
+        padding: "13px 14px",
+        marginBottom: "6px",
+        borderRadius: "11px",
+        cursor: "pointer",
+        background: "rgba(255,255,255,.02)",
+        border: "1px solid rgba(140,185,255,.14)",
+        transition: "background .15s ease, border-color .15s ease",
+        textDecoration: "none",
+        color: "inherit",
+      }}
+    >
+      <span style={{ color: "#7fb0ff", fontSize: "13px" }}>▸</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: SERIF, fontSize: "18.5px", color: "#eaf1ff" }}>{buildEntryTitle}</div>
+        <div
+          style={{
+            fontFamily: MONO,
+            fontSize: "11px",
+            letterSpacing: ".05em",
+            color: "#9fb6d6",
+            marginTop: "3px",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {buildEntryMeta}
+        </div>
+      </div>
+    </a>
+  );
+
   return (
     <main
       id="main"
@@ -69,24 +122,6 @@ export function BrowseIndex({ isMobile, onItem, onEnterGame, onBuild }: BrowseIn
             <div style={{ fontFamily: MONO, fontSize: "10px", letterSpacing: ".38em", color: "#7fb0ff", marginTop: "4px" }}>
               BACKEND SOFTWARE ENGINEER
             </div>
-          </div>
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={onEnterGame}
-            style={{
-              fontFamily: MONO,
-              fontSize: "11.5px",
-              letterSpacing: ".1em",
-              color: "#b9d2f8",
-              padding: "9px 14px",
-              borderRadius: "9px",
-              cursor: "pointer",
-              background: "rgba(80,150,255,.1)",
-              border: "1px solid rgba(140,185,255,.3)",
-            }}
-          >
-            <span style={{ color: "#9fc4ff" }}>▸</span> enter the game
           </div>
         </div>
 
@@ -200,62 +235,10 @@ export function BrowseIndex({ isMobile, onItem, onEnterGame, onBuild }: BrowseIn
                   </div>
                 );
               })}
+              {cat.key === "projects" && buildRow}
             </div>
           </div>
         ))}
-
-        {/* The /build/ page's full entry row, the one way into the
-            engineering page. Same row anatomy as the category items above. */}
-        <div style={{ marginTop: "30px" }}>
-          <a
-            href="/build/"
-            onClick={(e) => {
-              if (!shouldRouteInApp(e)) return;
-              e.preventDefault();
-              onBuild?.();
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(80,150,255,.1)";
-              e.currentTarget.style.borderColor = "rgba(150,190,255,.4)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(255,255,255,.02)";
-              e.currentTarget.style.borderColor = "rgba(140,185,255,.14)";
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "14px",
-              padding: "13px 14px",
-              borderRadius: "11px",
-              cursor: "pointer",
-              background: "rgba(255,255,255,.02)",
-              border: "1px solid rgba(140,185,255,.14)",
-              transition: "background .15s ease, border-color .15s ease",
-              textDecoration: "none",
-              color: "inherit",
-            }}
-          >
-            <span style={{ color: "#7fb0ff", fontSize: "13px" }}>▸</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: SERIF, fontSize: "18.5px", color: "#eaf1ff" }}>{buildEntryTitle}</div>
-              <div
-                style={{
-                  fontFamily: MONO,
-                  fontSize: "11px",
-                  letterSpacing: ".05em",
-                  color: "#9fb6d6",
-                  marginTop: "3px",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {buildEntryMeta}
-              </div>
-            </div>
-          </a>
-        </div>
 
         <div style={{ marginTop: "10px", fontFamily: MONO, fontSize: "10.5px", letterSpacing: ".12em", color: "#5f7196", textAlign: "center" }}>
           <span style={{ color: "#9fc4ff" }}>ESC</span> BACK TO ENTRY

@@ -829,7 +829,6 @@ export default function App() {
         <BrowseIndex
           isMobile={isMobile}
           onItem={(ri, si) => activate(ri, si)}
-          onEnterGame={() => goPhase("gate")}
           onBuild={() => goPhase("build")}
         />
       )}
