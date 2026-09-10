@@ -682,6 +682,14 @@ export default function App() {
     snd.back();
   }, [goPhase, snd]);
 
+  // Exit leaves the fight for the landing page.
+  const onBattleExit = useCallback(() => {
+    setBattleBoot(null);
+    goPhase("gate");
+    setCol("root");
+    snd.back();
+  }, [goPhase, snd]);
+
   /** Player-facing progress wipe. A player who has beaten the rush has no
    * way to replay from zero once progress persists, so a reset affordance
    * lives in the play-path menu (not the browse path). A single click
@@ -807,6 +815,7 @@ export default function App() {
             defeatedBosses={defeatedBosses}
             onVictory={onBattleVictory}
             onForfeit={onBattleForfeit}
+            onExit={onBattleExit}
             vw={w}
             vh={h}
             isMobile={isMobile}
