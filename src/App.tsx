@@ -18,7 +18,7 @@ import { BuildPage } from "./components/BuildPage";
 import { pathForPage, pageForPath, rowHref } from "./router";
 import { isNativeActivationTarget } from "./site/nativeActivate";
 import { shouldRouteInApp } from "./site/linkClick";
-import { phaseForPath } from "./site/phaseForPath";
+import { canonicalPath, phaseForPath } from "./site/phaseForPath";
 import { sealedLine, skipToContent } from "./landingCopy";
 
 const MONO = "'JetBrains Mono',monospace";
@@ -109,7 +109,9 @@ function decideBoot(): BootState {
       const stashPath = stash.split("?")[0];
       const stashPhase = pageForPath(stashPath) ? "browse" : phaseForPath(stashPath); // phaseForPath also resolves "build"
       if (stashPhase) {
-        window.history.replaceState({ phase: stashPhase }, "", stash);
+        // The address bar shows the canonical path, so an old /browse/ link
+        // lands on the index under /work/.
+        window.history.replaceState({ phase: stashPhase }, "", canonicalPath(stashPath) + stash.slice(stashPath.length));
         path = stashPath;
       }
     }
@@ -120,7 +122,11 @@ function decideBoot(): BootState {
   const initial = pageForPath(path);
   if (initial) return { phase: "browse", page: initial }; // pageForPath resolves project/case-study pages only, never a "build" page.
   const pathPhase = phaseForPath(path);
-  if (pathPhase) return { phase: pathPhase, page: null };
+  if (pathPhase) {
+    // A legacy path served directly (no 404 stash) is rewritten the same way.
+    if (canonicalPath(path) !== path) window.history.replaceState({ phase: pathPhase }, "", canonicalPath(path) + loc.search);
+    return { phase: pathPhase, page: null };
+  }
 
   if (dev) {
     const params = new URLSearchParams(loc.search);
