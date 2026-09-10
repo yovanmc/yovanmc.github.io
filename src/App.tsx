@@ -122,7 +122,11 @@ function decideBoot(): BootState {
   const initial = pageForPath(path);
   if (initial) return { phase: "browse", page: initial }; // pageForPath resolves project/case-study pages only, never a "build" page.
   const pathPhase = phaseForPath(path);
-  if (pathPhase) return { phase: pathPhase, page: null };
+  if (pathPhase) {
+    // A legacy path served directly (no 404 stash) is rewritten the same way.
+    if (canonicalPath(path) !== path) window.history.replaceState({ phase: pathPhase }, "", canonicalPath(path) + loc.search);
+    return { phase: pathPhase, page: null };
+  }
 
   if (dev) {
     const params = new URLSearchParams(loc.search);
