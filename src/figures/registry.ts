@@ -71,19 +71,6 @@ export const FIGURES: Record<string, Figure> = {
       { channel: "metrics.dispatch", value: "depth and lag exported", tone: "muted" },
     ],
   },
-  curio: {
-    kind: "flow",
-    rows: [
-      {
-        nodes: [
-          { label: "ONE LIBRARY", tone: "default" },
-          { label: "DESKTOP APP", tone: "default" },
-          { label: "SELF HOSTED", tone: "default" },
-          { label: "PHONE COMPANION", tone: "fix" },
-        ],
-      },
-    ],
-  },
 };
 
 export function figureFor(slug: string | undefined): Figure | null {

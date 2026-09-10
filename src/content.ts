@@ -81,7 +81,6 @@ export const CATS: Category[] = [
         body: "A single coding agent on a real backend repo runs out of context, grades its own work, and writes code that is confidently wrong. I built the orchestration layer it was missing.",
         summary:
           "Backend-harness sits on top of an existing inner loop and adds the outer loop it does not have. An orchestrator runs the whole thing and never reads the code itself. The agent that writes code and the agent that evaluates it are kept apart, with separate context, so the implementer cannot pass by grading its own work. Around that it runs the checks a careful developer would: unit, integration, and live API tests, plus a tiered mutation-testing gate so coverage means tests that catch a changed line. The two parts I am most proud of building: disk-state resumability (it writes full state after every step and resumes at the exact phase it left off) and oscillation detection (it tracks failure identity and escalates to a person when the agent starts going in circles). It runs the same whether the agent underneath is Claude Code or Codex, is validated against .NET, and is open source under MIT.",
-        metrics: [["Resumable", "recovers from interruption mid-run"]],
         tags: ["Agentic systems", "Orchestration", "Mutation testing"],
         link: "#",
         linkLabel: "CASE STUDY",
@@ -95,7 +94,6 @@ export const CATS: Category[] = [
         body: "Requests were being silently rejected and quietly retried, invisible to every dashboard. I traced the cause across a message bus, an HTTP ingress, and the OS network stack.",
         summary:
           "A service showed slightly lower throughput and one report of a message that never sent, but the audit trail showed no failures anywhere. I traced a message by hand and it never made it past the message-bus hop. The first real clue was an HTML 400 sitting in the retry topic's error field, from a path that did not emit HTML: something downstream was rejecting requests before our code ever saw them, and its logs were not in the observability tooling. That led me to Http.sys, the OS-level driver in front of every request. Backtracking ~50 requests one at a time revealed the pattern: every rejected request carried the same malformed header (a library was writing non-ASCII bytes), and Http.sys refuses those on sight. Rather than fight it, I routed around it with a consumer that pulled messages off the topic partitions directly, removing the HTTP layer entirely. Zero changes were required from any consumer, with the same at-least-once guarantees. Every negative indicator fell to zero as the change rolled out.",
-        metrics: [["3 layers", "message bus → OS kernel"]],
         tags: ["Message bus", "Observability", "Cross-stack debugging"],
         link: "#",
         linkLabel: "CASE STUDY",
@@ -108,7 +106,6 @@ export const CATS: Category[] = [
         body: "I automated reliability-guardian setup against Dynatrace's API, turning a manual, per-team job into something any team could stand up in seconds with golden-signal observability built in.",
         summary:
           "A reliability guardian watches a service against health objectives and flags it when it drifts out of bounds. Setting one up in Dynatrace was a manual, per-team job. It was slow, easy to skip, and inconsistent across services. I automated the whole setup against Dynatrace's API so a team could stand one up in seconds with golden-signal observability built in from the start, and wired our load testing in so stress-test results became part of the health picture. Observability became a one-button setup, realistic to roll out across many services. In May 2024 Dynatrace invited me and an enterprise architect to present the work to their global automation guild as a reference implementation for enterprise-scale reliability. I am most proud that it was not a one-off. Other people could use it without thinking about the plumbing underneath, and that is the part that actually scaled.",
-        metrics: [["Seconds", "to stand up what had been manual"]],
         tags: ["Observability", "Automation", "SRE"],
         link: "#",
         linkLabel: "CASE STUDY",
@@ -134,11 +131,6 @@ export const CATS: Category[] = [
         body: "Curio started as a video player and snowballed into a centralized experience for all media (video, audio, comics, and music). It superseded four of my own applications and serves its own phone companion.",
         summary:
           "Curio was originally a video player. I liked the style of Windows' Movies & TV app but wanted to expand it with capabilities common in applications like Plex, and I wanted the same unified experience for audio, with features like the old Windows XP Media Player visualizations. The app snowballed into a centralized experience. Once I realized that I had separate apps for video, audio, books, and comics, I decided one unified codebase was easier to handle and build off of. Curio superseded all four. My role was direction and database design. I had Claude handle how the code would work, and I focused on making sure the database would never need to be redone over and over. One of the hardest parts was the phone companion. I had a central app and server, but how that experience would translate to mobile or tablets was initially a mystery to me. I had to work through constraints such as screen size, UX, and keeping that experience consistent across different screen sizes. The desktop app self-hosts as the server for that companion. The code is private for now.",
-        metrics: [
-          ["4 → 1", "separate apps unified into one platform"],
-          ["Video · audio · comics · music", "one library, one experience"],
-          ["Self-hosting", "the desktop app serves its own phone companion"],
-        ],
         tags: ["C#", "WPF", "SQLite", "PWA"],
         link: "#",
         linkLabel: "CASE STUDY",
