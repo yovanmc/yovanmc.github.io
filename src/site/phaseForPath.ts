@@ -17,3 +17,11 @@ export function phaseForPath(path: string): "browse" | "build" | null {
   if (path === "/build" || path === "/build/") return "build";
   return null;
 }
+
+/** The path a restored deep link should show in the address bar: the index
+ * used to live at /browse/, so that path is rewritten to /work/. Every other
+ * path is kept as it came in. */
+export function canonicalPath(path: string): string {
+  if (path === "/browse" || path === "/browse/") return "/work/";
+  return path;
+}

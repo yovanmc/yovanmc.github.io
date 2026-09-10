@@ -18,7 +18,7 @@ import { BuildPage } from "./components/BuildPage";
 import { pathForPage, pageForPath, rowHref } from "./router";
 import { isNativeActivationTarget } from "./site/nativeActivate";
 import { shouldRouteInApp } from "./site/linkClick";
-import { phaseForPath } from "./site/phaseForPath";
+import { canonicalPath, phaseForPath } from "./site/phaseForPath";
 import { sealedLine, skipToContent } from "./landingCopy";
 
 const MONO = "'JetBrains Mono',monospace";
@@ -109,7 +109,9 @@ function decideBoot(): BootState {
       const stashPath = stash.split("?")[0];
       const stashPhase = pageForPath(stashPath) ? "browse" : phaseForPath(stashPath); // phaseForPath also resolves "build"
       if (stashPhase) {
-        window.history.replaceState({ phase: stashPhase }, "", stash);
+        // The address bar shows the canonical path, so an old /browse/ link
+        // lands on the index under /work/.
+        window.history.replaceState({ phase: stashPhase }, "", canonicalPath(stashPath) + stash.slice(stashPath.length));
         path = stashPath;
       }
     }

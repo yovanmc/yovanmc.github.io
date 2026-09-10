@@ -20,7 +20,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { phaseForPath } from "./phaseForPath";
+import { canonicalPath, phaseForPath } from "./phaseForPath";
 
 describe("phaseForPath", () => {
   it("resolves /work/ and /work to browse, and the old /browse/ path as a legacy alias", () => {
@@ -107,5 +107,18 @@ describe("App.tsx browse/build dispatch parity", () => {
     const gateLine = lines.find((l) => l.includes(GATE_LINE));
     expect(gateLine).toBeDefined();
     expect(gateLine).not.toContain("build");
+  });
+});
+
+describe("canonicalPath", () => {
+  it("rewrites the legacy /browse/ index path to /work/", () => {
+    expect(canonicalPath("/browse/")).toBe("/work/");
+    expect(canonicalPath("/browse")).toBe("/work/");
+  });
+
+  it("leaves every other path alone", () => {
+    for (const p of ["/work/", "/build/", "/work/curio/", "/experience/software-engineer/", "/"]) {
+      expect(canonicalPath(p)).toBe(p);
+    }
   });
 });
