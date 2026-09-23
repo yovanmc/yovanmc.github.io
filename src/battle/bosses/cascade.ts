@@ -58,11 +58,6 @@ export function livingNodeIds(boss: CascadeBoss): number[] {
   return boss.nodes.filter((n) => n.alive).map((n) => n.id);
 }
 
-/** The lowest-index living node. `undefined` once every node is dead. */
-export function headNode(boss: CascadeBoss): number | undefined {
-  return livingNodeIds(boss)[0];
-}
-
 /** Boss turns until the pulse wraps past the tail. Speed is a constant 3
  * living nodes per turn: CT changes only damage, never speed. */
 export function turnsUntilStorm(boss: CascadeBoss): number {
