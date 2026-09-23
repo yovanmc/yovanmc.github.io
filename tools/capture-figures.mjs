@@ -1,33 +1,24 @@
 // Capture and geometry rig for the six case-study figures.
 //
-// Built like tools/measure-battle-layout.mjs and tools/measure-figure-type.mjs:
-// same classic-CDP approach (raw WebSocket JSON-RPC client, no puppeteer
-// dependency), same Windows process-tree traps. Differs from both in that it
-// drives the REAL BUILT SITE (`npm run build` output under dist/, served
-// statically) through real deep-link routes (`/work/<slug>/`), not a
-// throwaway page and not the vite dev server: the share-shells plugin
-// writes a real static index.html per slug under dist/work/<slug>/, and the
-// app boots straight into the CaseStudyPage dialog for that slug from
-// `window.location.pathname` (src/App.tsx's `decideBoot`/`pageForPath`).
+// Same raw-CDP approach and Windows process traps as the other two rigs, but
+// drives the built site (dist/, served statically) through real deep-link
+// routes (`/work/<slug>/`): the share-shells plugin writes an index.html per
+// slug, and the app boots straight into that slug's CaseStudyPage.
 //
-// The output directory is an argv parameter, never hardcoded, and never a
-// docs/battle-prototypes/** directory (a hardcoded output path in an earlier
-// rig silently overwrote a directory of baseline PNGs, and the only signal
-// was pre-existing binaries showing as modified in `git status`). This script
-// refuses to run without an explicit output dir.
+// The output dir is a required argv, never a docs/battle-prototypes/** dir:
+// a hardcoded output path can silently overwrite baseline PNGs.
 //
 // Machine traps:
 //   - Classic `--headless`, never `--headless=new`, which exits 0 and
 //     silently writes no PNG on this machine.
 //   - Edge needs its own `--user-data-dir` or it delegates to an already-
 //     running instance and writes nothing.
-//   - Node here is v20.13.1, so the CDP WebSocket client needs
-//     `--experimental-websocket` (this file re-execs itself with the flag).
+//   - Node 20 needs `--experimental-websocket` for the CDP client (this file
+//     re-execs itself with the flag).
 //   - Writes are async, so poll for each file rather than testing once.
-//   - `msedge --headless --window-size=390,...` clamps layout to ~478px on
-//     this machine; that caveat is about `--window-size` only. The
-//     emulated-mobile set below uses `Emulation.setDeviceMetricsOverride`
-//     BEFORE first paint instead, which lays out at the real requested width.
+//   - `msedge --headless --window-size=390,...` clamps layout to ~478px. The
+//     mobile set uses `Emulation.setDeviceMetricsOverride` before first
+//     paint instead, which lays out at the real requested width.
 //   - Wait for `document.fonts.ready` before every capture or the shot is a
 //     fallback typeface, not JetBrains Mono.
 
@@ -50,8 +41,6 @@ if (typeof WebSocket === "undefined") {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const EDGE_PATH = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 
-// Output directory is a required argv parameter, never a hardcoded path
-// another rig run could silently overwrite. No default.
 const outDirArg = process.argv[2];
 if (!outDirArg) {
   console.error(
@@ -72,10 +61,6 @@ const FRAMES_JSON = resolve(OUT_DIR, "frames.json");
 
 console.log(`capture-figures: writing PNGs and geometry.json to ${OUT_DIR}`);
 
-// ---------------------------------------------------------------------------
-// What gets captured.
-// ---------------------------------------------------------------------------
-
 // All six figure pages, desktop widths.
 const DESKTOP_SLUGS = [
   "backend-harness",
@@ -87,19 +72,15 @@ const DESKTOP_SLUGS = [
 ];
 const DESKTOP_WIDTHS = [1440, 800];
 
-// Emulated-mobile (CDP) screenshot set: the narrow viewport is where figures
-// switch to their stacked form, so three representative pages are captured
-// there rather than all six.
+// The narrow viewport is where figures stack, so three representative pages
+// are captured there.
 const MOBILE_SCREENSHOT_SLUGS = ["backend-harness", "observability-by-default", "the-failure-that-left-no-logs"];
 const MOBILE_WIDTHS = [390, 320];
 
-// The geometry probe runs on BOTH log pages, even though only one of them is
-// also in the mobile screenshot set above.
 const LOG_SLUGS_FOR_GEOMETRY = ["the-failure-that-left-no-logs", "notification-dispatch"];
 
-// Union of slugs that need an emulated-mobile navigation at all (screenshot
-// and/or geometry), so notification-dispatch gets measured without being
-// photographed.
+// Slugs needing a mobile navigation at all, so notification-dispatch is
+// measured without being photographed.
 const MOBILE_NAV_SLUGS = Array.from(new Set([...MOBILE_SCREENSHOT_SLUGS, ...LOG_SLUGS_FOR_GEOMETRY]));
 
 function sleep(ms) {
@@ -117,10 +98,8 @@ function freePort() {
   });
 }
 
-/** Serves the already-built dist/ via `vite preview`. Requires `npm run
- * build` to have run first (this script does not build). Reads back an
- * explicit, freshly-bound port rather than trusting vite's default 4173,
- * which could collide with an unrelated running instance. */
+/** Serves the built dist/ via `vite preview` (run `npm run build` first). Uses
+ * a freshly bound port, not vite's default 4173, to avoid collisions. */
 async function startPreviewServer() {
   const port = await freePort();
   const viteEntry = resolve(root, "node_modules/vite/bin/vite.js");
@@ -186,9 +165,7 @@ async function getFirstPageTarget(port) {
   return page;
 }
 
-/** Minimal CDP JSON-RPC-over-WebSocket client, same shape as the other two
- * rigs in this repo (no puppeteer-core/chrome-remote-interface/playwright/ws
- * dependency exists in node_modules). */
+/** Minimal CDP JSON-RPC client, same as the other rigs. */
 class CdpClient {
   constructor(wsUrl) {
     this.ws = new WebSocket(wsUrl);
@@ -270,24 +247,19 @@ async function navigateAndSettle(client, url) {
         `capture would photograph a fallback typeface. STOP: do not capture anyway.`,
     );
   }
-  // Settle: let the case-study dialog's paint finish and glints/animation
-  // frames stabilise before capturing.
+  // Let the dialog paint and animations settle before capturing.
   await sleep(700);
 }
 
-/** Measures every log line's scrollWidth against its container's
- * clientWidth, both for the line wrapper (Figure.tsx's per-line div, which
- * carries the 2px left rule + 10px padding) and — in stacked mode
- * specifically — the value div one level deeper (which carries the FURTHER
- * 12px paddingLeft per Figure.tsx). Structural selection only, since
- * Figure.tsx carries no test attributes:
- *   [role="img"]                 -> the figure container (Figure.tsx's root)
- *   figure.children[0]           -> the log block (kind==="log" branch)
+/** Measures each log line's scrollWidth against its container's clientWidth,
+ * for the line wrapper (2px rule + 10px padding) and, in stacked mode, the
+ * value div inside it (a further 12px). Figure.tsx has no test attributes,
+ * so selection is structural:
+ *   [role="img"]                 -> the figure root
+ *   figure.children[0]           -> the log block
  *   logBlock.children[i]         -> one line wrapper
- *   lineWrapper.children.length === 2 with two DIV children => stacked mode;
- *     children[1] is the indented value div.
- *   lineWrapper.children.length === 1 (a <span>) => inline mode, no separate
- *     stacked value element exists.
+ *   two DIV children             => stacked; children[1] is the value div
+ *   one <span> child             => inline, no separate value element
  */
 const GEOMETRY_EXPR = `
 (() => {
@@ -332,24 +304,15 @@ async function pollForFile(path, timeoutMs = 5000) {
   if (!existsSync(path)) throw new Error(`capture-figures: expected file never appeared: ${path}`);
 }
 
-// ---------------------------------------------------------------------------
-// Frame guard: Page.captureScreenshot grabs only the current viewport at the
-// current scroll position. On mobile the figure sits below the fold, so a
-// capture taken without scrolling photographs the page header and contains no
-// figure at all, and every output file then comes out byte-identical even
-// when the DOM changed. Every screenshot capture below must scroll the figure
-// into frame AND verify, from the figure's own measured rect, that it actually
-// landed inside the captured viewport before any PNG is written. A valid image
-// of the wrong region passes every other check, so the element rect at capture
-// time is the only place this class of bug is visible.
-// ---------------------------------------------------------------------------
+// Frame guard: Page.captureScreenshot grabs only the current viewport. On
+// mobile the figure is below the fold, so an unscrolled capture holds no
+// figure and every file comes out identical even when the DOM changed. Every
+// capture scrolls the figure into frame and verifies its measured rect is
+// inside the viewport before writing.
 
-// The case-study dialog (CaseStudyPage.tsx) scrolls its own internal
-// [data-scroll] div (position:absolute + overflowY:auto) — the outer window
-// never scrolls at all here, so window.scrollTo/scrollY are no-ops on this
-// page. getBoundingClientRect() is still viewport-relative regardless of
-// which element scrolls, so the rect measurement itself is unaffected; only
-// the *scroll adjustment* has to target the real scroll container.
+// The dialog scrolls its own [data-scroll] div; the window never scrolls, so
+// window.scrollTo is a no-op here. getBoundingClientRect is viewport-relative
+// either way, so only the scroll adjustment targets the real container.
 const MEASURE_FIGURE_EXPR = `
 (() => {
   const fig = document.querySelector('[role="img"]');
@@ -370,14 +333,10 @@ async function measureFigure(client) {
   return res;
 }
 
-/** Centers the figure element in the viewport by computing an explicit
- * scrollTop target on its real scroll container (the [data-scroll] dialog
- * div, not window) from the figure's measured rect, then re-measuring to
- * confirm where it actually landed, rather than trusting `scrollIntoView`'s
- * own notion of "centered". Centering, rather than a tight crop of just the
- * figure, keeps surrounding page context in the shot so the figure can be
- * judged against the page it sits in. */
-let DISABLE_FIGURE_CENTERING = false; // Escape hatch for testing the guard itself; must be false for every real capture run.
+// centerFigureInViewport sets an explicit scrollTop on the [data-scroll]
+// container and re-measures, rather than trusting scrollIntoView. Centered,
+// not cropped, so the figure is judged in page context.
+let DISABLE_FIGURE_CENTERING = false; // Tests the guard itself; must be false for every real capture run.
 async function centerFigureInViewport(client) {
   if (DISABLE_FIGURE_CENTERING) return measureFigure(client);
   const before = await measureFigure(client);
@@ -392,14 +351,12 @@ async function centerFigureInViewport(client) {
     })()
     `,
   );
-  await sleep(50); // let the scroll (and any scroll-linked layout) settle before re-measuring.
+  await sleep(50); // let the scroll settle before re-measuring
   return measureFigure(client);
 }
 
-/** The guard: after scrolling, before writing any PNG, assert the figure's
- * measured rect is fully inside the captured viewport. Throws instead of
- * returning a boolean, so a missed call site fails loudly rather than
- * silently capturing anyway. */
+/** Asserts the figure's rect is fully inside the captured viewport. Throws,
+ * so a missed call site fails loudly instead of capturing anyway. */
 function assertFigureInFrame(slug, width, measured) {
   const { rect, viewport } = measured;
   const inFrame =
@@ -463,8 +420,7 @@ async function main() {
         console.log(`capture-figures: wrote ${filePath}`);
       }
     }
-    // Reset to non-mobile default so the mobile block below always applies
-    // its own explicit override rather than inheriting the last desktop one.
+    // Reset so the mobile block applies its own override, not the last desktop one.
     await client.send("Emulation.clearDeviceMetricsOverride");
 
     // ---- Emulated-mobile set (CDP), 390 and 320. ----
@@ -517,8 +473,8 @@ async function main() {
     }
   }
 
-  // ---- Worst-case ratio across both the line-wrapper and stacked-value
-  // measurements, over both log slugs and both widths. ----
+  // Worst ratio across line-wrapper and stacked-value measurements, both log
+  // slugs and both widths.
   let worst = { ratio: 0 };
   for (const r of geometryResults) {
     for (const line of r.lines) {
@@ -552,9 +508,8 @@ async function main() {
   await pollForFile(GEOMETRY_JSON);
   console.log(`capture-figures: wrote ${GEOMETRY_JSON}`);
 
-  // ---- frames.json: the verified figure rect (post-scroll, pre-write) for
-  // every screenshot, so the frame guard's own result can be inspected after
-  // the run rather than assumed. ----
+  // The verified post-scroll rect for every screenshot, so the frame guard's
+  // result can be inspected after the run.
   const framesFixture = {
     measuredAt: new Date().toISOString(),
     tool: "tools/capture-figures.mjs",
@@ -585,14 +540,9 @@ function killTree(pid, label) {
   }
 }
 
-/** Profile-scoped kill, same as tools/measure-battle-layout.mjs and
- * tools/measure-figure-type.mjs: Edge's headless launcher re-execs into a
- * real browser process whose crashpad/gpu/utility/renderer children sit
- * outside the launcher PID's own process tree, so a plain `taskkill /T` on
- * the launcher PID does not reap them. Enumerate msedge.exe processes via
- * WMI and match each one's own command line against this run's unique
- * --user-data-dir path, never by image name alone: unrelated msedge.exe
- * processes are usually running, and killing by name would take them out. */
+/** Profile-scoped Edge kill, same as the other rigs: `taskkill /T` misses the
+ * re-exec'd browser's children, and killing by image name would take out
+ * unrelated Edge processes. */
 function killEdgeByProfile(userDataDir, label) {
   const psLiteral = userDataDir.replace(/'/g, "''");
   const psScript =

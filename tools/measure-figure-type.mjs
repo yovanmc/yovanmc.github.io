@@ -1,47 +1,31 @@
 // Measures the type and layout constants src/figures/layout.ts consumes.
 //
-// Built like tools/measure-battle-layout.mjs: same classic-CDP approach (raw
-// WebSocket JSON-RPC client, no puppeteer dependency), same Windows
-// process-tree traps. Simpler than that rig in one respect: it measures type
-// metrics against a throwaway static page, not the real app, so no vite dev
-// server is needed and Edge navigates a `file://` URL directly.
+// Same raw-CDP approach and Windows process traps as measure-battle-layout.mjs,
+// but measures a throwaway static page over `file://`, so no dev server.
 //
-// This script writes the JSON fixture AND a generated TS fixture module
-// (src/figures/__fixtures__/measuredFigureType.ts), the same arrangement
-// tools/measure-battle-layout.mjs uses for
-// src/battle/__fixtures__/measuredLayout.ts: the JSON is the human-readable
-// record of a given rig run, and the TS module is what a src/**/*.test.ts
-// file actually imports (no resolveJsonModule; docs/ is outside
-// tsconfig.app.json's "include": ["src"]). Regenerating the TS module is this
-// rig's job rather than a hand-edit, so the measurement chain cannot silently
-// drift out of sync with the JSON the way a hand-copied module could.
-//
-// This script does not create or edit src/figures/layout.ts; that module takes
-// its constants from this fixture, rounding UP for NODE_MIN_PX and MONO_CH_PX.
+// Writes the JSON fixture and a generated TS module
+// (src/figures/__fixtures__/measuredFigureType.ts) that the tests import, so
+// the two cannot drift. layout.ts takes its constants from this fixture,
+// rounding NODE_MIN_PX and MONO_CH_PX up.
 //
 // Machine traps:
 //   - Classic `--headless`, never `--headless=new`, which exits 0 and
 //     silently writes no file on this machine.
 //   - Edge needs its own `--user-data-dir` or it delegates to an already-
 //     running instance and writes nothing.
-//   - Node here is v20.13.1, so the CDP WebSocket client needs
-//     `--experimental-websocket` (this file re-execs itself with the flag,
-//     same pattern as measure-battle-layout.mjs, so it stays correct if CI
-//     later runs a Node version that has WebSocket natively).
+//   - Node 20 needs `--experimental-websocket` for the CDP client (this file
+//     re-execs itself with the flag only when WebSocket is missing).
 //   - File writes are async, so poll for the output file rather than testing
 //     for it once.
 //
-// Font-readiness trap: index.html:10 loads
-// JetBrains Mono from Google Fonts with `display=swap`, so text renders in
-// a fallback monospace immediately and stays that way if the headless run
-// has no network. A rig that measures before the real face has loaded
-// produces confident wrong numbers. This script awaits `document.fonts.ready`
-// and hard-fails on `document.fonts.check("11px 'JetBrains Mono'")` rather
-// than falling back to whatever face is available.
+// Font readiness: index.html loads JetBrains Mono with `display=swap`, so
+// text renders in a fallback face until it loads, or forever without
+// network, and measurements come out confidently wrong. This script awaits
+// `document.fonts.ready` and hard-fails on
+// `document.fonts.check("11px 'JetBrains Mono'")`.
 //
-// The output directory is an argv parameter, never hardcoded: a hardcoded
-// output path in an earlier rig silently overwrote a directory of baseline
-// PNGs.
+// The output directory is a required argv, never hardcoded, so a run cannot
+// overwrite another run's baseline.
 
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
@@ -62,9 +46,7 @@ if (typeof WebSocket === "undefined") {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const EDGE_PATH = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 
-// Output directory is a required argv parameter, never a hardcoded path
-// another rig run could silently overwrite (see the header comment). No
-// default: an omitted argument is a usage error, not a silently-chosen path.
+// No default: an omitted argument is a usage error.
 const outDirArg = process.argv[2];
 if (!outDirArg) {
   console.error(
@@ -75,8 +57,7 @@ if (!outDirArg) {
 }
 const OUT_DIR = resolve(root, outDirArg);
 const OUT_JSON = resolve(OUT_DIR, "measured-figure-type.json");
-// Fixed path, same idea as measure-battle-layout.mjs's FIXTURE_TS: there is
-// only one figures fixture module, unlike OUT_DIR which is chosen per run.
+// Fixed path: there is one figures fixture module, unlike the per-run OUT_DIR.
 const FIXTURE_TS = resolve(root, "src/figures/__fixtures__/measuredFigureType.ts");
 
 console.log(`measure-figure-type: writing to ${OUT_JSON} and ${FIXTURE_TS}`);
@@ -136,9 +117,7 @@ async function getFirstPageTarget(port) {
   return page;
 }
 
-/** Minimal CDP JSON-RPC-over-WebSocket client, same shape as
- * tools/measure-battle-layout.mjs (this repo has no puppeteer-core/
- * chrome-remote-interface/playwright/ws dependency). */
+/** Minimal CDP JSON-RPC client, same as the other rigs. */
 class CdpClient {
   constructor(wsUrl) {
     this.ws = new WebSocket(wsUrl);
@@ -180,19 +159,12 @@ class CdpClient {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Throwaway page. Its structure replicates the real width chain:
-//   viewport -> CaseStudyPage's `data-page-content` (maxWidth 960, margin
-//   0 auto, padding `clamp(20px,5vw,44px)` horizontal, box-sizing:border-box
-//   from src/styles/tokens.css's `* { box-sizing: border-box }`)
-//   -> figure container (border 1px solid, padding 18px 20px,
-//   box-sizing:border-box)
-// At a 320px viewport, clamp(20px,5vw,44px) evaluates to 20px (5vw=16 is below
-// the 20px floor).
-//
-// Loads the SAME Google Fonts stylesheet as index.html (JetBrains Mono),
-// so the font-readiness trap is exercised for real, not stubbed.
-// ---------------------------------------------------------------------------
+// Throwaway page replicating the real width chain: viewport ->
+// CaseStudyPage's `data-page-content` (maxWidth 960, horizontal padding
+// `clamp(20px,5vw,44px)`, border-box via tokens.css) -> figure container
+// (1px border, padding 18px 20px, border-box). At 320px the clamp resolves to
+// its 20px floor. Loads the same Google Fonts stylesheet as index.html, so the
+// font-readiness trap is exercised for real.
 const THROWAWAY_HTML = `<!doctype html>
 <html>
 <head>
@@ -219,8 +191,7 @@ const THROWAWAY_HTML = `<!doctype html>
 </html>
 `;
 
-// Font-readiness + measurement, evaluated in the page. Async IIFE so it can
-// be run with Runtime.evaluate's awaitPromise:true.
+// Async IIFE for Runtime.evaluate's awaitPromise:true.
 const MEASURE_EXPR = `
 (async () => {
   await document.fonts.ready;
@@ -300,14 +271,11 @@ async function main() {
       }),
     );
     await loaded;
-    // Let the stylesheet <link> resolve and layout settle before evaluating.
     await sleep(300);
 
-    // document.fonts.ready has no hard timeout on its own — if this run has
-    // no network, the font never resolves and the promise can hang forever.
-    // Race it against an explicit timeout so a no-network environment STOPs
-    // with a clear report instead of hanging or (worse) silently falling
-    // back to a measurement of the fallback face.
+    // document.fonts.ready has no timeout: without network it can hang forever.
+    // Race it so a no-network run stops with a clear report instead of hanging
+    // or measuring the fallback face.
     const evalPromise = client.send("Runtime.evaluate", {
       expression: MEASURE_EXPR,
       returnByValue: true,
@@ -362,13 +330,10 @@ async function main() {
     monoChPx: result.monoChPx,
     nodeMinPx: result.nodeMinPx,
     narrowestContentPx: result.narrowestContentPx,
-    // ResizeObserver's contentRect is the content box (padding and border
-    // already excluded). narrowestContentPx is measured
-    // via ResizeObserver directly, so it is in the content box. monoChPx and
-    // nodeMinPx are measured via getBoundingClientRect() on elements with no
-    // border (box-sizing:border-box), where padding is part of the measured
-    // box on purpose (NODE_MIN_PX is defined in layout.ts as including the
-    // node's own padding).
+    // narrowestContentPx comes from ResizeObserver, so it is content-box.
+    // monoChPx and nodeMinPx come from getBoundingClientRect on border-box
+    // elements with no border, so padding is included on purpose (layout.ts's
+    // NODE_MIN_PX includes the node's padding).
     observedBox: "content",
     notes:
       "monoChPx and nodeMinPx are getBoundingClientRect() widths on borderless " +
@@ -378,8 +343,8 @@ async function main() {
       "API the real Figure component reads, which excludes padding and border.",
   };
 
-  // writeFileSync is synchronous, but confirm the file exists anyway: nothing
-  // downstream should read a fixture this rig did not actually land on disk.
+  // Confirm the file landed: nothing downstream should read a fixture that
+  // is not on disk.
   writeFileSync(OUT_JSON, JSON.stringify(fixture, null, 2) + "\n");
   let waited = 0;
   while (!existsSync(OUT_JSON) && waited < 5000) {
@@ -393,12 +358,9 @@ async function main() {
   console.log(`measure-figure-type: wrote ${OUT_JSON}`);
   console.log(`measure-figure-type: ${JSON.stringify(fixture, null, 2)}`);
 
-  // Generated TS fixture, same reason and same shape as
-  // measure-battle-layout.mjs's FIXTURE_TS: the JSON above cannot be
-  // imported from a src/**/*.test.ts file in this repo (no
-  // resolveJsonModule; docs/ is outside tsconfig.app.json's "include":
-  // ["src"]). This generated .ts module is the one the figure tests import.
-  // Do not hand-edit it; regenerate by re-running this script.
+  // The tests import this generated module because they cannot import the
+  // JSON (no resolveJsonModule; docs/ is outside tsconfig.app.json's include).
+  // Do not hand-edit; rerun this script.
   const fixtureTsSrc = `// GENERATED by tools/measure-figure-type.mjs. Do not edit by hand;
 // regenerate with \`node tools/measure-figure-type.mjs
 // docs/design-labs/s3-figures\`. The numbers come from
@@ -438,14 +400,9 @@ export const MEASURED_FIGURE_TYPE: MeasuredFigureType = {
   console.log(`measure-figure-type: wrote ${FIXTURE_TS}`);
 }
 
-/** Same profile-scoped kill as tools/measure-battle-layout.mjs: Edge's
- * headless launcher re-execs into a real browser process with its own
- * crashpad/gpu/utility/renderer children outside the launcher PID's own
- * process tree, so a plain `taskkill /T` on the launcher PID does not reap
- * them. Enumerate msedge.exe processes via WMI and match each one's own
- * command line against this run's unique --user-data-dir path, never by
- * image name alone, since unrelated msedge.exe processes are usually
- * running. */
+/** Profile-scoped Edge kill, same as the other rigs: `taskkill /T` misses the
+ * re-exec'd browser's children, and killing by image name would take out
+ * unrelated Edge processes. */
 function killEdgeByProfile(userDataDir, label) {
   const psLiteral = userDataDir.replace(/'/g, "''");
   const psScript =

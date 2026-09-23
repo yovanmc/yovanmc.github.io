@@ -1,20 +1,17 @@
-// Imposter Syndrome parity audit: the generated bossImposter.js module must
-// produce byte-identical frame data to the lab's own pure block, evaluated
-// standalone. Imposter is the one boss whose lab-embedded hero half is a LIVE
-// dependency (remapOf recolors the hero's own IDLE/ATK) rather than an inert
-// reference, so unlike Cascade/Silent Failure it gets a real drift guard.
+// Imposter Syndrome parity audit: the generated bossImposter.js must produce
+// frame data identical to the lab's own pure block, evaluated standalone. The
+// Imposter lab's embedded hero half is a live dependency (remapOf recolors the
+// hero's IDLE/ATK), so unlike the other bosses it gets a real drift guard.
 //
 // Two checks:
-//   1. Hero-embed parity spot-check: the lab's OWN embedded hero half must
-//      still match canon heroBattle.js for exactly the symbols the slice
-//      imports (IDLE/ATK/ROWS/COLS). If these drift apart, the lab renders
-//      against art the shipped module no longer uses.
-//   2. Full IMP_* parity: every exported frame/reel set, lab-computed (off
-//      its own embedded hero half) vs the generated module (importing REAL
-//      canon heroBattle.js), deep-equal and not just shape.
+//   1. The lab's embedded hero half still matches canon heroBattle.js for the
+//      symbols the slice imports (IDLE/ATK/ROWS/COLS). Otherwise the lab
+//      renders against art the shipped module does not use.
+//   2. Every exported IMP_* frame/reel set, lab-computed vs the generated
+//      module (importing real heroBattle.js), deep-equal.
 //
-// This checks the EXTRACTOR plus import wiring only. Render-layer correctness
-// (composeBoss, mirrorOf, erosion-stage mapping) is checked in the browser.
+// Covers the extractor and import wiring only; render-layer correctness
+// (composeBoss, mirrorOf, erosion stages) is checked in the browser.
 
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -27,11 +24,9 @@ const labHtml = readFileSync(resolve(root, "docs/battle-prototypes/boss-imposter
   "\n",
 );
 
-// Full pure body: from the lab's own `const PAL = {` (top of its embedded
-// hero half) through immediately before `function drawGrid` (same end anchor
-// the extractor uses) — every function/const declaration in between is pure
-// (no DOM touched); the DOM-writing looper()/getElementById() calls all live
-// AFTER this slice, never inside it.
+// From the lab's `const PAL = {` through just before `function drawGrid`
+// (the extractor's end anchor). Everything in between is pure; the DOM
+// writes all come after.
 const startAnchor = "const PAL = {";
 const endAnchor = "function drawGrid";
 const a = labHtml.indexOf(startAnchor);
@@ -73,8 +68,7 @@ check("ATK (lab embed vs canon heroBattle.js)", lab.ATK, hero.ATK);
 check("ROWS (lab embed vs canon heroBattle.js)", lab.ROWS, hero.ROWS);
 check("COLS (lab embed vs canon heroBattle.js)", lab.COLS, hero.COLS);
 
-// 2. Full IMP_* parity: lab-computed (off its own embedded hero half) vs the
-// generated module (importing real canon heroBattle.js).
+// 2. Full IMP_* parity.
 for (const key of ["IMP_IDLE", "IMP_SLASH", "GLITCH_A", "GLITCH_B", "IMP_REEL", "IMP_ATK", "IMP_HIT", "IMP_DIE"]) {
   check(key, lab[key], gen[key]);
 }

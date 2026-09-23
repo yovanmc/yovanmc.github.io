@@ -1,24 +1,16 @@
-// PIPELINE_FIGURE renders through the same <Figure> component every
-// registered flow figure does (Figure.tsx), but it lives outside FIGURES: it
-// has no owning project slug, so there is no registry.test.ts entry for it.
-// Figure.tsx derives its ROW_THRESHOLD_PX once from every FIGURES flow figure
-// at module load, so if PIPELINE_FIGURE were ever wider than the widest
-// registered figure, adding it to that population would raise the threshold
-// and silently reflow every OTHER figure on the site along with it. This
-// equality is the tripwire: it holds today because PIPELINE_FIGURE's one row
-// has 4 nodes, tying (not exceeding) the registry's current max
-// (backend-harness and curio both have a 4-node row), and it starts FAILING
-// the moment PIPELINE_FIGURE grows a 5th node, which is the point.
+// PIPELINE_FIGURE renders through <Figure> but sits outside FIGURES (no
+// project slug). Figure.tsx derives ROW_THRESHOLD_PX from every FIGURES flow
+// figure, so a PIPELINE_FIGURE wider than the widest registered figure would
+// reflow every other figure if it ever joined them. This equality is the
+// tripwire: its one 4-node row ties the registry's max and fails the moment
+// it grows a 5th node.
 import { describe, expect, it } from "vitest";
 import { FIGURES } from "./registry";
 import { uniformRowThresholdPx } from "./layout";
 import { PIPELINE_FIGURE } from "./pipelineFigure";
 import type { FlowFigure } from "./types";
 
-// Same derivation Figure.tsx itself uses for FLOW_FIGURES (not imported from
-// there - Figure.tsx does not export it - but reads the identical FIGURES
-// source with the identical filter, so this cannot drift from what the
-// component actually renders against).
+// Same FIGURES source and filter as Figure.tsx's own (unexported) list.
 const FLOW_FIGURES = Object.values(FIGURES).filter((f): f is FlowFigure => f.kind === "flow");
 
 describe("PIPELINE_FIGURE stays within the registry's row-threshold population", () => {

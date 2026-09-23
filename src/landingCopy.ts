@@ -1,9 +1,8 @@
 /**
- * User-facing copy for the site shell. This file is the single home for
- * every user-facing string this area adds.
+ * User-facing copy for the site shell. New shell copy goes here, not in a
+ * second copy home.
  *
  * Punctuation rule: no em dash, no en dash, no semicolon (src/site/shellPunctuation.test.ts).
- * New copy should append to this file rather than introducing a second copy home.
  */
 
 /** OG/meta description for the root shell (vite.config.ts share-shells plugin). */
@@ -15,10 +14,10 @@ export const ogBrowseDescription = "Browse the portfolio directly, case studies,
 /** Visually-hidden skip-link text (App.tsx root, first child). */
 export const skipToContent = "Skip to content";
 
-/** Forfeit control label everywhere the battle can be left (pause overlay, defeat overlay). Forfeit lands in the play menu, not the gate. */
+/** Forfeit control label (pause and defeat overlays). Forfeit lands in the play menu, not the gate. */
 export const skipToWork = "Skip to the work";
 
-/** The name, used wherever a surface needs an accessible page title and has no better one of its own (BrowseIndex's hidden h1). */
+/** Accessible page title for surfaces with no better one (BrowseIndex's hidden h1). */
 export const nameLine = "Yovan Collins";
 
 /** Role line under the name. */
@@ -43,25 +42,19 @@ export const footerEmail = "EMAIL";
 /** Shown under the start menu on phone: the game is playable there but is not the intended experience. */
 export const phoneNote = "Best played on a desktop";
 
-/** Sealed-panel body copy, used everywhere a locked item's detail is shown,
- * with the guarding boss's display name interpolated. The null branch is a
- * type-safety fallback only - every
- * gateable slug currently has a mapped boss (progress/unlocks.ts
- * guardingBoss), so it should not be reachable through the UI today. */
+/** Sealed-panel body with the guarding boss's name. The null branch is a
+ * type-safety fallback: every gateable slug has a guarding boss
+ * (progress/unlocks.ts). */
 export function sealedLine(boss: string | null): string {
   return boss
     ? `Sealed until you defeat ${boss}.`
     : "Sealed until you defeat the boss guarding it.";
 }
 
-/** Locked-page call to action that lets a visitor see the real content
- * anyway. Adds the slug to App's session-only `revealed` set; nothing
- * persists across a reload. */
+/** Lets a visitor read a locked page anyway, for this session only. */
 export const readAnyway = "Read it anyway";
 
-/** Shown on the reduced-motion dive: an opt-in, per-visit control that
- * runs the full cinematic instead of the 2.5 second cross-fade. Never
- * persisted. */
+/** Reduced-motion dive: opt-in per visit to the full cinematic. */
 export const playFullIntro = "Play the full intro";
 
 /** Battle screen exit control: leaves the fight for the landing page. */

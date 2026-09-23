@@ -124,10 +124,8 @@ describe("resolveSilentFailureBossTurn: swing 12 (CT -> 9), ambush 18 (CT -> 14)
 
 describe("cycle resolution — the CT-extension rule (window-end check reads ct BEFORE the engine's own end-of-turn decrement)", () => {
   it("CT cast on the LAST vanish turn: ct is still active at the following window's natural end -> extends to a 3rd embodied turn", () => {
-    // The second (= last, base window is 2) embodied turn: phaseTurnsLeft is
-    // about to hit 0. This models "CT cast on the last vanish turn" from the
-    // hero's perspective: by the time the SECOND embodied boss-turn's
-    // window-end check runs, CT (cast 2 hero-turns earlier) is still active.
+    // The last base embodied turn. Models CT cast on the last vanish turn: it
+    // is still active when this window-end check runs.
     const boundary: SilentFailureBoss = { ...spawnSilentFailure(), phase: "embodied", phaseTurnsLeft: 1 };
     const { boss, outcome } = resolveSilentFailureBossTurn(boundary, true, false);
     expect(outcome).toBe("swing");

@@ -1,19 +1,16 @@
-// Pure command-menu model: a nested top/skills/spells state machine driving
-// BattleScene.tsx's menu. No React, no DOM: every dependency (commands, mp)
-// is injected so this can be unit-tested directly under the node environment.
+// Pure command-menu model: a nested top/skills/spells state machine for
+// BattleScene.tsx. Commands and mp are injected, so it tests without a DOM.
 import type { AbilityCommand } from "./abilities";
 
 export type MenuLevelId = "top" | "skills" | "spells";
 export type MenuInput = "up" | "down" | "confirm" | "back";
 
-/** Fixed partition of the full kit into the two submenus. Attack stays
- * outside both (BASE_KIT, always at the top level). */
+/** Fixed partition of the kit into the two submenus. Attack stays at the top
+ * level. */
 export const SKILLS_IDS: readonly AbilityCommand["id"][] = ["ct", "pt", "debug"];
 export const SPELLS_IDS: readonly AbilityCommand["id"][] = ["fo", "rb", "rc", "conv"];
 
-// Menu copy. The punctuation rule is hard: no em dash, no en dash, no
-// semicolon. commandMenu.test.ts pins it with the same assertion pattern
-// scenes/punctuation.test.ts uses for scene copy.
+// Menu copy: no em dash, no en dash, no semicolon (commandMenu.test.ts).
 const SKILLS_LABEL = "Skills";
 const SKILLS_DESC = "Core moves. Always ready.";
 const SPELLS_LABEL = "Spells";
@@ -56,10 +53,9 @@ export type MenuEffect =
   | { type: "blocked" } // locked category or unaffordable ability -> playBack
   | { type: "cast"; cmd: AbilityCommand }; // caller handles needsTarget/commit
 
-/** Rows for one menu level. The top level is always exactly 3 rows (attack,
- * Skills, Spells). The Spells row is locked whenever the kit carries zero
- * SPELLS_IDS entries: its desc switches to the locked hint and no spell name
- * ever appears in that row. Skills is never locked. */
+/** Rows for one level. The top level is always attack, Skills, Spells. Spells
+ * is locked while the kit has no spell: its desc shows the locked hint and no
+ * spell name appears. Skills is never locked. */
 export function deriveMenuView(commands: AbilityCommand[], level: MenuLevelId): MenuView {
   if (level === "top") {
     const attack = commands.find((c) => c.id === "attack")!; // BASE_KIT: always present
@@ -89,13 +85,10 @@ export function deriveMenuView(commands: AbilityCommand[], level: MenuLevelId): 
   return { level, title: SPELLS_TITLE, rows };
 }
 
-/** Navigation and per-level cursor memory: up/down move ONLY the current
- * level's cursor (wrapping at both ends); confirm on
- * a category switches `level` (never touches any cursor); confirm on an
- * ability yields `cast` (MP-affordable) or `blocked` (not) with state
- * unchanged either way (the caller drives mode/commit); back ascends from a
- * submenu (state's `level` -> "top", cursor untouched) or pauses at top
- * (state unchanged). */
+/** up/down move only the current level's cursor, wrapping. confirm on a
+ * category switches `level`; on an ability it yields `cast` or `blocked`
+ * (not affordable) with state unchanged, since the caller drives mode and
+ * commit. back ascends to top (cursors kept) or, at top, pauses. */
 export function menuReduce(
   menu: MenuState,
   input: MenuInput,
@@ -117,7 +110,6 @@ export function menuReduce(
     return { menu: { ...menu, level: "top" }, effect: { type: "ascend" } };
   }
 
-  // confirm
   const row = rows[cursor];
   if (!row) return { menu, effect: { type: "blocked" } };
   if (row.kind === "category") {

@@ -13,17 +13,11 @@ export interface LockedCaseStudyProps {
   onClose: () => void;
 }
 
-/** Sealed treatment for the CaseStudyPage render boundary. The authoritative
- * gate is the `pageLocked` computation in App.tsx.
- *
- * A standalone overlay rather than a CaseStudyPage prop, so that "what
- * renders when locked" stays visible at the mount site instead of hiding
- * behind a flag inside the real page. Takes an explicit props contract rather
- * than reaching into App's module-level constants. Shows the real
- * title, meta and stat, replacing only the body, naming the guarding boss,
- * plus a "read it anyway" control that lets a visitor past the seal for this
- * session (App owns the `revealed` Set; nothing here persists it).
- */
+/** Sealed treatment at the CaseStudyPage render boundary; App.tsx's
+ * `pageLocked` is the authoritative gate. A standalone overlay, not a
+ * CaseStudyPage prop, so what renders when locked is visible at the mount
+ * site. Shows the real title, meta and stat, replaces the body, names the
+ * guarding boss, and offers "read it anyway" for this session. */
 export function LockedCaseStudy({ item, catLabel, isMobile, boss, onReveal, onClose }: LockedCaseStudyProps) {
   return (
     <div

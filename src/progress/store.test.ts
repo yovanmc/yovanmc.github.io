@@ -1,9 +1,6 @@
-// Progress store test suite. Drives readProgress/writeProgress/clearProgress
-// through a plain in-memory fake implementing ProgressStore: no jsdom, no real
-// localStorage. Covers the versioned envelope, every storage touch wrapped so
-// it never throws to the caller, and the implemented-boss cap via an injected
-// BossRoster so the real 4-entry RUSH_ORDER/IMPLEMENTED_BOSSES never has to be
-// mutated to exercise it.
+// Drives the store through an in-memory ProgressStore fake (no jsdom, no real
+// localStorage). The implemented-boss cap uses an injected BossRoster so the
+// real constants are never mutated.
 import { describe, expect, it } from "vitest";
 import { IMPLEMENTED_BOSSES, RUSH_ORDER } from "../battle/rushOrder";
 import {
@@ -16,7 +13,6 @@ import {
   type ProgressStore,
 } from "./store";
 
-/** Plain in-memory ProgressStore fake. */
 class FakeStore implements ProgressStore {
   private data = new Map<string, string>();
   getItem(key: string): string | null {

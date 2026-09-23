@@ -1,7 +1,5 @@
-// The Cascade's scene module: arena art, boss composition, plate copy, banner
-// text, victory/defeat copy. Mirrors scenes/alertStorm.ts's shape behind the
-// same `BossSceneModule` interface (./types); `composeCascade`
-// (./cascadeCompose) does the actual per-frame region composition.
+// The Cascade's scene module; `composeCascade` (./cascadeCompose) does the
+// per-frame region composition.
 import type { BattleState, BossState } from "../engine";
 import type { CascadeBoss } from "../bosses/cascade";
 import { CASCADE_ID } from "../bosses/cascade";
@@ -12,10 +10,8 @@ import { composeCascade } from "./cascadeCompose";
 import { skipToWork } from "../../landingCopy";
 import type { BossSceneModule, SceneFx } from "./types";
 
-/** Storm telegraph banner, the Cascade's analog of CT making tells linger:
- * presentation-only, shown one boss turn EARLIER while CT is active. The
- * engine's `stormIn` counter is authoritative and this is purely a display
- * threshold over it, with no balance coupling. */
+/** Storm telegraph: shown one boss turn earlier while CT is active. A display
+ * threshold over the engine's authoritative `stormIn`. */
 const STORM_BANNER = "THE CHAIN OVERLOADS · A STORM GATHERS";
 
 function bannerFor(state: BattleState): string {
@@ -25,10 +21,6 @@ function bannerFor(state: BattleState): string {
   return boss.stormIn > 0 && boss.stormIn <= telegraphTurns ? STORM_BANNER : "";
 }
 
-/** This module is never invoked with a non-cascade `boss` in practice, since
- * BattleScene.tsx selects the scene module by `boss.kind` (scenes/alertStorm.ts
- * guards its own composeBoss the same way); the empty-grid fallback is
- * defensive only. */
 function composeBoss(boss: BossState, _screaming: boolean, flutter: number, _fx: SceneFx): Grid {
   return boss.kind === CASCADE_ID ? composeCascade(boss, flutter) : newG();
 }
@@ -39,8 +31,7 @@ export const cascadeScene: BossSceneModule & { reels: { attack: Reel; hit: Reel;
   composeBoss,
   plate: {
     label: "THE CASCADE",
-    // Cascade never masks: its nodes always show real HP, so this string is
-    // structural only and BattleScene.tsx's plate JSX never renders it.
+    // Never rendered: Cascade nodes always show real HP.
     hiddenLabel: "SIX NODES · REAL HP",
     footer: (livingCount) => `${livingCount}/6 NODES`,
   },

@@ -16,8 +16,7 @@ import type { SilentFailureBoss } from "./bosses/silentFailure";
 import { spawnImposter } from "./bosses/imposter";
 import type { ImposterBoss } from "./bosses/imposter";
 
-/** Narrows `BattleState.boss` for the Alert Storm suites, whose states are all
- * alert-storm-shaped. */
+/** Narrows `BattleState.boss` for the Alert Storm suites. */
 function bats(s: BattleState): Bat[] {
   if (s.boss.kind !== "alert-storm") throw new Error("expected alert-storm boss");
   return s.boss.bats;
@@ -797,10 +796,8 @@ describe("Cascade boot + dispatch", () => {
   });
 });
 
-// ---- Silent Failure engine wiring + Rollback ------------------------------
-// These tests build a synthetic BattleState directly instead of booting
-// through initBattle. The hero arrives at 120/14 with Rollback, derived from
-// defeatedBosses: ["alert-storm", "cascade"].
+// Builds a synthetic BattleState instead of booting through initBattle. The
+// hero arrives at 120/14 with Rollback (defeated alert-storm and cascade).
 function silentFailureState(
   bossOverrides: Partial<SilentFailureBoss> = {},
   stateOverrides: Partial<BattleState> = {},
@@ -921,9 +918,8 @@ describe("Silent Failure engine wiring", () => {
   });
 
   describe("boss turn: swing (embodied) / ambush (vanished)", () => {
-    // Triggered with `attack`, not `ct`: casting CT itself sets ctTurns > 0
-    // for THIS SAME boss turn, which would silently CT-reduce the swing/ambush
-    // amount these tests measure uncT'd.
+    // Triggered with `attack`, not `ct`: casting CT sets ctTurns for this same
+    // boss turn and would CT-reduce the amounts measured here.
     it("embodied boss turn deals the swing amount (12) and decrements the window", () => {
       const s0 = silentFailureState({ phase: "embodied", phaseTurnsLeft: 2 });
       const s1 = battleReduce(s0, { type: "attack", target: SF_TARGET_ID });
@@ -1041,7 +1037,6 @@ describe("Silent Failure engine wiring", () => {
   });
 });
 
-// ---- Silent Failure boot + engine-generated win line ----------------------
 describe("Silent Failure boot + engine-generated win line", () => {
   it('initBattle boots boss: "silent-failure" on request: 140/140, embodied, 2 turns left, unmarked, no extension used, body forced off', () => {
     const s = initBattle({ seed: 42, boss: "silent-failure", defeatedBosses: ["alert-storm", "cascade"] });
@@ -1063,10 +1058,9 @@ describe("Silent Failure boot + engine-generated win line", () => {
   });
 
   describe("the engine-generated win line (fastest legal line: PT, PT, whiff, CT, PT, PT, 28+28+42+42 = exactly 140)", () => {
-    // Runs the line through the real reducer and reads OBSERVED facts off the
-    // resulting states: phases actually entered, whether an ambush turn was
-    // survived, and where the run lands relative to the 6-11 hero-turn band,
-    // rather than asserting numbers computed by hand.
+    // Runs the line through the real reducer and asserts observed facts
+    // (phases entered, ambush survived, the 6-11 hero-turn band), not
+    // hand-computed numbers.
     const ACTIONS: BattleAction[] = [
       { type: "pt", target: SF_TARGET_ID }, // T1 embodied
       { type: "pt", target: SF_TARGET_ID }, // T2 embodied -> flips to vanished
@@ -1120,15 +1114,13 @@ describe("Silent Failure boot + engine-generated win line", () => {
   });
 });
 
-// ---- Imposter engine wiring: rc/conv, mirror hookups, Conviction ----------
-// ---- conversion sites, clone-pop overlay ----------------------------------
 function imposterState(
   bossOverrides: Partial<ImposterBoss> = {},
   stateOverrides: Partial<BattleState> = {},
 ): BattleState {
-  // Hero arrives at 130/16 with Root Cause: defeatedBosses grants fo/rb/rc.
-  // imposter-syndrome itself is deliberately NOT in that list, so `conv` stays
-  // out of the derived kit unless a test opts into the mid-fight forge.
+  // Hero arrives at 130/16 with Root Cause. imposter-syndrome is not in
+  // defeatedBosses, so `conv` stays out of the kit unless a test opts into
+  // the mid-fight forge.
   const base = initBattle({ seed: 42, defeatedBosses: ["alert-storm", "cascade", "silent-failure"] });
   const boss: ImposterBoss = { ...spawnImposter(0, (r) => r).boss, ...bossOverrides };
   return { ...base, boss, ...stateOverrides };
@@ -1167,14 +1159,9 @@ describe("Root Cause (rc): 4 MP", () => {
     const s1 = battleReduce(s0, { type: "rc", target: 0 });
     if (s1.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
     expect(s1.boss.hp).toBe(180 - 22);
-    // Ends at "clones", not "mirror": ripBackVanish advances vanish -> mirror
-    // (non-degenerate nextPhase), but MIRROR_TURNS is always exactly 1 and
-    // the mirror phase resolves-and-advances unconditionally the INSTANT the
-    // boss-turn dispatch (later in this same reduce call) sees it, so the
-    // rip-back cascades through mirror's own immediate resolution too, in the
-    // same hero turn, landing on "clones". A rip-back from an already
-    // degenerate rotation skips mirror entirely and lands on "clones" the same
-    // way; this is the non-degenerate case, which passes THROUGH mirror.
+    // Ends at "clones", not "mirror": the rip-back advances vanish -> mirror,
+    // and MIRROR (always 1 turn) resolves and advances the instant the boss
+    // turn later in this same reduce sees it.
     expect(s1.boss.phase).toBe("clones");
   });
 
@@ -1198,11 +1185,8 @@ describe("rc marked bonus + ignores-stealth (both player-reachable: beat Silent 
     if (s1.boss.kind !== "cascade") throw new Error("unreachable");
     expect(s1.boss.nodes.find((n) => n.id === targetId)!.hp).toBe(25 - 22); // unmarked
 
-    // A real node's max is 25, too low to observe an unclamped 33 without
-    // dying first, so this fixture bumps just the hp/maxHp headroom on the
-    // ALREADY-BUILT state to isolate the marked-bonus arithmetic from the
-    // unrelated 25-HP clamp; nothing else about the node (id, carrier status,
-    // marked flag under test) is touched.
+    // A node's max of 25 would clamp 33, so bump only hp/maxHp headroom to
+    // isolate the marked-bonus arithmetic.
     const markedNodes = cascadeBoss0.nodes.map((n) =>
       n.id === targetId ? { ...n, marked: true, hp: 100, maxHp: 100 } : n,
     );
@@ -1228,9 +1212,8 @@ describe("rc marked bonus + ignores-stealth (both player-reachable: beat Silent 
   });
 
   it("vs a VANISHED Silent Failure lands full damage and does NOT whiff (targeting while hidden is Root Cause's job)", () => {
-    // rc only exists in kit AFTER Silent Failure is defeated once
-    // (KIT_UNLOCKS), so the only legal in-game way to cast it against SF at
-    // all is a REMATCH: defeatedBosses already includes "silent-failure".
+    // rc is only in kit after Silent Failure is defeated, so casting it
+    // against SF is only legal in a rematch.
     const s0 = silentFailureState(
       { phase: "vanished", phaseTurnsLeft: 2 },
       { defeatedBosses: ["alert-storm", "cascade", "silent-failure"] },
@@ -1338,9 +1321,8 @@ describe("conviction doubles every ability's constant, at reducer level", () => 
       { forgeFired: true },
       { hero: { hp: 30, maxHp: 130, mp: 16, maxMp: 16 }, dots: [{ batId: 0, ticksLeft: 3, tick: 4 }] },
     );
-    // Activates conviction mid-call; the PRE-EXISTING dot still ticks THIS
-    // same call, at its stamped value — never recomputed from the flag that
-    // just flipped.
+    // Conviction activates mid-call; the pre-existing dot still ticks this
+    // call at its stamped value.
     const s1 = battleReduce(s0, { type: "conv" });
     expect(s1.conviction).toBe(true);
     const dot1 = s1.events.find((e) => e.type === "dot");
@@ -1462,8 +1444,7 @@ describe("DoT anchoring crosses CLONES phase boundaries, at reducer level", () =
     expect(s1.events.find((e) => e.type === "dot")).toEqual({ type: "dot", batId: 0, amount: 4 });
     expect(s1.dots).toEqual([{ batId: 0, ticksLeft: 2, tick: 4 }]);
 
-    // second turn: now IN clones — the dot keeps ticking exactly the same
-    // way, never popped or otherwise treated specially by the illusion.
+    // Now in clones: the dot keeps ticking, untouched by the illusion.
     const s2 = battleReduce(s1, { type: "attack", target: s1.boss.realIndex ?? 0 });
     if (s2.boss.kind !== "imposter-syndrome") throw new Error("unreachable");
     expect(s2.boss.phase).toBe("clones");
@@ -1585,9 +1566,8 @@ describe("Imposter boot + engine-generated win line", () => {
   });
 
   describe("action tokens: rc:<id> / conv reach the reducer and resolve", () => {
-    // engine.test.ts owns the reducer-level shape; bootParams.test.ts owns the
-    // string-parsing contract. Covered here too because the reducer is what
-    // actually consumes the parsed shape end to end.
+    // bootParams.test.ts owns the string parsing; this covers the reducer end
+    // to end.
     it("rc with a target reaches the reducer and resolves", () => {
       const s0 = imposterState();
       const s1 = battleReduce(s0, { type: "rc", target: 0 });
@@ -1596,9 +1576,8 @@ describe("Imposter boot + engine-generated win line", () => {
     });
 
     it("conv without the gate met (hp*4 > maxHp) is rejected as invalid", () => {
-      // forgeFired:true unlocks conv via the mid-fight forge channel; kit
-      // derivation off defeatedBosses would ALSO reject this as "not in kit"
-      // first, so this isolates the gate check itself.
+      // forgeFired unlocks conv, so the kit check passes and this isolates the
+      // hp gate.
       const s0 = imposterState({ forgeFired: true });
       const s1 = battleReduce(s0, { type: "conv" });
       expect(s1.events).toEqual([{ type: "invalid", reason: "conviction gate not met" }]);
@@ -1606,22 +1585,13 @@ describe("Imposter boot + engine-generated win line", () => {
   });
 
   describe("the engine-generated win line (runs through the real reducer and asserts observed facts)", () => {
-    // Playability: a CLONES-phase targeted hit only lands for real if it
-    // happens to name `realIndex`, but `realIndex` is seeded rng, invisible to
-    // a real player until Debug's mark reveals it. Targeting `realIndex`
-    // before anything has marked the boss would be a hit no player could have
-    // aimed, making the turn count a claim about oracle play rather than
-    // achievable play.
-    //
-    // Structural guard, not just a comment: `realIndex` is kept OUT OF
-    // LEXICAL SCOPE for every action taken before the mark is confirmed
-    // held (PRE_MARK_ACTIONS below cannot reference it, there is nothing to
-    // reference). Every PRE_MARK_ACTIONS entry is illusion-independent (rc
-    // always resolves real regardless of aim; ct is untargeted; pt/debug
-    // target id 0, the only id that exists once the boss has left CLONES,
-    // never a guess). Only after H7's Debug is confirmed to have landed AND
-    // held the mark does `realIndex` come into scope at all, for
-    // POST_MARK_ACTIONS, exactly the point a real player would also learn it.
+    // Playability: a CLONES hit lands only if it names `realIndex`, which is
+    // seeded rng a real player cannot see until Debug's mark reveals it.
+    // Aiming at it earlier would make the turn count a claim about oracle
+    // play. So `realIndex` stays out of lexical scope for PRE_MARK_ACTIONS
+    // (every entry is illusion-independent: rc always hits real, ct is
+    // untargeted, pt/debug target id 0 after CLONES). It enters scope for
+    // POST_MARK_ACTIONS only once H7's Debug has landed and the mark holds.
     function winLine() {
       let s = initBattle({
         seed: 42,
@@ -1644,11 +1614,9 @@ describe("Imposter boot + engine-generated win line", () => {
       function step(action: BattleAction) {
         if (s.status !== "active") return;
         const prePhase = s.boss.kind === "imposter-syndrome" ? s.boss.phase : undefined;
-        // The structural playability guard (runtime half — the lexical
-        // PRE_MARK/POST_MARK split below is the other half): a targeted hit
-        // against a SPECIFIC clone slot, while still in CLONES and still
-        // unmarked, is a hit no real player could have aimed. Checked
-        // against the PRE-call state, before this action's own effects.
+        // Runtime half of the playability guard: an aimed hit on a specific
+        // clone slot while still in CLONES and unmarked is one no player could
+        // have aimed. Checked against the pre-call state.
         if (
           s.boss.kind === "imposter-syndrome" &&
           s.boss.phase === "clones" &&
@@ -1659,9 +1627,8 @@ describe("Imposter boot + engine-generated win line", () => {
           oracleViolation = true;
         }
         s = battleReduce(s, action);
-        // Each battleReduce call replaces `events` with just THIS call's log
-        // (never accumulates) — every event-based fact must be captured
-        // turn-by-turn here, not read off the final state's events array.
+        // Each battleReduce replaces `events` with this call's log only, so
+        // event facts must be captured turn by turn.
         if (s.events.some((e) => e.type === "invalid")) invalidCount++;
         if (s.events.some((e) => e.type === "forge" && e.ability === "conviction")) forgeCrossingSeen = true;
         if (s.events.some((e) => e.type === "unlock" && e.id === "imposter-syndrome")) unlockSeen = true;
@@ -1669,39 +1636,20 @@ describe("Imposter boot + engine-generated win line", () => {
         if (s.boss.kind === "imposter-syndrome") {
           phasesSeen.add(s.boss.phase);
           if (s.boss.degenerate) degenerateReached = true;
-          // "fired", not just charged: PULSE's charge turn always deals 0;
-          // only the fire turn deals a nonzero hit. Requiring the heroDamage
-          // event, not just the pre-phase label, is what confirms the fire
-          // actually resolved: a heroDamage event only ever gets pushed by a
-          // boss turn that actually ran, never by a rejected/invalid action
-          // and never by a call where the boss died from the hero's own hit
-          // before the boss-turn section.
+          // "Fired", not just charged: the charge turn deals 0. A heroDamage
+          // event is only pushed by a boss turn that actually ran.
           if (prePhase === "pulse" && s.events.some((e) => e.type === "heroDamage" && e.amount > 0)) {
             pulseFired = true;
           }
-          // MIRROR's own boss turn resolves against whatever phase was
-          // current at the START of the call (rc's rip-back is the only
-          // action that changes phase mid-call, and it only ever fires from
-          // "vanish", never from "mirror", so prePhase === "mirror" is
-          // unambiguous about WHICH phase the boss turn dispatches on).
-          // But the pre-phase label alone does not prove the boss turn
-          // actually RAN this call: if the hero's own action ends the fight
-          // first (H11: a lethal hit resolves before the boss-turn section
-          // even runs), the label is still "mirror" going in with no mirror
-          // strike ever landing. heroDamage is pushed exactly once, only by
-          // that boss-turn section, so requiring its presence counts "a
-          // mirror turn actually resolved and dealt its damage" rather than
-          // "the input phase happened to say mirror".
+          // prePhase is unambiguous (rc's rip-back only changes phase from
+          // "vanish"), but it does not prove the boss turn ran: a lethal hero hit
+          // (H11) ends the fight first. heroDamage is pushed only by the boss
+          // turn, so requiring it counts mirror strikes that actually landed.
           if (prePhase === "mirror" && s.events.some((e) => e.type === "heroDamage")) mirrorFired++;
         }
-        // Same reasoning: casting rc while the PRE-call phase was "vanish"
-        // does not by itself prove the rip-back happened. The action could
-        // have been rejected (e.g. insufficient MP), in which
-        // case `invalid()` returns the state byte-unchanged (phase still
-        // "vanish") with nothing but an "invalid" event. Confirming no
-        // "invalid" event fired AND the boss has actually left "vanish"
-        // afterward is checking the real state transition, not inferring it
-        // from the action type and the pre-call phase alone.
+        // Casting rc during "vanish" does not prove the rip-back happened: a
+        // rejected action (e.g. too little MP) leaves the phase unchanged. Check
+        // for no "invalid" event and that the boss actually left "vanish".
         if (
           prePhase === "vanish" &&
           action.type === "rc" &&
@@ -1714,10 +1662,9 @@ describe("Imposter boot + engine-generated win line", () => {
       }
 
       // H1 rc (clones, ignores the illusion) · H2 rc (clones->pulse) · H3 ct
-      // (buff window) · H4 pt (pulse fires -> vanish; the only visible target,
-      // id 0) · H5 ct (re-cast, covers the vanish ambush + the rip-back
-      // turn) · H6 rc (rips the vanish; the <=50% crossing fires here too)
-      // · H7 debug (mirror phase, single visible target — marks the boss).
+      // · H4 pt (pulse fires -> vanish; only target id 0) · H5 ct (re-cast,
+      // covers the ambush and the rip-back turn) · H6 rc (rips the vanish; the
+      // <=50% crossing fires here too) · H7 debug (mirror, marks the boss).
       const PRE_MARK_ACTIONS: BattleAction[] = [
         { type: "rc", target: 0 },
         { type: "rc", target: 0 },
@@ -1729,23 +1676,17 @@ describe("Imposter boot + engine-generated win line", () => {
       ];
       for (const action of PRE_MARK_ACTIONS) step(action);
 
-      // The rest of this line is only legitimate if H7's Debug actually
-      // landed and the mark is still held (no pulse-break intervenes in the
-      // degenerate rotation, pulse is behind us), the condition that must
-      // hold before `realIndex` may be consulted.
+      // The rest of the line is only legitimate once H7's Debug landed and the
+      // mark still holds.
       if (s.boss.kind !== "imposter-syndrome" || !s.boss.marked) {
         throw new Error("PRE_MARK_ACTIONS must land Debug's mark before realIndex is legitimate to target");
       }
-      const realIndex = s.boss.realIndex ?? 0; // seeded at spawn, never reseeds — and now legitimately known
+      const realIndex = s.boss.realIndex ?? 0; // seeded at spawn, never reseeds, and now legitimately known
 
-      // H8 attack (clones, real slot — legitimate: the mark is held; the
-      // boss's OWN turn this call is a plain degenerate CLONES slash, phase
-      // then advances to mirror) · H9 attack (mirror fires, mirroring H7's
-      // Debug — attack never updates the last-special tracker; phase then
-      // advances back to clones) · H10 attack (clones, real slot — still
-      // marked; boss turn is a plain slash again, phase advances to mirror)
-      // · H11 attack (mirror phase's single visible target, lethal — the
-      // fight ends before this call's own boss turn ever runs).
+      // H8 attack (clones, real slot; boss slashes, phase -> mirror) · H9
+      // attack (mirror fires, mirroring H7's Debug; phase -> clones) · H10
+      // attack (clones, real slot; phase -> mirror) · H11 attack (lethal, the
+      // fight ends before the boss turn).
       const POST_MARK_ACTIONS: BattleAction[] = [
         { type: "attack", target: realIndex },
         { type: "attack", target: 0 },
@@ -1787,11 +1728,8 @@ describe("Imposter boot + engine-generated win line", () => {
       expect(phasesSeen.has("mirror")).toBe(true);
       expect(pulseFired).toBe(true);
       expect(vanishRippedByRc).toBe(true);
-      // The true count, not a loose lower bound: counting "input phase was
-      // mirror" alone would read 3, because it would also count H11, where the
-      // boss died from the hero's own hit before any boss turn ran. That
-      // metric degrades quietly, staying green even if the mirror mechanic
-      // stopped dealing damage entirely.
+      // Counting "input phase was mirror" would read 3 (it includes H11) and
+      // would stay green even if mirror stopped dealing damage.
       expect(mirrorFired).toBe(2);
       expect(degenerateReached).toBe(true);
       expect(forgeCrossingSeen).toBe(true);
@@ -1802,9 +1740,8 @@ describe("Imposter boot + engine-generated win line", () => {
       const { s, unlockSeen, victorySeen } = winLine();
       expect(victorySeen).toBe(true);
       expect(unlockSeen).toBe(true);
-      // No post-defeat forge for Imposter. The mid-fight "forge: conviction"
-      // crossing event (asserted above) is a different channel entirely and
-      // already fired earlier in this same run.
+      // No post-defeat forge for Imposter. The mid-fight conviction forge is a
+      // separate channel, asserted above.
       expect(s.events.some((e) => e.type === "forge" && e.ability !== "conviction")).toBe(false);
       for (const bossId of RUSH_ORDER) {
         expect(s.defeatedBosses).toContain(bossId);

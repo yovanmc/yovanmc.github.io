@@ -12,12 +12,10 @@ export { shellPaths };
 const VIRTUAL_BUILD_FACTS_ID = "virtual:build-facts";
 const RESOLVED_BUILD_FACTS_ID = "\0" + VIRTUAL_BUILD_FACTS_ID;
 
-/** Resolves virtual:build-facts to the numbers the /build/ page renders.
- * Computed once, at build time, from the test run and git rather than typed
- * by hand. Build mode fails the whole build loudly
- * (this.error) when an input is missing or stale; serve mode never touches
- * the filesystem, matching computeBuildFacts's own mode: "serve" -> null
- * short circuit, so the page renders "run npm test to populate" in dev. */
+/** Resolves virtual:build-facts to the numbers the /build/ page renders,
+ * computed at build time from the test run and git. Build mode fails the
+ * build (this.error) on a missing or stale input; serve mode never touches
+ * the filesystem and yields null. */
 function buildFacts(): Plugin {
   let mode: BuildMode = "build";
   return {
@@ -103,11 +101,9 @@ function shareShells(): Plugin {
       mkdirSync(browseDir, { recursive: true });
       writeFileSync(resolve(browseDir, "index.html"), browseHtml);
 
-      // /build shell, same non-counted-loop treatment as /work/ above, so the
-      // count !== 8 guard below stays scoped to slug shells only.
-      // Title/description are plain literals here (same treatment as
-      // browseTitle above): src/buildCopy.ts carries the page's own on-page
-      // <h1> title, not this shell's OG description.
+      // Outside the counted loop, like /work/, so the count !== 8 guard stays
+      // scoped to slug shells. src/buildCopy.ts holds the on-page title, not
+      // this shell's OG copy.
       const buildUrl = `${SITE}/build/`;
       const buildTitle = "Build notes | Yovan Collins";
       const buildDescription = "Numbers and a verification pipeline for this site, computed at build time from the test run and git.";
@@ -143,12 +139,9 @@ function shareShells(): Plugin {
   };
 }
 
-/** Every URL the deployed site should advertise to crawlers: root, /work/,
- * /build/, and every project/experience shell. Exported (pure, no
- * filesystem) so src/site/sitemap.test.ts can assert every slug is listed
- * without a real `vite build`. Derived from the same shellPaths() list
- * share-shells itself writes shells for, so a slug or a route can never
- * appear in the shells but not the sitemap or vice versa. */
+/** Every URL the site advertises to crawlers: root, /work/, /build/ and each
+ * project/experience shell. Pure, for sitemap.test.ts. Derived from the same
+ * shellPaths() share-shells writes, so shells and sitemap cannot disagree. */
 export function sitemapUrls(): string[] {
   return [`${SITE}/`, ...shellPaths().map((p) => `${SITE}${p}`)];
 }

@@ -25,23 +25,19 @@ const MONO = "'JetBrains Mono',monospace";
 const SERIF = "'Marcellus',serif";
 const MOBILE_BREAKPOINT = 760;
 
-/** A locked item still shows its title, meta and stat; only the deeper
- * content (body, tags, the primary link) stays sealed. This is the seal
- * glyph's aria-label, not a visible string swapped in for the content. */
+/** Aria-label of the seal glyph on a locked item, not visible text. Locked
+ * items keep title, meta and stat; body, tags and primary link stay sealed. */
 const SEAL_LABEL = "Sealed";
 
 /**
- * Top-level phase machine: gate to play or browse, with the intro INSIDE
- * the play path (root entry lands on the gate; the Dive to the Heart
- * cinematic plays when "Enter the game" is chosen, first time per page load,
- * rather than on every visit).
- * - gate: the fork and the site's entry. No hero until the dive brings him.
- * - intro: the cinematic; skip lands in play. Ends with the menu rising.
- * - play: the RPG command-menu experience.
+ * Top-level phases. Root entry lands on the gate; the dive cinematic plays on
+ * the first "Enter the game" per page load, not on every visit.
+ * - gate: the fork and site entry. No hero until the dive brings him.
+ * - intro: the cinematic; skip lands in play.
+ * - play: the RPG command menu.
  * - browse: the flat portfolio index; case-study pages open over it.
- * - build: the engineering page, numbers strip plus verification pipeline
- *   figure, computed at build time. Routes exactly like browse (own
- *   top-level path, own shell, ESC/Backspace back to the gate).
+ * - build: the engineering page. Routes like browse (own path, own shell,
+ *   ESC/Backspace back to the gate).
  */
 type Phase = "intro" | "gate" | "play" | "browse" | "build" | "battle";
 
@@ -54,11 +50,8 @@ interface BattleBoot {
   seed: number;
   attempt: number;
   actions?: BattleAction[];
-  /** Capture keys, parsed and validated in src/battle/bootParams.ts so that
-   * logic is unit-testable without a DOM harness. Optional: only decideBoot's
-   * capture-key path populates them; the FIGHT button and the dive handoff
-   * still pin Alert Storm fresh. `defeatedBosses` seeds the App-level
-   * `defeatedBosses` state at boot (see the `useState` initializer below). */
+  /** Dev capture keys, validated in bootParams.ts. Set only by decideBoot's
+   * capture-key path. `defeatedBosses` seeds the `defeatedBosses` state. */
   boss?: string;
   defeatedBosses?: string[];
 }
@@ -70,38 +63,30 @@ interface BootState {
   battle?: BattleBoot;
 }
 
-/** Yields a ProgressStore | null, wrapped so that even ACCESSING
- * window.localStorage cannot throw (some privacy configurations throw on
- * the property getter itself, not just on method calls), same precedent as
- * the sessionStorage try/catch below. */
+/** Even reading `window.localStorage` can throw: some privacy settings throw
+ * on the getter itself, not only on method calls. */
 function progressStore(): ProgressStore | null {
   try {
     return window.localStorage;
   } catch {
-    // localStorage unavailable (privacy mode / disabled) — progress does not persist.
     return null;
   }
 }
 
-/** Initial-load decision, every arm of the path table, computed synchronously. */
 function decideBoot(): BootState {
   const loc = window.location;
   const dev = import.meta.env.DEV || loc.hostname === "localhost";
   let path = loc.pathname;
 
-  // Dev-only progress wipe, for deterministic capture runs. Must run BEFORE
-  // the pageForPath early-returns below: decideBoot returns for any path
-  // pageForPath resolves, which happens before the `if (dev)` capture-key
-  // block further down runs. Placing the wipe there would make
-  // /work/curio/?resetProgress=1 silently do nothing.
+  // Must run before the pageForPath early returns below, or
+  // /work/curio/?resetProgress=1 would silently do nothing.
   if (dev) {
     const resetParams = new URLSearchParams(loc.search);
     if (resetParams.get("resetProgress") === "1") clearProgress(progressStore());
   }
 
-  // 404.html stashes unknown deep-link paths (path-preserving fallback); a
-  // restored deep link bypasses the intro, same as a direct one.
-  // phaseForPath resolves the restored entry's phase, "browse" or "build".
+  // 404.html stashes unknown deep-link paths; a restored deep link bypasses the
+  // intro, same as a direct one.
   try {
     const stash = sessionStorage.getItem("dl");
     if (stash) {
@@ -109,8 +94,7 @@ function decideBoot(): BootState {
       const stashPath = stash.split("?")[0];
       const stashPhase = pageForPath(stashPath) ? "browse" : phaseForPath(stashPath); // phaseForPath also resolves "build"
       if (stashPhase) {
-        // The address bar shows the canonical path, so an old /browse/ link
-        // lands on the index under /work/.
+        // Show the canonical path, so an old /browse/ link lands on /work/.
         window.history.replaceState({ phase: stashPhase }, "", canonicalPath(stashPath) + stash.slice(stashPath.length));
         path = stashPath;
       }
@@ -120,10 +104,10 @@ function decideBoot(): BootState {
   }
 
   const initial = pageForPath(path);
-  if (initial) return { phase: "browse", page: initial }; // pageForPath resolves project/case-study pages only, never a "build" page.
+  if (initial) return { phase: "browse", page: initial }; // pageForPath never resolves a "build" page
   const pathPhase = phaseForPath(path);
   if (pathPhase) {
-    // A legacy path served directly (no 404 stash) is rewritten the same way.
+    // A legacy path served directly (no 404 stash) is rewritten too.
     if (canonicalPath(path) !== path) window.history.replaceState({ phase: pathPhase }, "", canonicalPath(path) + loc.search);
     return { phase: pathPhase, page: null };
   }
@@ -148,11 +132,8 @@ function decideBoot(): BootState {
           attempt: parseInt(params.get("attempt") ?? "", 10) || 1,
           actions: parseActions(params.get("actions")),
           boss: parseBoss(params.get("boss")),
-          // Leave defeatedBosses undefined when the raw param is absent,
-          // distinct from [] when it's present but empty. `battle` would
-          // otherwise be truthy on EVERY ?phase=battle boot regardless of
-          // whether ?defeated= was supplied, making "param omitted" and
-          // "param explicitly empty" indistinguishable downstream.
+          // Absent param stays undefined, distinct from an explicit empty
+          // list, so the boot falls back to stored progress.
           ...(rawDefeated !== null ? { defeatedBosses: defeated.value } : {}),
         },
       };
@@ -163,7 +144,7 @@ function decideBoot(): BootState {
   return { phase: "gate", page: null };
 }
 
-/** tiny WebAudio blip synth (lazily created, respects autoplay policy) */
+/** Lazily created WebAudio blip synth (respects the autoplay policy). */
 function useBlips() {
   const ctxRef = useRef<AudioContext | null>(null);
   const resume = useCallback(() => {
@@ -215,25 +196,17 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>(boot.current.phase);
   const [introOn, setIntroOn] = useState(boot.current.phase === "intro");
   const [battleBoot, setBattleBoot] = useState<BattleBoot | null>(boot.current.battle ?? null);
-  // Progression. Seeded from the boot's capture-key `defeated=` when
-  // explicitly supplied (dev URL wins), a `?phase=battle&defeated=alert-storm`
-  // boot reaches BattleScene with the matching rider/kit instead of
-  // starting fresh. Otherwise falls back to stored progress. This is a
-  // LAZY useState initializer (the arrow form) on purpose: a non-lazy
-  // `useState(readProgress(...))` would re-read storage on every render of
-  // App, which happens on every toast, resize, and keydown. Single source
-  // of truth, this same state is what BattleScene is passed below and what
-  // the FIGHT row label reads.
+  // A dev boot's explicit `defeated=` wins over stored progress. Lazy
+  // initializer so storage is not re-read on every render.
   const bootBattle = boot.current.battle;
   const [defeatedBosses, setDefeatedBosses] = useState<string[]>(() =>
     bootBattle?.defeatedBosses !== undefined ? bootBattle.defeatedBosses : readProgress(progressStore()),
   );
-  // the dive has run this page load — later play-entries skip straight to the
-  // menu, and the hero stands at the station only once he has actually dived
+  // The dive has run this page load: later play entries skip to the menu, and
+  // the hero stands at the station only after he has dived.
   const [hasDived, setHasDived] = useState(false);
-  // Slugs a visitor has clicked "read it anyway" on this session.
-  // Session-only by design, never written to progressStore, so a reload
-  // re-seals everything.
+  // Slugs revealed with "read it anyway". Session-only by design, never
+  // persisted, so a reload re-seals everything.
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const revealItem = useCallback((slug: string) => {
     setRevealed((prev) => {
@@ -249,27 +222,24 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
   const [h, setH] = useState(typeof window !== "undefined" ? window.innerHeight : 800);
-  // FIGHT submenu: open only when deriveFightChoice(defeatedBosses)
-  // returns more than one option, a fresh visitor (Alert Storm only) never
-  // sees this, `enterFight` direct-launches.
+  // Opens only when deriveFightChoice offers more than one boss; otherwise
+  // `enterFight` launches directly.
   const [fightChooserOpen, setFightChooserOpen] = useState(false);
   const [fightChooserIdx, setFightChooserIdx] = useState(0);
 
   const snd = useBlips();
   const toastTimer = useRef<number | undefined>(undefined);
-  /** which surface opened the current page, deciding where closing it lands.
-   * Never "build": boot.current.page is only ever set by pageForPath, which
-   * never resolves a build path, so this stays "play" | "browse"
-   * (a page opened while phase is "build" still records "browse", see the
-   * openPage assignment below). */
-  const pageOrigin = useRef<"play" | "browse">(boot.current.page ? "browse" : "play"); // never "build" - see the comment above
+  /** Which surface opened the current page, deciding where closing it lands.
+   * Never "build": pageForPath never resolves a build path, and a page opened
+   * from build records "browse". */
+  const pageOrigin = useRef<"play" | "browse">(boot.current.page ? "browse" : "play");
 
   const booted = phase === "play";
 
   const fightChoice = deriveFightChoice(defeatedBosses);
   const fightRows: FightRow[] = fightChoice.mode === "chooser" ? fightChoice.rows : [];
 
-  // live mirror of state so the keydown listener always reads current values
+  // Live mirror of state so the keydown listener reads current values.
   const stateRef = useRef({ phase, col, rootIdx, subIdx, page, hasDived, fightChooserOpen, fightChooserIdx, fightRows, defeatedBosses });
   stateRef.current = { phase, col, rootIdx, subIdx, page, hasDived, fightChooserOpen, fightChooserIdx, fightRows, defeatedBosses };
 
@@ -300,10 +270,9 @@ export default function App() {
     [snd],
   );
 
-  // gate↔play↔browse transitions rewrite the current history entry (never push)
-  // so the back button only ever walks pages — popstate to "/" can't replay the intro.
-  // A battle phase records "play" in history: a dead fight must never resurrect
-  // via Forward/bfcache.
+  // Phase transitions replace the current history entry (never push), so Back
+  // only walks pages and popstate to "/" can't replay the intro. Battle records
+  // "play": a dead fight must never resurrect via Forward/bfcache.
   const goPhase = useCallback((p: Exclude<Phase, "intro">) => {
     setPhase(p);
     const stored = p === "battle" ? "play" : p;
@@ -313,17 +282,9 @@ export default function App() {
     }
   }, []);
 
-  // ---- battle wiring (opt-in via FIGHT; the dive reroute is separate).
-  // Declared here (ahead of the keyboard useEffect below, which references
-  // `enterFight`/`launchFight` from inside its `onKey` closure) rather than
-  // down by `onBattleVictory` — closures may reference a `const` declared
-  // later in the same function body as long as the reference only resolves
-  // when the closure actually RUNS (deferred to a later keydown event), but
-  // the effect's own dependency array is evaluated synchronously at this
-  // point in the render, so anything the keyboard arm depends on must already
-  // be initialized here (TDZ). ----
-  /** Boots the chosen boss straight into battle (`battleBoot.boss` flows
-   * into `initBattle` via BattleScene's `boss` prop). Fresh seed every fight. */
+  // Declared before the keyboard effect: its dependency array reads these
+  // during render, so they must be initialized here (TDZ).
+  /** Boots the chosen boss straight into battle. Fresh seed every fight. */
   const launchFight = useCallback(
     (bossId: string) => {
       setBattleBoot({ seed: (Math.random() * 2147483646) | 0 || 1, attempt: 1, boss: bossId });
@@ -333,10 +294,8 @@ export default function App() {
     [goPhase, snd],
   );
 
-  /** FIGHT row entry: direct-launches when `deriveFightChoice` has only one
-   * option (fresh visitor = Alert Storm direct); opens the chooser panel
-   * otherwise (next undefeated IMPLEMENTED boss on top, defeated bosses below
-   * as REMATCH rows). */
+  /** Launches directly when `deriveFightChoice` offers one boss, otherwise
+   * opens the chooser. */
   const enterFight = useCallback(() => {
     snd.resume();
     if (fightChoice.mode === "direct") {
@@ -354,8 +313,8 @@ export default function App() {
     setRootIdx(0);
     setSubIdx(0);
     if (!stateRef.current.hasDived) {
-      // first play-entry this page load: the cinematic runs and lands in battle;
-      // warm the lazy battle chunk now so touchdown never shows a loading flash
+      // First play entry this page load runs the cinematic; warm the battle chunk
+      // now so touchdown never shows a loading flash.
       void import("./battle/BattleScene");
       setPhase("intro");
       setIntroOn(true);
@@ -366,10 +325,8 @@ export default function App() {
     snd.enter();
   }, [snd, goPhase]);
 
-  /** The splash's Continue row. Lands in the play menu world with the dive
-   * skipped. Marks hasDived, matching what the dive's own handoff
-   * (onIntroHandoff) does, so a later play re-entry this page load goes
-   * straight to the menu. */
+  /** Splash Continue: lands in the play menu with the dive skipped. Marks
+   * hasDived like the dive's own handoff, so later play entries skip it too. */
   const continuePlay = useCallback(() => {
     snd.resume();
     setCol("root");
@@ -382,7 +339,7 @@ export default function App() {
 
   const enterBrowse = useCallback(() => {
     snd.resume();
-    goPhase("browse"); // no goPhase("build") sibling here - see the render site's onBuild wiring
+    goPhase("browse"); // "build" is entered through the render site's onBuild
     snd.enter();
   }, [snd, goPhase]);
 
@@ -396,11 +353,7 @@ export default function App() {
   const openPage = useCallback(
     (ri: number, si: number) => {
       snd.resume();
-      // "build" counts as browse-origin - closing a page reached while
-      // phase is "build" lands back on /work/, the same safe ground a page
-      // reached while phase is "browse" does (BuildPage itself never opens
-      // a page today, but this keeps the invariant true if/when it ever
-      // links one).
+      // A page reached from build closes back to /work/, same as from browse.
       pageOrigin.current =
         stateRef.current.phase === "browse" || stateRef.current.phase === "build" ? "browse" : "play";
       setPage({ ri, si });
@@ -414,13 +367,11 @@ export default function App() {
 
   const closePage = useCallback(() => {
     setPage(null);
-    // pageOrigin.current is only ever "play" | "browse" (never "build" - see
-    // openPage above), so "/work/" is already the correct landing spot for
-    // a page reached from build; no separate "build" arm needed here.
+    // pageOrigin is never "build" (see openPage), so /work/ covers it.
     const home = pageOrigin.current === "browse" ? "/work/" : "/";
     if (window.location.pathname !== home)
       window.history.pushState({ phase: pageOrigin.current }, "", home);
-    if (pageOrigin.current === "browse" && stateRef.current.phase !== "browse") setPhase("browse"); // same reasoning: origin never "build"
+    if (pageOrigin.current === "browse" && stateRef.current.phase !== "browse") setPhase("browse"); // origin is never "build"
     snd.back();
   }, [snd]);
 
@@ -453,11 +404,8 @@ export default function App() {
       const c = CATS[r];
       const it = c.items[j];
       if (c.key === "projects" || c.key === "experience") {
-        // A locked item is still openable: the authoritative gate
-        // (`pageLocked`, computed at the CaseStudyPage/LockedCaseStudy
-        // render boundary below) decides what is actually shown once `page`
-        // is set, including for a popstate-restored page. So openPage runs
-        // for every project/experience row, locked or not.
+        // Locked items still open: the render-boundary gate (`pageLocked`)
+        // decides what shows, including for a popstate-restored page.
         openPage(r, j);
         return;
       }
@@ -487,27 +435,24 @@ export default function App() {
     [snd, goPhase],
   );
 
-  // keyboard + resize, phase-gated per the input table
+  // Keyboard and resize, gated per phase.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = stateRef.current;
-      // intro, gate, and battle own their inputs entirely (their own listeners);
-      // without the battle arm, Enter here opens a case-study page over the fight
+      // Intro, gate and battle own their inputs. Without the battle arm, Enter
+      // here would open a case-study page over the fight.
       if (s.phase === "intro" || s.phase === "battle" || (s.phase === "gate" && !s.page)) return;
       const k = e.key;
-      // A focused real anchor/button/control owns its own Enter/Space
-      // activation - step aside entirely so the browser handles it and
-      // this handler never preventDefaults or double-fires. Element-only,
-      // no ancestor walk: the play command-menu rows stay non-focusable
-      // divs, so they can never match here.
+      // A focused anchor/button/control owns its Enter/Space activation: step
+      // aside so the browser handles it without a double fire. No ancestor walk:
+      // play command-menu rows are non-focusable divs.
       if (isNativeActivationTarget(document.activeElement) && (k === "Enter" || k === " ")) return;
       const handled = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", "Escape", "Backspace", " "];
       if (handled.includes(k)) e.preventDefault();
       snd.resume();
 
-      // FIGHT chooser owns input fully while open: arrows cycle rows, Enter
-      // launches the highlighted boss, Esc/Backspace closes back to the
-      // FIGHT row.
+      // The open chooser owns all input: arrows cycle, Enter launches,
+      // Esc/Backspace close back to the FIGHT row.
       if (s.fightChooserOpen) {
         if (k === "ArrowUp" || k === "ArrowDown") {
           const dir = k === "ArrowUp" ? -1 : 1;
@@ -540,9 +485,8 @@ export default function App() {
           const n = c.items.length;
           setSub((s.subIdx + dir + n) % n);
         } else if (s.col === "fight") {
-          // FIGHT sits as one extra row past either end of the root list,
-          // so a further press in the same direction continues on into
-          // CATS's own wrap.
+          // FIGHT sits one step past either end of the root list, so a further
+          // press in the same direction continues into CATS's own wrap.
           setRoot(dir === 1 ? 0 : CATS.length - 1);
         } else {
           const atTop = s.rootIdx === 0;
@@ -574,17 +518,14 @@ export default function App() {
     };
   }, [snd, back, enter, activate, setRoot, setSub, enterFight, launchFight]);
 
-  // browser Back/Forward — the popstate table; "/" NEVER resolves to intro here
+  // Back/Forward. "/" never resolves to intro here.
   useEffect(() => {
     const onPop = (e: PopStateEvent) => {
       const path = window.location.pathname;
       const statePhase: Phase | undefined = e.state?.phase;
       const p = pageForPath(path);
       if (p) {
-        // Resolved-page branch: pages never open from build, so this stays
-        // play-vs-browse only. phaseForPath below is scoped to the
-        // path-only branch instead.
-        const ph = statePhase === "play" ? "play" : "browse"; // never "build" - resolved pages are never build
+        const ph = statePhase === "play" ? "play" : "browse"; // pages never open from build
         pageOrigin.current = ph;
         setPhase(ph);
         setPage(p);
@@ -598,7 +539,7 @@ export default function App() {
           return;
         }
         setPage(null);
-        // battle/intro are never restorable phases — both map to safe ground
+        // battle and intro are never restorable; both map to safe ground
         setPhase(
           statePhase && statePhase !== "intro" && statePhase !== "battle" ? statePhase : "gate",
         );
@@ -608,20 +549,11 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // The dive lands directly in battle: touchdown, the boss descends,
-  // fight. Victory lands in the menu world; re-entries within the same
-  // page load (hasDived) go straight to the menu. A RETURNING visitor with
-  // saved progress dives onto their next undefeated boss instead of always
-  // Alert Storm, so persistence doesn't turn every reload into a redundant
-  // rematch. A visitor who has beaten every IMPLEMENTED boss skips the
-  // battle entirely and lands in the menu world (the menu world is the
-  // standing post-battle landing). First-time visitors are unaffected,
-  // nextUndefeatedBoss([]) is always "alert-storm". Reads stateRef, not the
-  // `defeatedBosses` state variable directly: this callback's only dep is
-  // `goPhase` (referentially stable forever, `useCallback(..., [])`), so it
-  // is created once on mount and any state closed over directly would
-  // freeze at its mount-time value, the same stale-closure shape as the
-  // victory handler below.
+  // The dive lands in battle, on the visitor's next undefeated boss (Alert
+  // Storm when fresh). A visitor who has beaten every implemented boss skips
+  // the battle and lands in the menu world. Reads stateRef because this
+  // callback is created once on mount; a closed-over `defeatedBosses` would
+  // stay frozen at its mount-time value.
   const onIntroHandoff = useCallback(
     (_target: IntroTarget) => {
       setHasDived(true);
@@ -639,29 +571,18 @@ export default function App() {
 
   const onBattleVictory = useCallback(
     (final: BattleState) => {
-      // "previous" must come from stateRef.current, NOT the
-      // `defeatedBosses` state variable this callback would otherwise
-      // close over. onBattleVictory's only dep is `goPhase`
-      // (useCallback(..., []), referentially stable forever), so it is
-      // created once on mount and any `defeatedBosses` read directly here
-      // would be frozen at its mount-time value ([]) forever: beat Alert
-      // Storm, then rematch it, and the frozen [] would make
-      // !prev.includes("alert-storm") true again, firing a spurious unlock
-      // toast on a victory lap. stateRef is reassigned every render, so at
-      // the moment this handler fires it holds the committed pre-victory
-      // value.
+      // From stateRef, not state: this callback is created once on mount, so
+      // a closed-over `defeatedBosses` stays [] forever and a rematch would
+      // fire a spurious unlock toast.
       const prevDefeated = stateRef.current.defeatedBosses;
       const newlyDefeated = final.defeatedBosses.filter((id) => !prevDefeated.includes(id));
       setDefeatedBosses(final.defeatedBosses);
-      // The only write site: persist immediately alongside the in-memory
-      // state update so a reload never loses a just-earned win.
+      // The only write site. Persist now so a reload never loses a win.
       writeProgress(progressStore(), final.defeatedBosses);
       setBattleBoot(null);
       setCol("root");
       goPhase("play");
       if (newlyDefeated.length > 0) {
-        // Title read through the existing CATS lookup, never duplicated as
-        // a separate string.
         const titles = newlyDefeated
           .map((bossId) => UNLOCK_BY_BOSS[bossId])
           .filter((slug): slug is string => !!slug)
@@ -673,8 +594,8 @@ export default function App() {
     [goPhase, showToast],
   );
 
-  // Forfeit lands in the play menu, not the gate, which is why the control
-  // reads "Skip to the work" (landingCopy.skipToWork).
+  // Forfeit lands in the play menu, not the gate, hence the control's
+  // "Skip to the work" label.
   const onBattleForfeit = useCallback(() => {
     setBattleBoot(null);
     goPhase("play");
@@ -682,7 +603,6 @@ export default function App() {
     snd.back();
   }, [goPhase, snd]);
 
-  // Exit leaves the fight for the landing page.
   const onBattleExit = useCallback(() => {
     setBattleBoot(null);
     goPhase("gate");
@@ -690,11 +610,8 @@ export default function App() {
     snd.back();
   }, [goPhase, snd]);
 
-  /** Player-facing progress wipe. A player who has beaten the rush has no
-   * way to replay from zero once progress persists, so a reset affordance
-   * lives in the play-path menu (not the browse path). A single click
-   * performs the wipe and confirms via the existing showToast pattern, no
-   * separate are-you-sure step. */
+  /** Player-facing progress wipe, so a player who beat the rush can replay
+   * from zero. One click, confirmed by toast, no are-you-sure step. */
   const resetProgressAction = useCallback(() => {
     snd.resume();
     clearProgress(progressStore());
@@ -703,39 +620,29 @@ export default function App() {
     snd.back();
   }, [snd, showToast]);
 
-  // ---- derived view values ----
   const isMobile = w < MOBILE_BREAKPOINT;
   const cat = CATS[rootIdx];
   const item = cat.items[subIdx] ?? cat.items[0];
-  // Gating: the play-path command menu locks the 4 project items not yet
-  // earned. `phase === "play"` guards this even though every render site
-  // below is already play-phase-only chrome; the browse path
-  // (BrowseIndex.tsx) always shows all 11 items.
+  // Locks the project items not yet earned. The browse path always shows
+  // every item.
   const unlockedSet = unlockedSlugs(defeatedBosses);
   const isLocked = (catKey: string, slug: string | undefined) =>
     phase === "play" && isGateable(catKey, slug) && !unlockedSet.has(slug!);
   const itemLocked = isLocked(cat.key, item.slug);
   const itemBoss = itemLocked && item.slug ? guardingBoss(item.slug) : null;
-  // The AUTHORITATIVE gate. `activate()`'s early return above is only the
-  // feedback path for a keypress/click; it cannot see the popstate
-  // handler's own `setPage(p)` call, which is what a "beat the rush, open
-  // a project, reset, press Back" sequence drives. Gating the actual
-  // render of the resolved page, not just the entry points into it, is
-  // what closes that bypass. Deep links are unaffected: pageForPath always
-  // resolves to phase "browse", never "build" - it only ever resolves
-  // project/case-study pages.
+  // The authoritative gate. `activate()`'s early return cannot see the
+  // popstate handler's own `setPage(p)` (beat the rush, open a project,
+  // reset, press Back), so the resolved page is gated at render.
   const pageCat = page ? CATS[page.ri] : null;
   const pageItem = page && pageCat ? pageCat.items[page.si] : null;
-  // A slug in `revealed` (this session's "read it anyway" clicks) overrides
-  // the lock, through the same authoritative gate.
+  // A slug revealed this session overrides the lock.
   const pageLocked =
     page !== null &&
     pageCat !== null &&
     isLocked(pageCat.key, pageItem?.slug) &&
     !(pageItem?.slug && revealed.has(pageItem.slug));
   const pageBoss = pageItem?.slug ? guardingBoss(pageItem.slug) : null;
-  // The station only mounts during intro (stationVisible), so the idle dim
-  // level is the only one it ever needs.
+  // The station only mounts during intro, so it only needs the idle dim.
   const ringOpacity = 0.82;
   const glassScale = isMobile ? Math.max(0.44, Math.min(0.62, (w - 30) / 680)) : 1;
   const detailW = Math.max(330, Math.min(540, w - 612));
@@ -767,11 +674,9 @@ export default function App() {
 
   const catLabelUpper = cat.label.toUpperCase();
   const idxLabel = String(subIdx + 1).padStart(2, "0") + " / " + String(cat.items.length).padStart(2, "0");
-  // The wordmark is the play surface's one <h1>, ONLY while play is
-  // actually the active phase - never a hidden h1 sitting around at the
-  // gate. Every other phase renders the exact same visual as a plain div
-  // (this element is opacity-toggled, not unmounted, across phase changes,
-  // so it must never claim heading semantics it doesn't own yet).
+  // The wordmark is the one <h1> only while play is active. This element
+  // is opacity-toggled, not unmounted, across phases, so it must not
+  // claim heading semantics at the gate.
   const NameTag = phase === "play" ? "h1" : "div";
 
   return (
@@ -792,8 +697,7 @@ export default function App() {
       </a>
       <Atmosphere />
 
-      {/* The station is the dive's landing geometry only, see
-          stationVisible(). */}
+      {/* The station is the dive's landing geometry only. */}
       {stationVisible(phase) && (
         <Station scale={glassScale} opacity={ringOpacity} top={isMobile ? "31%" : "40%"} />
       )}
@@ -851,17 +755,11 @@ export default function App() {
 
       {phase === "build" && !page && <BuildPage isMobile={isMobile} onBack={() => goPhase("gate")} />}
 
-      {/* The play surface's <main>. id/tabIndex are only ever set while
-          phase === "play" - this block is opacity-toggled, not
-          conditionally mounted, across every phase (the play<->gate
-          transition animates), so an unconditional id="main" here would
-          collide with BrowseIndex's own <main id="main"> the moment phase
-          becomes "browse" (same reasoning covers "build" - BuildPage owns
-          its own <main id="main"> too). No `position` set, so it is
-          layout-neutral for the position:absolute children below (they
-          still resolve against the root fixed container, same as before). */}
+      {/* id/tabIndex only while play is active: this block is opacity-toggled,
+          not unmounted, so an unconditional id="main" would collide with the
+          <main id="main"> of BrowseIndex and BuildPage. */}
       <main id={phase === "play" ? "main" : undefined} tabIndex={phase === "play" ? -1 : undefined}>
-        {/* header — browsing wordmark (play phase only; browse carries its own) */}
+        {/* wordmark (play phase only; browse carries its own) */}
         <NameTag
           style={{
             position: "absolute",
@@ -998,9 +896,8 @@ export default function App() {
         </div>
 
         {!itemLocked && !!item.linkLabel && (() => {
-          // Real anchor when there's something to link to (case study or
-          // external), a plain button only for the rare item with a label
-          // but no link at all.
+          // Real anchor when there is a case study or external link; a button
+          // only for an item with a label but no link.
           const href = rowHref(item, rootIdx, subIdx);
           const external = !item.slug && href !== null;
           const linkStyle: CSSProperties = {
@@ -1100,11 +997,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* FIGHT: a play-phase-only row that sits outside the CATS content
-            roster. Highlights when the keyboard arm focuses it (col ===
-            "fight", reached ahead of the CATS wrap) and its tag reflects the
-            actual FIGHT choice: the boss name for a direct launch, or
-            CHOOSE when the chooser is offered. */}
+        {/* FIGHT: a play-only row outside the CATS roster. Its tag shows the
+            boss name for a direct launch, or CHOOSE when the chooser opens. */}
         <div
           role="button"
           onClick={enterFight}
@@ -1140,16 +1034,10 @@ export default function App() {
           </span>
         </div>
 
-        {/* RESET: play-path progress wipe. A small subdued text row below
-            FIGHT, inside the same play-phase-only command-system container
-            as the root menu and FIGHT, rather than an item in the CATS
-            content. Gated on defeatedBosses.length > 0: a permanently
-            visible reset advertises state machinery to a first-time visitor
-            with nothing to reset, and would sit next to locked rows as pure
-            noise.
-            Click-only, with no tabIndex or onKeyDown: a focusable element
-            inside a UI that owns a global keydown listener can
-            double-fire. */}
+        {/* RESET: play-path progress wipe. Hidden until a boss is defeated, so
+            a first-time visitor sees no state machinery. Click-only (no
+            tabIndex or onKeyDown): a focusable element under the global
+            keydown listener can double-fire. */}
         {defeatedBosses.length > 0 && (
           <div
             role="button"
@@ -1272,37 +1160,14 @@ export default function App() {
         </div>
       </div>
 
-      {/* FIGHT chooser: same glassy panel idiom as the FIGHT row itself.
-          Its own top-level element (not nested in the desktop-only
-          command-system container above) so the mobile FIGHT chip opens
-          the identical panel; positioning branches on isMobile instead.
-          Tap targets are 44 CSS px tall (minHeight below).
-          zIndex 25 puts it above the mobile category sheet (22) and the
-          mobile command bar / FIGHT chip (24), which would otherwise fully
-          cover this panel's region on a phone while it is open. Plain
-          z-index ordering, not a stacking-context trap: this div, the
-          category sheet, and the command bar/chip are all direct children
-          of the same root `position: fixed` container with no
-          intermediate transform/filter/opacity/will-change wrapper (which
-          is why this element sits outside the one nearby container that
-          would introduce one), so they compete on z-index within a single
-          shared stacking context. On desktop the two elements it out-ranks
-          are `display: isMobile ? ... : "none"` and never painted at all,
-          and the only other visible overlay in this region is the
-          command-system container at zIndex 7. */}
-      {/* FIGHT chooser tap-outside dismiss. A full-viewport backdrop, same
-          z-index as the chooser panel itself and placed immediately BEFORE
-          it in the DOM: at equal z-index the LATER sibling wins the paint
-          order where they overlap, so the panel (and its rows) stay fully
-          clickable in its own footprint while the backdrop still out-ranks
-          everything else on screen (the mobile category sheet at 22, the
-          command bar and FIGHT chip at 24) everywhere OUTSIDE that
-          footprint. Routes through the SAME `back()` path Escape/Backspace
-          use here, which reads `fightChooserOpen` off `stateRef` and both
-          closes the chooser and plays the back sound. This element carries
-          `data-ui` so the root container's own `bgClick` background-unboot
-          handler (which acts only when the click target is NOT inside any
-          `[data-ui]` element) never also fires for the same tap. */}
+      {/* FIGHT chooser. Top-level (outside the desktop command-system
+          container) so the mobile FIGHT chip opens the same panel. zIndex 25
+          beats the mobile category sheet (22) and command bar / FIGHT chip
+          (24); all are direct children of the root fixed container, so they
+          share one stacking context. */}
+      {/* Tap-outside backdrop: same z-index as the panel and placed before
+          it, so the panel wins where they overlap. Routes through `back()`
+          like Escape. `data-ui` keeps `bgClick` from also firing. */}
       {fightChooserOpen && booted && !page && (
         <div
           data-ui
@@ -1395,9 +1260,7 @@ export default function App() {
           WebkitBackdropFilter: "blur(10px)",
           overflow: "hidden",
           opacity: sheetOpen ? 1 : 0,
-          // Closed means nothing inside is focusable/tabbable, not just
-          // invisible-by-opacity - without this Tab could walk into row
-          // anchors that are sitting off to the side.
+          // Closed means nothing inside is tabbable, not just invisible.
           visibility: sheetOpen ? "visible" : "hidden",
           pointerEvents: sheetOpen ? "auto" : "none",
           transform: `translateY(${sheetOpen ? "0" : "18px"})`,
@@ -1434,9 +1297,7 @@ export default function App() {
         <div data-scroll style={{ flex: 1, overflowY: "auto", padding: "6px 16px 120px" }}>
           {cat.items.map((it, j) => {
             const locked = isLocked(cat.key, it.slug);
-            // A locked row never links anywhere - it shows the seal, not
-            // the destination - so it always stays a plain div regardless
-            // of what rowHref would otherwise resolve.
+            // A locked row shows the seal, never a link.
             const href = locked ? null : rowHref(it, rootIdx, j);
             const external = !locked && !it.slug && href !== null;
             const rowStyle: CSSProperties = {
@@ -1518,7 +1379,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* mobile command bar (play phase only — never over the gate) */}
+      {/* mobile command bar (play phase only, never over the gate) */}
       <div
         data-ui
         style={{
@@ -1579,7 +1440,7 @@ export default function App() {
         })}
       </div>
 
-      {/* mobile FIGHT chip — same play-phase-only rule as the command bar */}
+      {/* mobile FIGHT chip, same play-only rule as the command bar */}
       <div
         data-ui
         role="button"
@@ -1606,11 +1467,9 @@ export default function App() {
         <span style={{ color: "#ff9d8a" }}>⚔</span> Fight
       </div>
 
-      {/* mobile RESET chip: same play-phase-only rule as the FIGHT chip
-          (isMobile && booted && !page), positioned top-right since the
-          bottom edge is already occupied by the command bar and the FIGHT
-          chip. Gated on defeatedBosses.length > 0, same as the desktop
-          row. */}
+      {/* mobile RESET chip: top-right because the bottom edge holds the
+          command bar and FIGHT chip. Shown only after a defeat, like the
+          desktop row. */}
       {defeatedBosses.length > 0 && (
       <div
         data-ui

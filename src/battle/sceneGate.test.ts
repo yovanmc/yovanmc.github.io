@@ -1,6 +1,5 @@
-// The death-reel gate predicate, unit-tested directly: buried inside a
-// useEffect it was not independently assertable, so a wrong gate stayed
-// invisible to the rest of the suite.
+// The death-reel gate predicate, tested directly because inside a useEffect
+// it could not be asserted.
 import { describe, expect, it } from "vitest";
 import { shouldComposeBoss } from "./sceneGate";
 import type { ComposeGateMode } from "./sceneGate";

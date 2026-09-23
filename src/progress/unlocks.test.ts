@@ -1,8 +1,5 @@
-// Unlock map test suite. Drives unlockedSlugs/isGateable, the pure leaf
-// helpers that turn `defeatedBosses` into "which project slugs may the play
-// path open". CATS is imported here, in the test file ONLY, to cross-check the
-// slug maps against the real content: unlocks.ts itself stays a leaf module
-// with no content.ts import.
+// CATS is imported here only, to cross-check the slug maps against real
+// content; unlocks.ts itself must not import content.ts.
 import { describe, expect, it } from "vitest";
 import { CATS } from "../content";
 import { BOSS_NAMES, IMPLEMENTED_BOSSES } from "../battle/rushOrder";

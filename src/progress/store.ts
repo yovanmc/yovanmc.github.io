@@ -1,60 +1,46 @@
-// Progression persistence core. Pure and side-effect-free apart from the
-// injected ProgressStore, so it tests under the node environment with no
-// jsdom. Console-free, matching bootParams.ts's precedent.
+// Progression persistence. Pure apart from the injected ProgressStore, so it
+// tests in the node environment without jsdom.
 //
-// Versioned envelope, single key. Key: "yrpg.progress". Value:
-// {"v":1,"defeated":[...]}. A v that is absent, non-numeric, or !== 1 is
-// treated as absent (fresh progress), never partially read. Unknown extra
-// top-level fields are dropped on read and never round-tripped on write.
+// One key, "yrpg.progress", value {"v":1,"defeated":[...]}. A missing,
+// non-numeric or other `v` reads as fresh progress, never partially. Unknown
+// top-level fields are dropped on read and never written back.
 //
-// Every storage touch is wrapped. localStorage access can throw in some
-// privacy configurations, and setItem can throw on quota. Read failures
-// degrade to empty progress, write failures degrade to a no-op. Neither ever
-// throws to the caller.
+// Every storage touch is wrapped: access can throw in some privacy modes and
+// setItem on quota. Reads degrade to empty progress, writes to a no-op.
 //
-// One shared validator: boss-id validation reuses coerceRushPrefix from
-// bootParams.ts rather than re-implementing dedupe+prefix logic here.
+// Boss ids are validated by bootParams.ts's coerceRushPrefix. Reads cap the
+// prefix at the implemented bosses, so a stored boss with no module can never
+// route to a nonexistent scene.
 //
-// The read path caps the validated prefix at roster.implemented.length, not
-// just roster.rushOrder.length, so a stored value referencing a boss
-// RUSH_ORDER knows about but no module implements yet can never route to a
-// nonexistent scene. See the BossRoster seam note below.
-//
-// Deliberately importing only leaf/pure modules: ../battle/rushOrder and
-// ../battle/bootParams. Do NOT import from ../battle/engine: it drags the
-// battle engine's runtime into whatever imports this module (this module is
-// imported eagerly from App.tsx), the exact landing-bundle regression
-// rushOrder.ts was split out to prevent (+4.95 kB, measured).
+// Imports only leaf modules. Do NOT import ../battle/engine: this module is
+// loaded eagerly from App.tsx and would pull the engine into the landing
+// bundle.
 import { coerceRushPrefix } from "../battle/bootParams";
 import { IMPLEMENTED_BOSSES, RUSH_ORDER } from "../battle/rushOrder";
 
 export const PROGRESS_KEY = "yrpg.progress";
 export const PROGRESS_VERSION = 1;
 
-/** Minimal shape of the Web Storage API this module uses. Injected so the
- * module stays pure and testable under the node environment, with no jsdom. */
+/** The slice of the Web Storage API used here, injected to keep the module
+ * pure. */
 export interface ProgressStore {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
 }
 
-/** Seam required so the implemented-boss cap is testable: coerceRushPrefix
- * rejects anything that isn't an exact RUSH_ORDER prefix before any cap can
- * run, and today RUSH_ORDER and IMPLEMENTED_BOSSES hold the same 4 ids, so
- * no over-long value can ever reach the cap through the real constants. */
+/** Makes the implemented-boss cap testable: the real RUSH_ORDER and
+ * IMPLEMENTED_BOSSES hold the same ids, so no over-long value can reach the
+ * cap through them. */
 export interface BossRoster {
   rushOrder: readonly string[];
   implemented: readonly string[];
 }
 
-/** Real constants. The parameter exists so the cap above is testable without
- * mutating RUSH_ORDER/IMPLEMENTED_BOSSES themselves. */
 export const REAL_ROSTER: BossRoster = { rushOrder: RUSH_ORDER, implemented: IMPLEMENTED_BOSSES };
 
-/** Reads and validates stored progress. Never throws, never logs; any
- * malformed, stale, or out-of-order value degrades to `[]` (fresh
- * progress) rather than partially trusting it. */
+/** Never throws or logs; any malformed, stale or out-of-order value reads as
+ * `[]` rather than being partially trusted. */
 export function readProgress(store: ProgressStore | null, roster: BossRoster = REAL_ROSTER): string[] {
   if (store === null) return [];
 
@@ -62,7 +48,7 @@ export function readProgress(store: ProgressStore | null, roster: BossRoster = R
   try {
     raw = store.getItem(PROGRESS_KEY);
   } catch {
-    // Storage access itself threw (SecurityError in some privacy modes).
+    // Storage access threw (SecurityError in some privacy modes).
     return [];
   }
   if (raw === null) return [];
@@ -88,10 +74,8 @@ export function readProgress(store: ProgressStore | null, roster: BossRoster = R
   return result.value.slice(0, roster.implemented.length);
 }
 
-/** Validates and persists `defeated`. Refuses to write anything that does
- * not itself pass coerceRushPrefix, so a caller bug can't corrupt the
- * store. Swallows a throwing setItem (e.g. quota exceeded) as a silent
- * no-op. */
+/** Refuses to write a value that fails coerceRushPrefix, so a caller bug
+ * cannot corrupt the store. A throwing setItem is a silent no-op. */
 export function writeProgress(
   store: ProgressStore | null,
   defeated: string[],

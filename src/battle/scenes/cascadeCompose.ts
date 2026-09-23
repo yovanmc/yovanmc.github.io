@@ -1,16 +1,9 @@
 // Cascade's region-composition renderer. There is no per-node art primitive:
-// `cascadeFinal(f)` is a whole-field frame with a fixed lit node (core 'X') and
-// one afterglow node (core 'W') tied to `f`, and the engine kills ARBITRARY
-// node sets, so a naive base-frame approach would render a STILL chain. This
-// composer instead builds each frame per node, copying the already-`eOutline`d
-// node "box" region straight out of a matching source frame and never
-// re-running eOutline itself: all 6 boxes are pairwise non-adjacent across both
-// bob values, so a box's own outline is fully local and survives being pasted
-// onto a fresh canvas unchanged.
-//
-// This lives in a `.ts` sibling of bosses/cascade.ts rather than inside it, so
-// the engine module and this presentation module stay separate;
-// `src/battle/**/*.ts` covers both for coverage either way.
+// `cascadeFinal(f)` is a whole-field frame with a fixed lit node and afterglow
+// node, while the engine kills arbitrary node sets. So each frame is built per
+// node, pasting the already-outlined node box out of a matching source frame.
+// eOutline never reruns: the 6 boxes are pairwise non-adjacent at both bob
+// values, so each outline is local and survives the paste.
 import { NODES, cascadeFinal, cascadeDark, newG } from "../../generated/bossCascade";
 import type { Grid } from "../../generated/heroBattle";
 import type { CascadeBoss } from "../bosses/cascade";
@@ -23,12 +16,9 @@ export interface NodeBox {
   c2: number;
 }
 
-/** The node's structural footprint at a given row-shift ("bob", 0 or 1).
- * Mirrors `bossCascade.js`'s own per-node box formula exactly (node 0 is the
- * "big" head node, `+2` taller/wider). The carrier is always rendered at
- * `bob = 0`, because cascadeFinal(f) never shifts its own lit node (i === f
- * gives `(f + f) % 2 === 0` for every f): the carrier doesn't bob, it's holding
- * the charge. */
+/** Node footprint at a row-shift ("bob", 0 or 1), matching bossCascade.js's
+ * box formula (node 0 is 2 cells larger). The carrier always renders at
+ * bob 0: cascadeFinal never shifts its own lit node. */
 export function nodeBox(i: number, bob: number): NodeBox {
   const [r, c] = NODES[i];
   const big = i === 0 ? 1 : 0;
@@ -38,10 +28,8 @@ export function nodeBox(i: number, bob: number): NodeBox {
   return { rr, r2, c, c2 };
 }
 
-/** The four ping-burst cells `cascadeFinal(f)` draws around ITS OWN lit node
- * (`f`), the only node-local content that falls outside `nodeBox`. Exact
- * offsets replicated from the generated slice's own ping-burst block (2 cells
- * beyond each edge midpoint); only the carrier ever needs these. */
+/** The four ping-burst cells around the lit node, 2 cells past each edge
+ * midpoint, as in the generated slice. Only the carrier needs them. */
 export function pingPoints(box: NodeBox): [number, number][] {
   const mid = Math.floor((box.c + box.c2) / 2);
   const rmid = Math.floor((box.rr + box.r2) / 2);
@@ -53,9 +41,8 @@ export function pingPoints(box: NodeBox): [number, number][] {
   ];
 }
 
-/** The 3 dotted-link cells between node `i` and node `i + 1`, given each end's
- * own bob. Uses the same 4-step interpolation `bossCascade.js`'s
- * `cascadeFinal` uses for its link dots. */
+/** The 3 link-dot cells between node `i` and `i + 1`, with cascadeFinal's
+ * 4-step interpolation. */
 export function linkPoints(i: number, bobI: number, bobJ: number): [number, number][] {
   const [r1, c1] = NODES[i];
   const [r2, c2] = NODES[i + 1];
@@ -72,16 +59,11 @@ export function linkPoints(i: number, bobI: number, bobJ: number): [number, numb
   return pts;
 }
 
-/** The smallest source-frame index `f` giving node `i` the requested bob
- * parity, EXCLUDING the frame where `i` is lit (`f === i`, core `'X'`) and the
- * frame where `i` is the afterglow node (`f === (i + 1) % NODE_COUNT`, core
- * `'W'`), so a "living unlit" node never copies a stray lit/afterglow core. `i`
- * and `(i + 1) % NODE_COUNT` are always consecutive integers (mod 6), so they
- * never share a parity: exactly one of them is excluded from any given parity's
- * 3 candidates, leaving exactly 2 valid frames whose node-`i` box CONTENT is
- * byte-identical (box shape only depends on bob = f % 2 parity plus the
- * lit/after checks this exclusion already rules out). "Smallest" is therefore
- * an arbitrary but stable choice. */
+/** Smallest source frame giving node `i` the requested bob parity, excluding
+ * the frames where `i` is lit (`f === i`) or the afterglow
+ * (`f === (i + 1) % NODE_COUNT`), so an unlit node never copies a stray core.
+ * Those two frames differ in parity, so each parity leaves 2 frames with
+ * identical box content; "smallest" is just a stable choice. */
 export function sourceFrameFor(i: number, bob: number): number {
   for (let f = 0; f < NODE_COUNT; f++) {
     if (f % 2 === bob && f !== i && f !== (i + 1) % NODE_COUNT) return f;
@@ -96,19 +78,12 @@ function copyBox(dst: Grid, src: Grid, box: NodeBox): void {
   }
 }
 
-/** Composes one frame of the chain from engine state: each living node's box
- * is pasted from a bob-matching `cascadeFinal` source (the carrier's own box
- * + ping burst from `cascadeFinal(carrier)` itself), each dead node's box
- * from the memoized `cascadeDark(NODE_COUNT, bob)` husk reference, then links
- * are drawn fresh between LIVING neighbors only (hot edge = `boss.lastHop`),
- * explicitly nulling any non-living pair's 3 link-dot cells, since
- * `cascadeFinal` always draws all 5 links unconditionally and a living node's
- * own box copy can carry one of its neighbor's stale link-dot pixels inside its
- * own footprint (10 of 12 living-node/parity box slices embed one). No final
- * `eOutline` pass: every pasted box is already outlined by its source frame,
- * and boxes are pairwise non-adjacent (they never touch, even across bob
- * values), so each box's outline is fully local and survives the paste
- * unchanged. */
+/** One frame of the chain: living boxes pasted from bob-matching sources (the
+ * carrier's box and ping burst from `cascadeFinal(carrier)`), dead boxes from
+ * the `cascadeDark` husk, then links drawn between living neighbors only (hot
+ * edge = `boss.lastHop`). Link dots of non-living pairs are nulled explicitly:
+ * cascadeFinal draws all 5 links, and a pasted box can carry a neighbor's
+ * stale link dot. */
 export function composeCascade(boss: CascadeBoss, flutter: number): Grid {
   const out = newG();
   const bobOf = (i: number) => (flutter + i) % 2;

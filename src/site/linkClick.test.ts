@@ -1,9 +1,5 @@
-// A real <a href> anchor on a BrowseIndex/detail-panel/mobile-sheet row is
-// intercepted (preventDefault + drive the SPA in-app) on a plain left
-// click, but a modifier click (ctrl/cmd/shift) or a non-primary button
-// (middle click) must fall through to the browser's own handling of the real
-// href - new tab, save link, etc. shouldRouteInApp is the single guard both
-// App.tsx and BrowseIndex.tsx call so the two surfaces never drift.
+// A plain left click on a row's <a href> is handled in-app; a modifier click
+// (ctrl/cmd/shift) or middle click falls through to the browser.
 import { describe, expect, it } from "vitest";
 import { shouldRouteInApp } from "./linkClick";
 

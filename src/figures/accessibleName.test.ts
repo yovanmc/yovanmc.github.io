@@ -3,15 +3,9 @@ import { CATS } from "../content";
 import { FIGURES } from "./registry";
 import { accessibleNameFor } from "./accessibleName";
 
-// The figure system carries no per-figure captions, so a figure has no
-// hand-written string to hang an `aria-label` on and would render as an
-// unlabeled graphic. Its accessible name is derived from the owning project's
-// title instead.
-//
-// There is no jsdom/testing-library in this repo (vitest.config.ts's
-// `test.include` is an explicit glob list that does not pull in a DOM
-// environment), so this exercises the pure derivation function directly
-// rather than rendering <Figure/> and reading its computed accessible name.
+// Figures carry no captions, so their accessible name is derived from the
+// owning project's title. No DOM environment here, so this tests the pure
+// derivation rather than rendering <Figure/>.
 
 const allProjectItems = CATS.find((c) => c.key === "projects")!.items;
 

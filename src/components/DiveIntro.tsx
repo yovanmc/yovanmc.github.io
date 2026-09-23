@@ -18,16 +18,14 @@ import {
 } from "../generated/diveTimeline";
 
 /**
- * Dive to the Heart, the play path's opening cinematic. It runs when
- * "Enter the game" is chosen, not at site entry. The pure timeline lives in
- * the generated module src/generated/diveTimeline; this component is the
- * render layer: applyState over React refs, plus viewport framing, the settle
- * beat that lands the station on the site's hero geometry, and the handoff
- * fade to the live scene.
+ * Dive to the Heart, the play path's opening cinematic, run on "Enter the
+ * game". The timeline lives in src/generated/diveTimeline; this is the render
+ * layer: applyState over refs, viewport framing, the settle beat onto the
+ * site's hero geometry, and the handoff fade.
  *
- * Framing: desktop = contain-fit both shots. Mobile = cover-fit for the fall
- * (shot 1), then width-fit-to-station from the hard cut on, because the cut
- * is the one place a framing change is invisible.
+ * Framing: desktop contain-fits both shots. Mobile cover-fits the fall (shot
+ * 1), then width-fits the station from the hard cut, where a framing change
+ * is invisible.
  */
 
 export type IntroTarget = "gate" | "browse";
@@ -35,7 +33,7 @@ export type IntroTarget = "gate" | "browse";
 interface DiveIntroProps {
   /** Start rendering the destination scene beneath the overlay (settle finished). */
   onHandoff: (target: IntroTarget) => void;
-  /** Overlay fade complete — unmount me. */
+  /** Overlay fade complete; unmount. */
   onDone: () => void;
   /** Freeze the timeline at this ms and hold (capture tool; skip stays live). */
   freezeAt?: number;
@@ -206,15 +204,10 @@ export function HeroIdle({ vw, vh, visible }: { vw: number; vh: number; visible:
 }
 
 /**
- * The entry point App.tsx imports. Reads the
- * `prefers-reduced-motion` media query once, on first render, via a lazy
- * useState initializer, never in an effect, so there is no flip after
- * mount, and the check is guarded for SSR (false when `window` doesn't
- * exist, matching every other window-touching read in this file). Renders
- * the purpose-built DiveIntroReduced when the preference is set, unless the
- * visitor has explicitly opted into the full cinematic this visit via its
- * "Play the full intro" control. `forceFull` is plain
- * component state, never persisted, so a reload re-applies the preference.
+ * Reads `prefers-reduced-motion` once in a lazy useState initializer, so
+ * there is no flip after mount. Renders DiveIntroReduced when set, unless the
+ * visitor chose "Play the full intro". `forceFull` is not persisted, so a
+ * reload re-applies the preference.
  */
 export function DiveIntro({ onHandoff, onDone, freezeAt }: DiveIntroProps) {
   const [reduced] = useState(
@@ -227,19 +220,14 @@ export function DiveIntro({ onHandoff, onDone, freezeAt }: DiveIntroProps) {
   return <DiveIntroFull onHandoff={onHandoff} onDone={onDone} freezeAt={freezeAt} />;
 }
 
-/** Pure timeline for the reduced-motion dive: a 2.5 second opacity
- * cross-fade replaces the full cinematic. handoffAtMs is the fade midpoint
- * (mirrors the full version's settle-then-handoff semantics); doneAtMs is
- * when the overlay finishes and unmounts. Exported so src/site/
- * diveIntroReduced.test.ts can assert the numbers mechanically. */
+/** Reduced-motion dive: a 2.5 s opacity cross-fade. handoffAtMs is the fade
+ * midpoint, doneAtMs when the overlay unmounts. */
 export function reducedDiveTimeline(): { handoffAtMs: number; doneAtMs: number } {
   return { handoffAtMs: 1250, doneAtMs: 2500 };
 }
 
-/** Every style the reduced path applies, exported so the test file can prove
- * mechanically (not by inspection) that no animated transform/translation
- * ever appears here: the reduced path is opacity-only by construction, never
- * a frozen copy of the cinematic's transform-driven motion. */
+/** Exported so the test can prove the reduced path is opacity-only, with no
+ * transform or translation. */
 export const REDUCED_STYLES: Record<string, CSSProperties> = {
   overlay: { position: "fixed", inset: 0, zIndex: 100, background: "#07040f", cursor: "pointer" },
   frame: { position: "absolute", inset: 0, transition: "opacity 2500ms ease" },
@@ -253,19 +241,12 @@ export interface DiveIntroReducedProps {
 }
 
 /**
- * The reduced-motion dive. A dark
- * backdrop, the landing-state station (buildStationCanon("B"), the same
- * "lit" copy the full cinematic settles into) drawn once with a static,
- * non-animated transform, and the hero's landing pose. No motes, no
- * aurora, no twinkle: that ambient layer is itself the
- * vestibular trigger reduced motion exists to avoid, so it is intentionally
- * dropped here, not just slowed down. The whole thing is one 2.5 second
- * opacity fade-in (REDUCED_STYLES.frame), never a transform/translation.
- * onHandoff fires at the fade's midpoint and onDone when it completes,
- * matching the full cinematic's handoff/done semantics exactly so App.tsx
- * needs no branch of its own. Skip (click anywhere outside the control row,
- * or any key) short-circuits both callbacks immediately, same convention as
- * the full version's skip.
+ * The reduced-motion dive: a dark backdrop, the lit landing station drawn
+ * once with a static transform, and the hero's landing pose, in one 2.5 s
+ * opacity fade. No motes, aurora or twinkle: that ambient layer is itself a
+ * vestibular trigger. Callbacks match the full cinematic, so App.tsx needs no
+ * branch. Skip (a click outside the control row, or any key) fires both
+ * immediately.
  */
 export function DiveIntroReduced({ onHandoff, onDone, onPlayFull }: DiveIntroReducedProps) {
   const [visible, setVisible] = useState(false);
@@ -560,8 +541,8 @@ function DiveIntroFull({ onHandoff, onDone, freezeAt }: DiveIntroProps) {
       if (e.key === "Tab" || e.altKey || e.ctrlKey || e.metaKey) return; // never hijack focus/shortcuts
       skip("gate");
     };
-    // native listener — fires before React's synthetic handlers, so it must
-    // ignore clicks born inside the control row (their own handlers pick the target)
+    // Native listener, so it fires before React's handlers: ignore clicks
+    // inside the control row, whose own handlers pick the target.
     const onClick = (e: MouseEvent) => {
       if ((e.target as HTMLElement).closest("[data-dive-controls]")) return;
       skip("gate");
@@ -576,10 +557,6 @@ function DiveIntroFull({ onHandoff, onDone, freezeAt }: DiveIntroProps) {
     };
     window.addEventListener("resize", onResize);
 
-    // DiveIntroFull only ever runs once the DiveIntro wrapper above has
-    // decided prefers-reduced-motion is NOT set (or the visitor explicitly
-    // chose "play the full intro" anyway), so this component never reads the
-    // media query itself.
     if (freezeRef.current !== undefined) {
       const ft = freezeRef.current;
       applyState(computeState(ft));
@@ -606,8 +583,7 @@ function DiveIntroFull({ onHandoff, onDone, freezeAt }: DiveIntroProps) {
       raf = requestAnimationFrame(loop);
     }
 
-    // "portfolio only" is wired via the row's own click handlers below, through
-    // this ref so the closure state (finish) is reachable.
+    // Exposed so the "portfolio only" control's handler can reach `finish`.
     (overlay as unknown as { __diveSkipTo?: (t: IntroTarget) => void }).__diveSkipTo = skip;
 
     return () => {

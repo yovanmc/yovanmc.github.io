@@ -1,7 +1,6 @@
 /**
- * The splash's start menu, the arrow-key focus arithmetic behind it, and the
- * contact hrefs it reuses. Pure so the node vitest environment can test the
- * contract without jsdom; Landing.tsx only renders what these return.
+ * The splash's start menu, its arrow-key focus arithmetic and contact hrefs.
+ * Pure, so it tests without jsdom; Landing.tsx only renders the results.
  */
 import { CATS } from "../content";
 import { rowContact, rowContinue, rowNewGame, rowWork } from "../landingCopy";
@@ -21,11 +20,10 @@ export interface ContactLinks {
   email: string;
 }
 
-/** The three contact hrefs, read from content.ts's Contact category so no
- * address is duplicated into the shell. Throws if a title is renamed. The
- * gate for that is landingRows.test.ts / landing.test.tsx under `npm test`
- * (CI runs it before the build); the throw is a render-time failure, not a
- * build-time one. Titles today: "GitHub", "Email", "LinkedIn". */
+/** Contact hrefs read from content.ts's Contact category, so no address is
+ * duplicated. Throws at render time if a title ("GitHub", "Email",
+ * "LinkedIn") is renamed; landingRows.test.ts and landing.test.tsx catch
+ * that in CI before the build. */
 export function contactLinks(): ContactLinks {
   const cat = CATS.find((c) => c.key === "contact");
   if (!cat) throw new Error("content.ts has no contact category");
@@ -37,8 +35,7 @@ export function contactLinks(): ContactLinks {
   return { github: link("GitHub"), linkedin: link("LinkedIn"), email: link("Email") };
 }
 
-/** Ordered menu rows. `Continue` renders only for a visitor with saved
- * progress (defeatedBosses.length > 0). */
+/** `Continue` renders only for a visitor with saved progress. */
 export function landingRows(hasProgress: boolean): LandingRow[] {
   const rows: LandingRow[] = [{ kind: "game", label: rowNewGame }];
   if (hasProgress) rows.push({ kind: "continue", label: rowContinue });
@@ -49,8 +46,8 @@ export function landingRows(hasProgress: boolean): LandingRow[] {
   return rows;
 }
 
-/** Roving-focus arithmetic. `current` is the focused row index or null when
- * nothing (or something outside the menu) has focus. Wraps. */
+/** Roving focus with wrap. `current` is null when nothing in the menu has
+ * focus. */
 export function nextRowIndex(current: number | null, key: "ArrowUp" | "ArrowDown", count: number): number {
   if (count <= 1) return 0;
   if (current === null) return key === "ArrowDown" ? 0 : count - 1;

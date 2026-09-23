@@ -1,13 +1,10 @@
-// Schema-evolution guard. Distinct from store.test.ts on purpose: this file
-// pins the ON-DISK SHAPE by hard-coding raw strings exactly as they would sit
-// in localStorage today, rather than building them by calling writeProgress,
-// which would make the assertions tautological: round-tripping the same
-// serializer through itself proves nothing about the shape actually persisted.
+// Pins the on-disk shape with raw strings as they sit in localStorage, not
+// strings built by writeProgress (round-tripping the serializer proves
+// nothing about what is persisted).
 //
-// CHANGING THESE LITERALS IS A BREAKING STORAGE CHANGE requiring a version
-// bump (PROGRESS_VERSION -> 2) and a migration path in readProgress, not a
-// test edit. A real visitor's browser holds v1 data, and silently
-// reinterpreting it is exactly what the version field exists to prevent.
+// CHANGING THESE LITERALS IS A BREAKING STORAGE CHANGE: bump
+// PROGRESS_VERSION and add a migration in readProgress instead. Visitors'
+// browsers hold v1 data.
 import { describe, expect, it } from "vitest";
 import { readProgress, type ProgressStore } from "./store";
 

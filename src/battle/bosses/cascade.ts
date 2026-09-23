@@ -1,22 +1,15 @@
-// The Cascade: boss 2's node-chain state and pulse mechanics. This module is
-// pure mechanics; the exported functions take and return `CascadeBoss` values
-// and never touch battle boot wiring.
+// The Cascade: node-chain state and pulse mechanics, pure.
 //
-// Jolt/storm damage (boss -> hero) routes through engine.ts's `takenDamage`
-// (CT-aware); Fan Out (hero -> nodes) routes through `dealtDamage`
-// (CT/Conviction-aware). `FAN_OUT_DMG` is imported from engine.ts (the one
-// shared base every boss's Fan Out uses) rather than redefined here, to keep a
-// single source of truth.
+// Jolt/storm damage to the hero goes through engine.ts's `takenDamage`; Fan
+// Out goes through `dealtDamage`. `FAN_OUT_DMG` is shared by every boss.
 //
-// Invariant callers must uphold: `boss.carrier` always names a currently
-// LIVING node id. `fallForwardIfCarrierDied` is how a caller restores that
-// invariant after applying hero-turn damage that might have killed the
-// carrier; call it before the next `resolveCascadeBossTurn`.
+// Invariant callers must uphold: `boss.carrier` always names a LIVING node.
+// After hero-turn damage that may have killed the carrier, call
+// `fallForwardIfCarrierDied` before the next `resolveCascadeBossTurn`.
 import { dealtDamage, FAN_OUT_DMG, takenDamage } from "../engine";
 
-/** Canonical definition lives in ../rushOrder, like alertStorm.ts's
- * ALERT_STORM_ID re-export: bootParams.ts needs it without pulling the
- * engine.ts<->cascade.ts cycle into the eagerly loaded landing bundle. */
+/** Defined in ../rushOrder so bootParams.ts can import it without pulling the
+ * engine.ts<->cascade.ts cycle into the landing bundle. */
 export { CASCADE_ID } from "../rushOrder";
 
 export interface CascadeNode {
@@ -32,16 +25,12 @@ export interface CascadeBoss {
   nodes: CascadeNode[];
   /** Node id currently carrying the pulse. */
   carrier: number;
-  /** Boss turns remaining until the loop wraps and a storm fires; `1` means
-   * the very next boss turn is the storm. Presentation-only: nothing reads it
-   * to gate behavior. The wrap math in `resolveCascadeBossTurn` is
-   * authoritative and this field just mirrors it for the renderer's telegraph
-   * (CT's "one turn earlier" glow is a display concern in the scene module,
-   * with no balance coupling here). */
+  /** Boss turns until the loop wraps and a storm fires (`1` = next turn).
+   * Presentation-only, for the renderer's telegraph: the wrap math in
+   * `resolveCascadeBossTurn` is authoritative. */
   stormIn: number;
-  /** `[from, to]` node ids of the pulse's last genuine hop (arrival). `null`
-   * after a reset (storm wrap or carrier-death fall-forward) — those are
-   * placements, not hops. */
+  /** `[from, to]` of the pulse's last genuine hop. `null` after a reset (storm
+   * wrap or carrier fall-forward): those are placements, not hops. */
   lastHop: [number, number] | null;
 }
 
@@ -63,22 +52,19 @@ export function spawnCascade(): CascadeBoss {
   return { ...boss, stormIn: turnsUntilStorm(boss) };
 }
 
-/** Living node ids in ring order (ascending id). Dead nodes stay as husks in
- * the underlying `nodes` array — they are filtered out here, never removed. */
+/** Living node ids in ring order (ascending id). Dead nodes stay in `nodes`
+ * as husks. */
 export function livingNodeIds(boss: CascadeBoss): number[] {
   return boss.nodes.filter((n) => n.alive).map((n) => n.id);
 }
 
-/** "head" = the lowest-index LIVING node. `undefined` only once every node is
- * dead (post-victory). */
+/** The lowest-index living node. `undefined` once every node is dead. */
 export function headNode(boss: CascadeBoss): number | undefined {
   return livingNodeIds(boss)[0];
 }
 
-/** Boss turns remaining until the pulse wraps past the tail and a storm
- * fires. Pulse speed is 3 living nodes per boss turn, constant — CT never
- * slows it (no `ct` parameter here; CT only ever changes the DAMAGE numbers,
- * via `takenDamage` in `resolveCascadeBossTurn`). */
+/** Boss turns until the pulse wraps past the tail. Speed is a constant 3
+ * living nodes per turn: CT changes only damage, never speed. */
 export function turnsUntilStorm(boss: CascadeBoss): number {
   const ring = livingNodeIds(boss);
   if (ring.length === 0) return 0;
@@ -86,9 +72,8 @@ export function turnsUntilStorm(boss: CascadeBoss): number {
   return Math.ceil((ring.length - idx) / PULSE_STEP);
 }
 
-/** The node carrying the pulse takes HALF damage, rounded down, from every
- * source (the charge armors it) — a carrier shield. Clamps at 0 HP and
- * flips `alive` false there; a no-op against an already-dead node. */
+/** Carrier shield: the pulse carrier takes half damage, rounded down, from
+ * every source. Clamps at 0 HP and marks the node dead; no-op on a dead node. */
 export function damageNode(boss: CascadeBoss, nodeId: number, amount: number): CascadeBoss {
   const applied = nodeId === boss.carrier ? Math.floor(amount / 2) : amount;
   const nodes = boss.nodes.map((n) => {
@@ -99,17 +84,15 @@ export function damageNode(boss: CascadeBoss, nodeId: number, amount: number): C
   return { ...boss, nodes };
 }
 
-/** Debug's target mark: a debugged node cannot pass the pulse. See the absorb
- * branch of `resolveCascadeBossTurn`, which consumes the mark on block. */
+/** Debug's mark: a marked node cannot pass the pulse. The absorb branch of
+ * `resolveCascadeBossTurn` consumes it. */
 export function markNode(boss: CascadeBoss, nodeId: number): CascadeBoss {
   const nodes = boss.nodes.map((n) => (n.id === nodeId ? { ...n, marked: true } : n));
   return { ...boss, nodes };
 }
 
-/** Fan Out vs the chain: every LIVING node takes the same dealt amount
- * (CT/Conviction-aware, computed once per cast), with the carrier's own hit
- * still halved by the shield. No reshuffle: unlike Alert Storm's bats, nodes
- * carry no fake/real identity to scramble. */
+/** Every living node takes the same dealt amount, the carrier's hit still
+ * halved. No reshuffle: nodes have no fake/real identity. */
 export function fanOutNodes(boss: CascadeBoss, ct: boolean, conviction: boolean): CascadeBoss {
   const amount = dealtDamage(FAN_OUT_DMG, ct, conviction);
   let next = boss;
@@ -119,11 +102,8 @@ export function fanOutNodes(boss: CascadeBoss, ct: boolean, conviction: boolean)
   return next;
 }
 
-/** A carrier killed on a HERO turn falls forward to the next living node in
- * ring order, with no reset and no storm (`lastHop` is left untouched: this
- * counts as neither a hop nor an arrival). A no-op while the carrier is still
- * alive. Call this after any hero-turn node damage, before the next
- * `resolveCascadeBossTurn`. */
+/** A carrier killed on a hero turn falls forward to the next living node,
+ * with no reset, no storm, and `lastHop` untouched. No-op while it lives. */
 export function fallForwardIfCarrierDied(boss: CascadeBoss): CascadeBoss {
   const carrierNode = boss.nodes.find((n) => n.id === boss.carrier)!;
   if (carrierNode.alive) return boss;
@@ -138,21 +118,18 @@ export type CascadeTurnOutcome = "jolt" | "storm" | "absorbed";
 export interface CascadeTurnResult {
   boss: CascadeBoss;
   outcome: CascadeTurnOutcome;
-  /** Damage the HERO takes this boss turn (0 when absorbed). Already
-   * CT/Conviction-adjusted via `takenDamage` — apply as-is. */
+  /** Damage the hero takes this boss turn (0 when absorbed), already
+   * CT/Conviction-adjusted. */
   heroDamage: number;
 }
 
-/** Resolves one boss turn: advances the pulse 3 living-node ring-steps from
- * the current carrier.
+/** Advances the pulse 3 living-node steps from the carrier.
  *
- * - Wrapping past the tail = loop complete: a STORM fires INSTEAD of the
- *   jolt, and the pulse restarts at head. That restart is a reset, so it is
- *   never mark-checked.
- * - A non-wrapping advance is a genuine ARRIVAL: if the landing node is
- *   marked, the discharge is ABSORBED (no storm and no jolt), the mark burns
- *   out, and the pulse resets to head; otherwise a normal JOLT fires and the
- *   pulse stays at the new node. */
+ * - Wrapping past the tail completes the loop: a STORM fires instead of the
+ *   jolt and the pulse resets to head (a reset is never mark-checked).
+ * - Otherwise it is an arrival: a marked landing node ABSORBS the discharge
+ *   (no storm, no jolt), the mark burns out and the pulse resets to head;
+ *   an unmarked one takes a JOLT and keeps the pulse. */
 export function resolveCascadeBossTurn(
   boss: CascadeBoss,
   ct: boolean,

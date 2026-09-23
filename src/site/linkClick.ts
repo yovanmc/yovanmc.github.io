@@ -1,12 +1,8 @@
 /**
- * True when a click on a real `<a href>` row anchor should be
- * intercepted and driven in-app (SPA navigation / activate()) rather than
- * left to the browser's own handling of the href. False for any modifier
- * click or non-primary button, so ctrl/cmd-click, shift-click, and middle
- * click all keep working exactly like a normal link - open in a new tab,
- * open in a new window, whatever the browser/OS does with a real href.
- * Shared by App.tsx (detail panel, mobile sheet) and BrowseIndex.tsx so the
- * two surfaces can never drift on what counts as "just open it".
+ * True when a click on a row's `<a href>` should be handled in-app. False for
+ * any modifier or non-primary click, so ctrl/cmd, shift and middle click
+ * behave like a normal link. Shared by App.tsx and BrowseIndex.tsx so they
+ * agree.
  */
 export interface ClickModifiers {
   metaKey: boolean;

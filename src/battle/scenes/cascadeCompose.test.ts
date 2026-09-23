@@ -1,11 +1,9 @@
-// composeCascade purity tests: per-box deep-equality against source frames,
-// links only between living neighbors (hot edge from lastHop), zero stray cells
-// outside boxes + links, and a semantic guard that a living UNLIT node's core is
-// never a stray 'X' lit core or 'W' afterglow. `cascadeFinal` always draws all
-// 5 links unconditionally, so a node's own copied box can legitimately show a
-// COLD link dot ('a' or 'P') crossing its core pixels; that is real canonical
-// content, so it is excluded from the strict per-box/core checks below, the same
-// way the composer's own link pass has final authority over those coordinates.
+// composeCascade: boxes deep-equal their source frames, links only between
+// living neighbors (hot edge from lastHop), no stray cells, and a living
+// unlit node's core is never a stray 'X' or 'W'. cascadeFinal draws all 5
+// links, so a copied box can legitimately carry a cold link dot ('a' or 'P')
+// over its core; link cells are excluded from the strict checks, since the
+// link pass has final authority there.
 import { describe, expect, it } from "vitest";
 import { cascadeFinal, cascadeDark } from "../../generated/bossCascade";
 import type { CascadeBoss, CascadeNode } from "../bosses/cascade";
@@ -42,10 +40,8 @@ function coreCells(i: number, box: { rr: number; c: number }): [number, number][
   return pts;
 }
 
-/** Every cell segment `(i, i+1)`'s link touches, across the two node boxes it
- * neighbors. Used to exclude the composer's own link-redraw coordinates from a
- * strict per-box source-frame comparison, since the link pass has final
- * authority there (see composeCascade's own doc). */
+/** Every cell the links touch, excluded from the strict per-box comparison
+ * because the link pass has final authority there. */
 function linkCellSet(boss: CascadeBoss, flutter: number): Set<string> {
   const bobFor = bobForBoss(boss, flutter);
   const cells = new Set<string>();
@@ -149,8 +145,8 @@ describe("composeCascade — links only between living neighbors, hot edge from 
     const hotPts = linkPoints(0, bobForHop(0), bobForHop(1));
     expect(hotPts.every(([r, c]) => outHop[r][c] === "X")).toBe(true);
 
-    // a hop that is NOT this exact index-adjacent pair (e.g. it skipped a
-    // dead node) leaves every segment cold — no single edge is "the" hop.
+    // A hop between non-adjacent indices (it skipped a dead node) leaves every
+    // segment cold.
     const skipBoss = makeBoss({ carrier: 3, lastHop: [0, 3] });
     const outSkip = composeCascade(skipBoss, 0);
     const bobForSkip = bobForBoss(skipBoss, 0);

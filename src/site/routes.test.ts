@@ -1,22 +1,13 @@
 // /build/ routes exactly like /work/, so every "browse" dispatch site in
-// App.tsx needs a "build" counterpart. Two things are tested here:
-//  1. phaseForPath(path) - the pure path-only resolver both decideBoot and
-//     popstate's path arm use.
-//  2. A structural guard over App.tsx's source text: every line containing
-//     the literal string "browse" (quoted, matching `grep -n '"browse"'`)
-//     must have "build" within one line of it - same line, the line before,
-//     or the line after - so a future edit that adds a new browse-only branch
-//     trips this test instead of silently reintroducing the /build/ gap. The
-//     one allowed exception is App.tsx's keydown early-return gate
-//     (`s.phase === "intro" || s.phase === "battle" || (s.phase === "gate"
-//     && !s.page)`) - "build" must NEVER be added there, since intro/
-//     battle/gate own their own input entirely and build's ESC/Backspace
-//     handling lives in the ordinary browse-shaped arm further down. At
-//     HEAD that gate line does not itself contain "browse" (it never has,
-//     it is not a browse/build dispatch site), so the exception clause is
-//     currently a defensive no-op over the real file - findOffenders' own
-//     unit tests below (not App.tsx) are what prove the clause actually
-//     excludes a matching line when one exists.
+// App.tsx needs a "build" counterpart. Tested here:
+//  1. phaseForPath(path), the path-only resolver decideBoot and popstate use.
+//  2. A guard over App.tsx's source: every line containing the quoted
+//     literal "browse" must have "build" on it or an adjacent line, so a new
+//     browse-only branch fails here. The one exception is the keydown
+//     early-return gate, where "build" must never be added (intro, battle and
+//     gate own their input; build is handled in the browse-shaped arm). That
+//     line holds no "browse" today, so findOffenders' own unit tests prove
+//     the exception works.
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -45,14 +36,12 @@ describe("phaseForPath", () => {
   });
 });
 
-/** The one App.tsx line "browse" is allowed to appear on without a "build"
- * sibling: the keydown early-return gate. Matched by content, not a line
- * number, so file drift can't silently disarm the exception. */
+/** Allowed without a "build" sibling: the keydown early-return gate. Matched
+ * by content, not line number, so file drift cannot disarm it. */
 const GATE_LINE = 's.phase === "intro" || s.phase === "battle" || (s.phase === "gate" && !s.page)';
 
-/** Pure so it is testable against synthetic fixtures, not just the real
- * App.tsx - returns one string per offending line (1-indexed line number +
- * trimmed content), empty when every "browse" line has a "build" sibling. */
+/** One string per offending line (1-indexed number + trimmed content), empty
+ * when every "browse" line has a "build" sibling. */
 export function findBrowseBuildOffenders(lines: string[]): string[] {
   const offenders: string[] = [];
   lines.forEach((line, i) => {
@@ -91,7 +80,7 @@ describe("findBrowseBuildOffenders (unit, synthetic fixtures)", () => {
 
   it("vacuity check: the gate-line exception DOES suppress a hypothetical offender that matches it exactly", () => {
     const withoutException = findBrowseBuildOffenders([`if (${GATE_LINE} || x === "browse") return;`]);
-    expect(withoutException).toEqual([]); // proves the exception clause, not a coincidence: same input minus the gate marker below IS flagged
+    expect(withoutException).toEqual([]); // the same input minus the gate marker IS flagged
     const notExempt = findBrowseBuildOffenders(['if (x === "browse") return; // not the gate line']);
     expect(notExempt).toHaveLength(1);
   });

@@ -1,7 +1,5 @@
-// FIGHT submenu chooser derivation. Pure and side-effect-free so the
-// chooser-row logic (defeatedBosses ∩
-// IMPLEMENTED_BOSSES) is unit-testable without a DOM harness; App.tsx's
-// keyboard arm and JSX render whatever this returns, never re-deriving it.
+// FIGHT chooser derivation, pure. App.tsx renders whatever this returns and
+// never re-derives it.
 import { BOSS_NAMES, IMPLEMENTED_BOSSES } from "./rushOrder";
 
 export interface FightRow {
@@ -14,24 +12,18 @@ export type FightChoice =
   | { mode: "direct"; boss: string }
   | { mode: "chooser"; rows: FightRow[] };
 
-/** Next boss in rush order the player has not beaten, or undefined when the
- * rush is complete. Shared by deriveFightChoice and the intro dive handoff
- * (App.tsx onIntroHandoff) so the two can never disagree: deriveFightChoice
- * exposes no next-undefeated-boss field once a chooser exists, and nothing
- * useful at all once every implemented boss is beaten, so callers that need
- * just "what is next" ask here instead of re-deriving chooser logic. */
+/** Next boss in rush order not yet beaten, or undefined once the rush is
+ * complete. Shared by deriveFightChoice and the dive handoff so they never
+ * disagree. */
 export function nextUndefeatedBoss(defeatedBosses: string[]): string | undefined {
   return IMPLEMENTED_BOSSES.find((id) => !defeatedBosses.includes(id));
 }
 
-/** Next undefeated IMPLEMENTED boss on top (labeled, not a rematch) plus
- * every already-defeated IMPLEMENTED boss below as a REMATCH row, in rush
- * order. Rows only ever come from IMPLEMENTED_BOSSES, the same set kit
- * derivation and the `boss=` whitelist intersect with, so a row can never
- * point at a boss with no module behind it. A single resulting option
- * direct-launches with no chooser (a fresh visitor goes straight to
- * alert-storm); two or more open the chooser. When every IMPLEMENTED boss is
- * defeated, the chooser shows the defeated roster only, with no "next" row. */
+/** The next undefeated implemented boss on top, then every defeated one as a
+ * REMATCH row, in rush order. Rows come only from IMPLEMENTED_BOSSES, so none
+ * points at a boss with no module. One option launches directly (a fresh
+ * visitor goes straight to alert-storm); two or more open the chooser. With
+ * every boss defeated there is no "next" row. */
 export function deriveFightChoice(defeatedBosses: string[]): FightChoice {
   const nextBoss = nextUndefeatedBoss(defeatedBosses);
   const rows: FightRow[] = [];
@@ -41,10 +33,8 @@ export function deriveFightChoice(defeatedBosses: string[]): FightChoice {
       rows.push({ boss: id, label: BOSS_NAMES[id], isRematch: true });
     }
   }
-  // rows[0] is always defined here in practice (rows.length === 0 would need
-  // IMPLEMENTED_BOSSES empty, which never happens — alert-storm is always
-  // first); the `?? IMPLEMENTED_BOSSES[0]` fallback only exists so the return
-  // type never needs a third "nothing to fight" mode over an impossible input.
+  // rows is never empty (alert-storm is always implemented); the fallback
+  // only keeps the return type free of a "nothing to fight" mode.
   if (rows.length <= 1) {
     /* v8 ignore next -- unreachable, see comment above */
     return { mode: "direct", boss: rows[0]?.boss ?? IMPLEMENTED_BOSSES[0] };

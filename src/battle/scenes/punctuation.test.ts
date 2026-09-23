@@ -1,7 +1,6 @@
-// Copy punctuation gate: no em dash, en dash, or semicolon in any scene
-// module's exported copy strings (middle dots stay legal). Banned chars are
-// unicode-escaped throughout so this file never contains a banned literal
-// itself, in the detection pattern or anywhere else (test titles included).
+// No em dash, en dash or semicolon in any scene module's copy (middle dots
+// are fine). Banned chars are unicode-escaped so this file never contains
+// one, test titles included.
 import { describe, expect, it } from "vitest";
 import { initBattle } from "../engine";
 import { SCENE_MODULES } from "./index";
@@ -30,22 +29,13 @@ function copyStringsFor(scene: (typeof SCENE_MODULES)[string]): { label: string;
   let s = initBattle({ seed: 42 });
   s = { ...s, turn: 3, status: "active" };
   out.push({ label: "banner(scream turn)", value: scene.banner(s) });
-  // plate.labelFor is optional and additive. Alert Storm and Cascade don't
-  // implement it, so `plate.label` above already covers them. When a module
-  // DOES implement it (Silent Failure), its output is a different string per
-  // phase that `plate.label` alone would never surface, and "VANISHED" would be
-  // a copy string this gate never sees. Sampled against the module's own boot
-  // (`scene.id`), for both phase values, with the vanished one built by
-  // overriding `phase` on the state.
+  // labelFor surfaces per-phase strings ("VANISHED") that plate.label never
+  // shows, so sample both phases from the module's own boot.
   if (scene.plate.labelFor) {
     const boot = initBattle({ seed: 42, boss: scene.id, defeatedBosses: ["alert-storm", "cascade"] });
     out.push({ label: "plate.labelFor(embodied)", value: scene.plate.labelFor(boot) });
-    // Narrowed on the `kind` discriminant rather than a structural
-    // `"phase" in boot.boss` check: the Imposter's BossState member also
-    // carries a `phase` field, with a different enum entirely
-    // ("clones"/"pulse"/"vanish"/"mirror", never "vanished"), so a structural
-    // check would not pin this spread to SilentFailureBoss unambiguously. Only
-    // Silent Failure implements `labelFor` today.
+    // Narrowed on `kind`, not `"phase" in boss`: the Imposter also has a
+    // `phase` field with a different enum.
     const vanishedBoss =
       boot.boss.kind === "silent-failure" ? { ...boot.boss, phase: "vanished" as const } : boot.boss;
     const vanished = { ...boot, boss: vanishedBoss };

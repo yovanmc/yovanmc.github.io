@@ -1,23 +1,17 @@
-// Boot-param parsing/validation for the dev capture-key grammar
+// Parsing and validation for the dev capture keys
 // (`?phase=battle&boss=&defeated=&seed=&attempt=&actions=`). Pure and
-// side-effect-free (no console, no DOM) so it falls under the coverage gate
-// and is unit-testable without a DOM harness. App.tsx's `decideBoot` calls
-// these and owns the dev-only console.warn on rejection.
+// console-free so it is unit-testable and under the coverage gate; App.tsx's
+// `decideBoot` owns the dev-only warning on rejection.
 
 import type { BattleAction } from "./engine";
-// Deliberately NOT importing from "./engine" or "./bosses/alertStorm" here
-// for these three constants: both modules have a circular value dependency
-// on each other (engine.ts <-> bosses/alertStorm.ts) that defeats Rollup's
-// tree-shaking, and this file is imported eagerly by App.tsx — pulling in
-// battleReduce/initBattle/spawnAlertStorm etc. would leak the whole battle
-// engine into the landing bundle. ./rushOrder is a leaf module with no other
-// imports, so it tree-shakes cleanly. (Measured: +4.95 kB landing bundle
-// growth importing from "./engine" directly, vs. 0 kB from "./rushOrder".)
+// Not imported from "./engine" or "./bosses/alertStorm": their circular
+// dependency defeats Rollup's tree-shaking, and this file loads eagerly from
+// App.tsx, so it would pull the battle engine into the landing bundle.
+// ./rushOrder is a leaf module.
 import { ALERT_STORM_ID, IMPLEMENTED_BOSSES, RUSH_ORDER } from "./rushOrder";
 
-/** `boss=` capture key: whitelist = IMPLEMENTED_BOSSES, default alert-storm.
- * A boss with no module behind it, or garbage, silently falls back rather
- * than becoming a crash path in production. */
+/** `boss=` capture key, whitelisted to IMPLEMENTED_BOSSES. Anything else falls
+ * back to alert-storm rather than becoming a crash path. */
 export function parseBoss(raw: string | null): string {
   if (raw && IMPLEMENTED_BOSSES.includes(raw)) return raw;
   return ALERT_STORM_ID;
@@ -25,21 +19,16 @@ export function parseBoss(raw: string | null): string {
 
 export interface DefeatedParseResult {
   value: string[];
-  /** true when raw was present but did not validate as a rush-order prefix.
-   * This module stays console-free (pure, vitest-friendly); the dev-guarded
-   * caller decides whether/how to warn. */
+  /** True when raw was present but not a rush-order prefix. The caller decides
+   * whether to warn. */
   rejected: boolean;
 }
 
-/** Shared dedupe+prefix-validation core (one shared validator, never two).
- * Dedupes `tokens` preserving first-seen order, then checks the result
- * against an exact prefix of `rushOrder` (order-sensitive, per the literal
- * meaning of "prefix"): id-set validation alone would let rider count and
- * kit derivation disagree, e.g. `silent-failure` alone implying 110/12
- * stats with Root Cause but no Fan Out, a state unreachable in play.
- * Anything that isn't an exact prefix rejects to `[]`. `rushOrder` defaults
- * to the real RUSH_ORDER; the parameter exists so src/progress's
- * implemented-boss cap is testable without mutating the real constants. */
+/** Dedupes `tokens` (first-seen order), then requires an exact prefix of
+ * `rushOrder`, else `[]`. An id-set check would let rider count and kit
+ * disagree (e.g. `silent-failure` alone: 110/12 with Root Cause but no Fan
+ * Out, unreachable in play). The `rushOrder` parameter makes
+ * src/progress's implemented-boss cap testable. */
 export function coerceRushPrefix(
   tokens: string[],
   rushOrder: readonly string[] = RUSH_ORDER,
@@ -50,8 +39,7 @@ export function coerceRushPrefix(
   return isValid ? { value: prefix, rejected: false } : { value: [], rejected: true };
 }
 
-/** `defeated=` capture key: validates as a RUSH_ORDER PREFIX after dedupe.
- * See coerceRushPrefix for the shared validation core. */
+/** `defeated=` capture key: a RUSH_ORDER prefix after dedupe. */
 export function parseDefeatedBosses(raw: string | null): DefeatedParseResult {
   if (raw === null) return { value: [], rejected: false };
   const tokens = raw
@@ -62,10 +50,8 @@ export function parseDefeatedBosses(raw: string | null): DefeatedParseResult {
 }
 
 /** `actions=` capture key: `ct,debug:3,pt:0,fo` -> engine actions (targets
- * are bat ids). Unrecognized tokens are silently dropped (today's path) —
- * out-of-kit tokens that DO parse (e.g. `fo` before alert-storm is beaten)
- * still reach the reducer and come back as an `invalid` event, same as any
- * other illegal action. */
+ * are bat ids). Unrecognized tokens are dropped. Out-of-kit tokens that parse
+ * still reach the reducer and come back `invalid`. */
 export function parseActions(raw: string | null): BattleAction[] | undefined {
   if (!raw) return undefined;
   const out: BattleAction[] = [];

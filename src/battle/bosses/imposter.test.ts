@@ -19,8 +19,7 @@ import {
 } from "./imposter";
 import type { ImposterBoss } from "./imposter";
 
-/** Deterministic stand-in for engine.ts's Park-Miller `nextRng` — draw(r) = r
- * itself works fine for seeding tests since only `% 3` of the result matters. */
+/** Stand-in for `nextRng`: only `% 3` of the draw matters for seeding. */
 const identityDraw = (r: number) => r;
 
 function fresh(overrides: Partial<ImposterBoss> = {}): ImposterBoss {
@@ -391,16 +390,14 @@ describe("resolveImposterBossTurn", () => {
     boss = resolveImposterHit(boss, boss.realIndex!, 100).boss; // 180 -> 80, forge fires
     expect(boss.forgeFired).toBe(true);
     expect(boss.degenerate).toBe(false); // not yet — mid-phase
-    // The turn that just crossed still had 2 phaseTurnsLeft; simulate the
-    // boss's own turn continuing normally (still non-degenerate this turn).
+    // This turn still had 2 phaseTurnsLeft, so the phase continues.
     const stillClones = resolveImposterBossTurn(boss, false, false);
     expect(stillClones.outcome).toBe("slash");
     expect(stillClones.boss.phase).toBe("clones"); // current phase completes, doesn't truncate
     expect(stillClones.boss.degenerate).toBe(false);
     expect(stillClones.boss.phaseTurnsLeft).toBe(1);
-    // NOW the boundary is reached (phaseTurnsLeft hits 0) — degenerate flips
-    // exactly here, and the NEW (post-flip) degenerate mapping decides the
-    // next phase: leaving clones while degenerate goes to mirror.
+    // The boundary: degenerate flips exactly here, and the degenerate mapping
+    // sends clones to mirror.
     const boundary = resolveImposterBossTurn(stillClones.boss, false, false);
     expect(boundary.boss.degenerate).toBe(true);
     expect(boundary.boss.phase).toBe("mirror");
