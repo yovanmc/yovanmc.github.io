@@ -18,9 +18,8 @@ import {
 import type { FlowFigure, LogFigure } from "./types";
 import { MEASURED_FIGURE_TYPE } from "./__fixtures__/measuredFigureType";
 
-// Local test-only flow figures. Deliberately NOT importing `./registry`:
-// this module tests the algorithm's general behaviour, while registry.test.ts
-// exercises it against the real six figures.
+// Local figures, not `./registry`: this tests the algorithm in general;
+// registry.test.ts covers the real figures.
 const THREE_NODE: FlowFigure = {
   kind: "flow",
   rows: [{ nodes: [{ label: "A", tone: "default" }, { label: "B", tone: "default" }, { label: "C", tone: "default" }] }],
@@ -116,10 +115,8 @@ describe("logModeFor", () => {
   it("returns inline when the widest line (threshold) exactly equals the text width", () => {
     const line = { channel: "chan", value: "value", tone: "muted" as const };
     const exactWidth = logLineWidthPx(line);
-    // Build a synthetic content width where textPx exactly equals this line's width.
     const exactContentPx = exactWidth + 12; // LOG_INDENT_PX inverse of logTextWidthPx
     expect(logModeFor(exactWidth, exactContentPx)).toBe("inline");
-    // sanity: confirm the width really is exactly the text width at that content size
     expect(logTextWidthPx(exactContentPx)).toBeCloseTo(exactWidth, 6);
   });
 
@@ -165,10 +162,8 @@ describe("uniformLogThresholdPx", () => {
 
 describe("maxLabelWordChars / maxLogValueChars", () => {
   it("maxLabelWordChars() holds the registry's longest label word, ORCHESTRATOR (12 chars), with zero margin to spare", () => {
-    // Restating the implementation would pass for any constants.
-    // ORCHESTRATOR is the actual 12-character boundary NODE_MIN_PX exists to
-    // guard: if this cap ever drops below 12 the registry's own label-cap
-    // test goes red for real content.
+    // ORCHESTRATOR is the real 12-character label NODE_MIN_PX guards; below 12
+    // the registry's label-cap test fails on real content.
     expect(maxLabelWordChars()).toBeGreaterThanOrEqual(12);
   });
 

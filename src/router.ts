@@ -10,13 +10,10 @@ export function pathForPage(p: PageRef): string {
   return prefix + item.slug + "/";
 }
 
-/** The one href a row should carry, or null when
- * there is nothing to link to (a copy-only contact item, or a slugless item
- * with no external link). Never falls back to pathForPage's own "/" default
- * for a slugless item, because that default exists for callers that already
- * know they have a real page ref, not as a "no link" signal. Shared by
- * BrowseIndex, App's detail-panel link button, and the mobile category
- * sheet so the three surfaces can't drift on what counts as a real link. */
+/** The href a row should carry, or null when there is nothing to link to
+ * (copy-only contact, or a slugless item without an external link). Never
+ * falls back to pathForPage's "/" default. Shared by BrowseIndex, the detail
+ * panel and the mobile sheet so they agree. */
 export function rowHref(item: Item, ri: number, si: number): string | null {
   if (item.slug) return pathForPage({ ri, si });
   if (item.link && item.link !== "#") return item.link;

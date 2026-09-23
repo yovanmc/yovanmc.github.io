@@ -25,17 +25,13 @@ const MONO = "'JetBrains Mono',monospace";
 const SERIF = "'Marcellus',serif";
 
 /**
- * The /build/ engineering page: a numbers strip computed at
- * build time (virtual:build-facts), the verification-pipeline
- * figure, three self-contained lesson write-ups with no external links, and
- * a link to the repo. Routes and chrome-shapes like BrowseIndex, with its
- * own <h1> and container card, and ESC/Backspace back to the gate via
- * App.tsx's existing browse key path (this component adds no keyboard
- * handling of its own).
+ * The /build/ engineering page: a build-time numbers strip, the
+ * verification-pipeline figure, three lesson write-ups and a repo link.
+ * Shaped like BrowseIndex; ESC/Backspace go through App.tsx's browse key
+ * path, so this adds no keyboard handling.
  *
- * facts is null in dev/serve mode, because the buildFacts() plugin never
- * touches the filesystem there. The numbers strip is then replaced by
- * serveModeLine instead of rendering zeros, which would read as real data.
+ * facts is null in serve mode; the strip then shows serveModeLine rather
+ * than zeros that would read as real data.
  */
 export interface BuildPageProps {
   isMobile: boolean;

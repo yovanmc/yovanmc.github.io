@@ -15,8 +15,7 @@ import {
 } from "./cascade";
 import type { CascadeBoss } from "./cascade";
 
-/** Kill a node outright for test setup (bypasses the carrier-shield math —
- * tests that care about the shield call damageNode directly). */
+/** Kills a node outright, bypassing the carrier shield. */
 function kill(boss: CascadeBoss, nodeId: number): CascadeBoss {
   const nodes = boss.nodes.map((n) => (n.id === nodeId ? { ...n, hp: 0, alive: false } : n));
   return { ...boss, nodes };

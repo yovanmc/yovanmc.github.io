@@ -11,9 +11,8 @@ interface StationProps {
 }
 
 /**
- * The stained-glass Station hero. The SVG comes from
- * src/generated/stationCanon.js. This wrapper adds only a gentle 9s breathe
- * animation, no hue-rotate, so the generated palette renders as authored.
+ * The stained-glass Station hero from src/generated/stationCanon.js. Adds
+ * only a 9s breathe, no hue-rotate, so the palette renders as authored.
  */
 export function Station({ scale, opacity, top }: StationProps) {
   const svg = useMemo(() => buildStationCanon(), []);

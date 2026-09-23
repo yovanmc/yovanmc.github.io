@@ -1,7 +1,5 @@
-// README gate: every backticked repo path in README.md has to exist on disk,
-// so a citation of a file that was renamed or never existed fails here instead
-// of shipping. Also enforces the same punctuation rule as the rest of the site
-// shell (no em dash, no en dash).
+// Every backticked repo path in README.md must exist on disk, and the README
+// follows the shell punctuation rule (no em dash, no en dash).
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -14,10 +12,8 @@ function read(path: string): string {
   return readFileSync(resolve(process.cwd(), path), "utf8");
 }
 
-/** A backticked span "looks like a repo path" when it has no spaces (rules
- * out prose fragments and shell commands with arguments) and either
- * contains a slash or ends in a file extension. Deliberately excludes
- * anything starting with a URL scheme. */
+/** "Looks like a repo path": no spaces (rules out prose and commands with
+ * arguments), no URL scheme, and a slash or a file extension. */
 function looksLikeRepoPath(text: string): boolean {
   if (/\s/.test(text)) return false;
   if (/^[a-z]+:\/\//.test(text)) return false;
@@ -27,9 +23,8 @@ function looksLikeRepoPath(text: string): boolean {
 
 describe("README", () => {
   const readme = read("README.md");
-  // Strip fenced ``` code blocks first - without this, a triple-backtick
-  // fence reads as three single-backtick opens/closes and the regex below
-  // swallows the whole block (including newlines) as one bogus "path".
+  // Strip fenced blocks first, or a ``` fence reads as three backticks and
+  // the regex swallows the whole block as one bogus "path".
   const proseOnly = readme.replace(/```[\s\S]*?```/g, "");
 
   it("has no em dash or en dash anywhere", () => {

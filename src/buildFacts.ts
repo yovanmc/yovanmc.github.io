@@ -1,9 +1,7 @@
 /**
- * The shape of the numbers on the /build/ page. Computed at build time
- * by tools/build-facts.ts from the test run, coverage summary, package.json
- * and the site content model, never typed by hand. This file is the type
- * only, kept in src/ so it can be imported by both the browser bundle
- * (via virtual:build-facts) and the node-only compute function in tools/.
+ * The numbers on the /build/ page, computed at build time by
+ * tools/build-facts.ts. Type only, in src/ so both the browser bundle (via
+ * virtual:build-facts) and tools/ can import it.
  */
 export interface BuildFacts {
   /** total assertions across the whole vitest run (report.numTotalTests) */

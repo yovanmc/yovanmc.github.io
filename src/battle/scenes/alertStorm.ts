@@ -1,6 +1,4 @@
-// Alert Storm's scene module: arena art, boss composition, plate copy, banner
-// text, victory/defeat copy, all behind the `BossSceneModule` interface
-// (./types) that every boss module implements (./index is the registry).
+// Alert Storm's scene module.
 import type { Bat, BattleState, BossState } from "../engine";
 import { isScreamTurn } from "../engine";
 import {
@@ -15,10 +13,9 @@ import type { BossSceneModule, SceneFx } from "./types";
 
 const SCREAM_BANNER = "THE SWARM SCREAMS · ONE VOICE RUNS RED";
 
-/** Plot the purple mark chevron above a marked bat: three cells, each dropped
- * only if it lands on the stage. Exported so the boundary guard, which the
- * fixed SWARM/JIT formation never reaches through `composeBoss`'s own
- * parameter space, is still directly unit-testable. */
+/** Plots the purple mark chevron above a marked bat, dropping cells that
+ * fall off the stage. Exported because the fixed formation never reaches
+ * that boundary through `composeBoss`. */
 export function plotMarkChevron(out: Grid, mr: number, mc: number): void {
   for (const [pr, pc] of [[0, 0], [1, 1], [0, 2]] as const) {
     const rr = mr + pr;
@@ -28,15 +25,9 @@ export function plotMarkChevron(out: Grid, mr: number, mc: number): void {
 }
 
 /**
- * Compose the swarm grid from per-bat primitives against engine state, which
- * the monolithic reels cannot express because they carry no per-bat death or
- * marks. Step order: outline + per-bat post-draw + marks, then dither (if any),
- * then the scream ripple overlay (if any).
- *
- * Takes the whole `BossState` (the shape `BossSceneModule.composeBoss` gives
- * every boss module) and narrows to `.bats` itself. This module is never
- * invoked with a non-alert-storm `boss`, since BattleScene.tsx selects the
- * scene module by `boss.kind`, so the empty-array fallback is defensive only.
+ * Composes the swarm from per-bat primitives, since the monolithic reels
+ * carry no per-bat death or marks. Order: outline + per-bat post-draw +
+ * marks, then dither, then the scream ripple.
  */
 function composeBoss(boss: BossState, screaming: boolean, flutter: number, fx: SceneFx): Grid {
   const bats: Bat[] = boss.kind === ALERT_STORM_ID ? boss.bats : [];

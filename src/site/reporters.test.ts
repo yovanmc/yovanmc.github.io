@@ -1,10 +1,6 @@
-// The build-facts virtual module reads its numbers from
-// coverage/vitest-report.json (numTotalTests) and
-// coverage/coverage-summary.json
-// (total.branches.pct). Both files only exist when vitest is invoked with the
-// json and json-summary reporters. This test makes the wiring mechanically
-// checkable instead of relying on someone remembering to keep the reporter
-// flags in place.
+// Build facts read coverage/vitest-report.json and
+// coverage/coverage-summary.json, which exist only when vitest runs with the
+// json and json-summary reporters. This keeps those reporter flags in place.
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";

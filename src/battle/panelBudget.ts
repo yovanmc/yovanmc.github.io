@@ -1,11 +1,7 @@
-// Viewport-aware panel height budget, computed against the worst-case actor
-// set across ALL FOUR bosses plus the hero, not just the current boss: Alert
-// Storm's swarm is the binding actor at most tight viewports. Fresh spawns
-// per boss at their real stamp origins (`stampOrigin` is overridden only by
-// imposter, everything else stamps at BOSS_AT), with imposter forced to its
-// CLONES phase, its own worst case. The spawn helper mirrors layout.test.ts's
-// `fresh` helper, duplicated here rather than importing across a .test.ts
-// file.
+// Panel height budget against the worst-case actors across all four bosses
+// plus the hero, not just the current boss (Alert Storm's swarm binds at
+// most tight viewports). Fresh spawns at their real stamp origins, with the
+// Imposter forced into CLONES, its widest phase.
 import { gridRect, panelMaxHeight, stageMetrics, type Rect } from "./layout";
 import { IDLE } from "../generated/heroBattle";
 import { HERO_AT, BOSS_AT } from "../generated/battlefieldScene";
@@ -17,12 +13,10 @@ import { sceneFor } from "./scenes/index";
 import type { BossState } from "./engine";
 
 const identityDraw = (r: number) => r;
-// Fresh-spawn compositions are the per-boss worst cases: full occupancy
-// (bats/clones die, bboxes only shrink), and formation slots are structural,
-// not seed-driven (seed picks hidden identities, not positions), the same
-// determinism the clip invariant already relies on. The property test in
-// panelBudget.test.ts re-derives all of this independently; if a future boss
-// breaks the assumption the test goes red, not the player's screen.
+// Fresh spawns are the worst case: actors only die, so bboxes only shrink,
+// and formation slots do not depend on the seed. panelBudget.test.ts
+// re-derives this independently, so a boss that breaks the assumption fails
+// the test, not the player's screen.
 const imposterClones: ImposterBoss = { ...spawnImposter(0, identityDraw).boss, phase: "clones" };
 const WORST_BOSSES: BossState[] = [
   spawnAlertStorm(0, identityDraw).boss,

@@ -1,9 +1,6 @@
-// BuildPage rendered via renderToStaticMarkup (same convention as
-// landing.test.tsx/links.test.tsx: node environment, no jsdom). Both facts
-// states are exercised in one file via vi.doMock + a fresh dynamic import per
-// test (vi.mock's static hoisting can only pick one module shape per file), so
-// a null-facts regression and a populated-facts regression are both caught
-// here rather than needing two separate files that could drift apart.
+// Rendered with renderToStaticMarkup (node environment, no jsdom). Both facts
+// states are covered here with vi.doMock and a fresh dynamic import per test,
+// since vi.mock's hoisting allows one module shape per file.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
@@ -88,10 +85,8 @@ describe("BuildPage - populated facts", () => {
   });
 });
 
-// No semicolon in any buildCopy.ts string VALUE. Same scope as
-// src/battle/scenes/punctuation.test.ts: the file's own
-// statement-terminating semicolons are code, not copy, and are never what
-// this checks.
+// No semicolon in any buildCopy.ts string value (statement semicolons are
+// code, not copy).
 describe("buildCopy.ts punctuation", () => {
   function stringLiterals(): string[] {
     const source = readFileSync(resolve(process.cwd(), "src/buildCopy.ts"), "utf8");

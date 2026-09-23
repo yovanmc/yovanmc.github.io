@@ -1,10 +1,8 @@
-// Alert Storm: boss 1's swarm state and mechanics.
+// Alert Storm: the swarm's state and mechanics.
 //
-// `BattleState` is imported type-only, so this module has no runtime
-// dependency on engine.ts's module-evaluation order; `nextRng` is imported as
-// a value, which is safe under the resulting cycle because it's a hoisted
-// `function` declaration in engine.ts, not a `const` arrow, and hoisted
-// functions are bound before either module's top-level code runs.
+// The engine.ts import cycle is safe: `BattleState` is type-only, and
+// `nextRng` is a hoisted function declaration, bound before either module's
+// top-level code runs. Keep it a `function`, not a `const` arrow.
 import type { BattleState } from "../engine";
 import { nextRng } from "../engine";
 
@@ -25,9 +23,8 @@ export interface AlertStormBoss {
   bats: Bat[];
 }
 
-/** Canonical definition lives in ../rushOrder (bootParams.ts needs it
- * without pulling this module's engine.ts cycle into the eagerly loaded
- * landing bundle); re-exported here for import sites. */
+/** Defined in ../rushOrder so bootParams.ts can import it without pulling
+ * the engine.ts cycle into the landing bundle. */
 export { ALERT_STORM_ID } from "../rushOrder";
 
 const VOLLEY_BASE = 7;
@@ -59,11 +56,8 @@ export function isScreamTurn(state: BattleState): boolean {
   return state.ctTurns > 0 && state.turn > 3 && state.turn % 3 === 1;
 }
 
-/** `BattleState.boss` is a discriminated union over the bosses. Every function
- * below this point is Alert-Storm-specific and is only ever invoked by
- * engine.ts's dispatch AFTER it has already branched on `boss.kind`, so this
- * narrows for the type checker without changing any runtime behavior (pure
- * accessor). */
+/** Narrows for the type checker. Everything below runs only after engine.ts
+ * has branched on `boss.kind`. */
 function bats(s: BattleState): Bat[] {
   return (s.boss as AlertStormBoss).bats;
 }
@@ -83,10 +77,8 @@ export function reshuffle(s: BattleState, reason: "fakeHit" | "screamEnd"): void
   s.events.push({ type: "reshuffle", reason });
 }
 
-/** Applies damage + damage/batDown events only — no reshuffle. Shared by the
- * single-target `damageBat` (which reshuffles per its own fake-hit rule) and
- * `fanOutHit` (which resolves every hit first, then fires at most one
- * reshuffle for the whole volley of hits). */
+/** Damage and events only, no reshuffle. `damageBat` reshuffles per hit;
+ * `fanOutHit` reshuffles at most once per volley. */
 function applyDamage(s: BattleState, batId: number, amount: number): void {
   const bat = bats(s).find((b) => b.id === batId)!;
   bat.hp = Math.max(0, bat.hp - amount);
@@ -103,12 +95,9 @@ export function damageBat(s: BattleState, batId: number, amount: number): void {
   if (!bat.real) reshuffle(s, "fakeHit");
 }
 
-/** Fan Out's AoE hit resolution: every LIVING bat takes `amount`, resolved
- * before any reshuffle fires. Nine chained fake-hit reshuffles (one per fake
- * in the swarm) would be noise and burn nine rng draws for nothing, so this
- * fires at most ONE reshuffle afterward — iff at least one hit landed on a
- * fake (dead or alive after the hit; matches `damageBat`'s own rule, which
- * doesn't distinguish either). */
+/** Every living bat takes `amount`, then at most one reshuffle, iff any hit
+ * landed on a fake (dead or alive after it, as in `damageBat`). One per fake
+ * would be noise and burn rng draws. */
 export function fanOutHit(s: BattleState, amount: number): void {
   const targets = bats(s).filter((b) => b.alive);
   let hitFake = false;

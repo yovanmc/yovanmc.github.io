@@ -1,7 +1,3 @@
-// Imposter Syndrome's scene module. Covers the two optional BossSceneModule
-// seams (stampOrigin, arenaFor), the mirrorOf facing fix (including a mirrored
-// overlay coordinate, not just a cell-count check), the CLONES composite
-// canvas, and the defensive banner.
 import { describe, expect, it } from "vitest";
 import { initBattle } from "../engine";
 import { erosionStage, IMPOSTER_ID, spawnImposter, type ImposterBoss } from "../bosses/imposter";
@@ -24,9 +20,8 @@ describe("mirrorOf - facing", () => {
   });
 
   it("mirrors an OVERLAY coordinate correctly, not just some cell (eyes() hardcodes cols 23/27)", () => {
-    // eyes(grid, 0) overlays [10,23,'T'] and [10,27,'T'] onto IMP_IDLE[0] at
-    // generation time - a naive off-by-one reverse would misplace them by
-    // one column and still pass a cell-count-only check.
+    // eyes() bakes [10,23] and [10,27] into IMP_IDLE[0]; an off-by-one
+    // reverse would misplace them and still pass a cell-count check.
     expect(IMP_IDLE[0][10][23]).toBe("T");
     expect(IMP_IDLE[0][10][27]).toBe("T");
     const mirrored = mirrorOf(IMP_IDLE[0]);
@@ -52,14 +47,12 @@ describe("stampOrigin - via imposterBatAnchor/imposterCursorAnchor, the shared-o
     const slot0 = imposterBatAnchor(clones, 0);
     const slot1 = imposterBatAnchor(clones, 1);
     const slot2 = imposterBatAnchor(clones, 2);
-    // three distinct homes
     expect(new Set([slot0[1], slot1[1], slot2[1]]).size).toBe(3);
     // evenly spaced by the +-20-col gap
     expect(slot1[1] - slot0[1]).toBe(20);
     expect(slot2[1] - slot1[1]).toBe(20);
-    // the MIDDLE slot lands exactly where a solo boss would: composeBoss's
-    // canvas and this anchor math both key off the SAME shifted stampOrigin,
-    // so they can't independently drift apart.
+    // The middle slot lands where a solo boss would; canvas and anchors share
+    // the same stampOrigin.
     expect(slot1).toEqual(imposterBatAnchor(nonClones, 0));
   });
 
@@ -92,19 +85,16 @@ describe("composeBoss", () => {
 
   it("a defeated boss selects the mirrored IMP_DIE frame via the shared deathFrame mapping", () => {
     const boss = fresh({ phase: "mirror", hp: 0 });
-    // deathFrame({}) === 0 (scenes/silentFailure.ts's own mapping)
+    // deathFrame({}) === 0
     expect(imposterScene.composeBoss(boss, false, 0, {})).toEqual(mirrorOf(IMP_DIE[0][0]));
     expect(imposterScene.composeBoss(boss, false, 0, { fall: 10, dither: 3 })).toEqual(mirrorOf(IMP_DIE[6][0]));
   });
 
-  // Slots 0/1/2 sit at local canvas columns 0/20/40: 48-wide frames on a
-  // 20-col gap, so they deliberately overlap. Slot 0's leftmost 20 columns and
-  // slot 2's rightmost 20 columns are the only canvas regions no OTHER slot's
-  // frame ever reaches, so they are the only ones a pixel-exact assertion can
-  // make regardless of paint order. They are used below instead of a full
-  // 48-col slice, which is order-dependent everywhere else thanks to the
-  // overlap, worst of all for the sandwiched middle slot.
-  const LEFT_EXCLUSIVE = [0, 20] as const; // slot 0's own local cols [0,20)
+  // Slots sit at canvas columns 0/20/40 and their 48-wide frames overlap.
+  // Only slot 0's leftmost 20 and slot 2's rightmost 20 columns are reached
+  // by no other slot, so only they can be asserted pixel-exact regardless of
+  // paint order.
+  const LEFT_EXCLUSIVE = [0, 20] as const;
   const RIGHT_EXCLUSIVE = [68, 88] as const; // slot 2's own local cols [28,48), i.e. canvas [68,88)
 
   function region(canvas: (string | null)[][], bounds: readonly [number, number]) {
@@ -118,11 +108,9 @@ describe("composeBoss", () => {
     expect(canvas.length).toBe(ROWS);
     expect(canvas[0].length).toBe(COLS + 40);
 
-    // slot 0 is REAL here - its exclusive left edge must be the real frame.
     const expectedReal = mirrorOf(IMP_IDLE[0]).map((row) => row.slice(0, 20));
     expect(region(canvas, LEFT_EXCLUSIVE)).toEqual(expectedReal);
-    // slot 2 is fake here (CLONE_VARIANTS[2] = GLITCH_A) - its exclusive
-    // right edge (its own local cols [28,48)) must be the glitch variant.
+    // slot 2 is fake here (CLONE_VARIANTS[2] = GLITCH_A)
     const expectedFake2 = mirrorOf(GLITCH_A).map((row) => row.slice(28, 48));
     expect(region(canvas, RIGHT_EXCLUSIVE)).toEqual(expectedFake2);
   });
@@ -257,11 +245,9 @@ describe("plate.footerFor - phase-aware targetable-slot count", () => {
     expect(imposterScene.plate.footerFor!(withBoss({ phase: "mirror", hp: 0 }))).toBe("0/1 TARGET");
   });
 
-  // Not a defensive corner: a killing blow never advances the phase (only the
-  // boss's own turn does, via tickPhase/advancePhase), and CLONES is the
-  // opening phase (spawnImposter). So a fast kill during CLONES is the
-  // ordinary outcome, and the plate keeps rendering this string through the
-  // IMP_DIE death-animation window, where the player can see it.
+  // Not a corner case: a kill never advances the phase and CLONES is the
+  // opening phase, so a fast kill shows this string through the IMP_DIE
+  // animation.
   it("CLONES + dead: 0/3, the ordinary fast-kill display during the opening phase (slots still exist, none targetable)", () => {
     expect(imposterScene.plate.footerFor!(withBoss({ phase: "clones", hp: 0 }))).toBe("0/3 TARGET");
   });

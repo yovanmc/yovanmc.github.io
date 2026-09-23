@@ -39,22 +39,12 @@ import { SWARM } from "../generated/bossAlertStorm";
 import { SR, SC, BOSS_AT, HERO_AT } from "../generated/battlefieldScene";
 import { battleExit, skipToWork } from "../landingCopy";
 
-/**
- * `BattleState.boss` is a discriminated union over the boss kinds.
- * This narrows to Alert Storm's own bat list for the type checker without
- * changing runtime behavior when the current fight isn't Alert Storm, the
- * same accessor-path carve as bosses/alertStorm.ts's own `bats()` helper.
- * Cascade's equivalent (`cascadeNodes` below) sits alongside it; every
- * targeting/float/plate helper below branches on `boss.kind` rather than
- * assuming Alert Storm, so this shell cannot crash against a fight whose
- * boss carries a different shape.
- */
+/** Alert Storm's bat list, or [] for any other boss, so the targeting,
+ * float and plate helpers below never crash on a different boss shape. */
 function alertBats(boss: BossState): Bat[] {
   if (boss.kind === "alert-storm") return boss.bats;
   if (boss.kind === CASCADE_ID) return [];
   if (boss.kind === SILENT_FAILURE_ID) return [];
-  // Imposter has no bat list of its own — same permanent empty-array
-  // contribution Silent Failure and Cascade each make here.
   if (boss.kind === IMPOSTER_ID) return [];
   return assertNever(boss);
 }
@@ -63,20 +53,13 @@ function cascadeNodes(boss: BossState): CascadeNode[] {
   if (boss.kind === CASCADE_ID) return boss.nodes;
   if (boss.kind === "alert-storm") return [];
   if (boss.kind === SILENT_FAILURE_ID) return [];
-  // Imposter has no node list of its own — same permanent empty-array
-  // contribution Silent Failure and Alert Storm each make here.
   if (boss.kind === IMPOSTER_ID) return [];
   return assertNever(boss);
 }
 
-/**
- * The Silent Failure's single static on-stage position, derived from
- * `PIECES` (bossSilentFailure.js's armor-piece boxes, the same generated
- * data scenes/silentFailure.ts's mote overlay reads) so this can't silently
- * drift from the actual art. Unlike Cascade's six per-node positions
- * (`nodeBox`), the armor never moves, so a single module-level bounding box
- * is enough — no per-frame lookup needed.
- */
+/** Silent Failure's one static position, derived from the generated armor
+ * pieces so it cannot drift from the art. The armor never moves, so one
+ * bounding box is enough. */
 const SF_ARMOR_BOX = SF_PIECES.reduce(
   (acc, [r1, , c1, c2]) => ({
     top: Math.min(acc.top, r1),
@@ -91,11 +74,10 @@ const MONO = "'JetBrains Mono',monospace";
 const SERIF = "'Marcellus',serif";
 
 /**
- * Battle renderer. The engine is the only rules authority; this component
- * composes the scene from the generated sprite primitives against engine
- * state and sequences the reels.
- * Composition contract: actor grids stamp TOP-LEFT-anchored, 1:1 cells,
- * swarm at BOSS_AT, hero at HERO_AT.
+ * Battle renderer. The engine is the only rules authority; this composes the
+ * scene from generated sprite primitives against engine state and sequences
+ * the reels. Actor grids stamp top-left-anchored, 1:1 cells, swarm at
+ * BOSS_AT, hero at HERO_AT.
  */
 
 interface FloatNum {
@@ -108,19 +90,14 @@ interface FloatNum {
   born: number;
 }
 
-// UiMode's literal set is identical to sceneGate.ts's ComposeGateMode by
-// construction (both name every state this component's
-// own `mode` can hold) — importing rather than re-declaring keeps the
-// predicate's input type and this component's actual state in lockstep, so
-// a future mode addition here can't silently desync from the gate.
+// Imported, not re-declared, so a new mode here cannot desync from the gate.
 type UiMode = ComposeGateMode;
 
 interface Props {
   seed: number;
   attempt?: number;
-  /** `boss=` capture key / FIGHT selection, forwarded straight to
-   * `initBattle` (`App.tsx`'s `battleBoot.boss` flows in here). Undefined
-   * falls back to Alert Storm, same as `initBattle` itself. */
+  /** `boss=` capture key / FIGHT selection, passed to `initBattle`. Undefined
+   * falls back to Alert Storm. */
   boss?: string;
   /** dev capture key: actions replayed through the engine before first render */
   replayActions?: BattleAction[];
@@ -183,14 +160,11 @@ export default function BattleScene(props: Props) {
   const [banner, setBanner] = useState("");
   const [descend, setDescend] = useState(true);
 
-  // ---- boss scene module + kit-derived command menu ----
   const scene = sceneFor(state.boss.kind);
   const commands = useMemo(
     () => commandsForKit(deriveKit(state.defeatedBosses)),
     [state.defeatedBosses],
   );
-  // The nested top/skills/spells view the panel renders, derived from the
-  // pure commandMenu.ts model.
   const view = useMemo(() => deriveMenuView(commands, menu.level), [commands, menu.level]);
   const currentCursor = menu.cursor[menu.level];
   const activeRow = view.rows[currentCursor];
@@ -202,42 +176,32 @@ export default function BattleScene(props: Props) {
   const stateRef = useRef({ mode, menu, pendingCmd, cursorBat, state, shown, commands });
   stateRef.current = { mode, menu, pendingCmd, cursorBat, state, shown, commands };
 
-  // The COMMAND panel is height-clamped and its ability list scrolls (see
-  // the `data-cmd-panel` block below), so the arrow-key cursor can move
-  // outside the visible scroll area. Keep the active row in view on every
-  // cursor move, including the wrap and level changes (each level keeps
-  // its own cursor, so a level switch must re-scroll too).
+  // The panel is height-clamped and its list scrolls, so keep the active row
+  // in view on every cursor move, including wraps and level changes (each
+  // level keeps its own cursor).
   const activeRowRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     activeRowRef.current?.scrollIntoView({ block: "nearest" });
   }, [menu.level, currentCursor]);
 
-  // Scroll affordance for all three menu levels.
-  // `overflowing` drives the bottom fade+chevron below; the effect is
-  // declared after `cmdPanelMaxHeight` (further down) since it's part of
-  // the dependency array.
+  // Drives the bottom fade and chevron. The effect sits below
+  // `cmdPanelMaxHeight`, which is in its dependency array.
   const scrollBodyRef = useRef<HTMLDivElement | null>(null);
   const [overflowing, setOverflowing] = useState(false);
 
-  // ---- geometry: contain-fit desktop, width-fit mobile ----
-  // The math lives in src/battle/layout.ts, a pure module the unit tests
-  // cover directly; this file only wires it into a useMemo.
+  // Contain-fit on desktop, width-fit on mobile (layout.ts).
   const { scale, stageW, stageH, stageLeft, stageTop } = useMemo(
     () => stageMetrics(vw, vh, isMobile),
     [vw, vh, isMobile],
   );
 
-  // Viewport-aware cap on the command panel (panelBudget.ts).
-  // `containerHeight` is `[data-battle]`'s own rendered height, which equals
-  // `vh` at every viewport this renders at, so `vh` is passed directly and
-  // no measured container value is needed in scope here.
+  // Viewport-aware cap on the command panel (panelBudget.ts). The
+  // container's height equals `vh` at every viewport, so `vh` is passed.
   const cmdPanelMaxHeight = useMemo(
     () => Math.round(menuPanelMaxHeight(vw, vh, vh, isMobile)),
     [vw, vh, isMobile],
   );
 
-  // Recompute whenever the body's content (level/rows) or the panel's own
-  // height budget could change.
   useEffect(() => {
     const el = scrollBodyRef.current;
     setOverflowing(!!el && el.scrollHeight > el.clientHeight + 0.5);
@@ -296,46 +260,26 @@ export default function BattleScene(props: Props) {
     const off = offRef.current;
     const octx = off.getContext("2d")!;
 
-    // `arenaFor?.(shown.boss)` reads `shown` (the animation-lagged copy),
-    // not the live `state`, so the stage-3 PURE station is what's on
-    // screen during the Imposter's death-animation window
-    // (`shouldComposeBoss` below keeps the boss layer alive through it).
-    // Boss modules that implement no `arenaFor` fall back to the scene's
-    // single static arena.
+    // Reads `shown` (animation-lagged), not `state`, so the stage-3 station
+    // stays on screen through the Imposter's death animation. Bosses without
+    // `arenaFor` use the scene's single static arena.
     const g = (scene.arenaFor?.(shown.boss) ?? scene.arena)[flutter].map((row) => row.slice());
     const screaming = isScreamTurn(shown) && shown.status === "active";
-    // Gate on `mode`, not `shown.status`. `shown.status` flips to "victory"
-    // at the very first animation step after a killing blow, BEFORE any
-    // death-escalation fx step fires and well before the victory overlay
-    // itself takes over, so gating on it would blank the boss layer at the
-    // instant of impact and leave the arena empty for the whole
-    // death-animation window (SIL_DIE, Alert Storm's fall/dither, Cascade's
-    // CAS_DIE would never render).
-    // `mode` stays "anim" through that entire window and only becomes
-    // "victory" once the overlay is actually up, so the boss layer keeps
-    // composing (still showing `shown.boss`, whose hp/phase already reflect
-    // the kill, feeding composeBoss's death-frame selection) right up to
-    // that point.
+    // Gate on `mode`, not `shown.status`: status flips to "victory" on the
+    // first animation step after a killing blow, which would blank the boss
+    // layer for the whole death animation. `mode` stays "anim" until the
+    // victory overlay is up.
     if (shouldComposeBoss({ descend, mode })) {
       const bossGrid = scene.composeBoss(shown.boss, screaming, flutter, swarmFx);
-      // Stamp at the boss module's own `stampOrigin` when it implements
-      // one (the Imposter's leftward clone spread), and at the bare
-      // `BOSS_AT` constant otherwise.
+      // Imposter's clone spread supplies its own origin; others use BOSS_AT.
       const bossOrigin = scene.stampOrigin?.(shown.boss) ?? BOSS_AT;
       stampGrid(g, bossGrid, bossOrigin[0], bossOrigin[1]);
     }
-    // Gold-hair remap "on every reel while active" (Conviction doubles
-    // every other ability's effects AND recolors the hero, persisting
-    // once cast) applies uniformly to whatever frame was already selected,
-    // idle or mid-cast. `hd` matches the idle frames' own headO exactly
-    // (IDLE[0]/[1] build at headO 0/1 — see heroBattle.js's buildFrame);
-    // active-reel frames use varying headO internally with no per-frame
-    // metadata exported, so `flutter` is a deliberate approximation there
-    // (cosmetic only, no test can assert pixel-perfect hair alignment
-    // against every reel frame).
-    // The DEBUFF cue (visual only, grants nothing mechanically) shows only
-    // at idle (no active reel) so it never fights an ability animation for
-    // the same frame slot.
+    // Conviction's gold-hair remap applies to whatever frame is selected,
+    // idle or mid-cast. `hd` matches the idle frames' headO exactly; reel
+    // frames vary headO with no exported metadata, so `flutter` approximates
+    // there (cosmetic). The DEBUFF cue shows only at idle so it never fights
+    // an ability animation for the frame.
     const heroBase = heroReel
       ? heroReel.frames[Math.min(heroFrame, heroReel.frames.length - 1)]
       : shown.heroMarked
@@ -358,7 +302,6 @@ export default function BattleScene(props: Props) {
     ctx.drawImage(off, 0, 0, cv.width, cv.height);
   }, [shown, flutter, swarmFx, heroReel, heroFrame, scene, descend, scale, mode]);
 
-  // ---- action sequencing ----
   const schedule = useCallback((steps: Step[]) => {
     for (const s of steps) timers.current.push(window.setTimeout(s.fn, s.at));
   }, []);
@@ -367,14 +310,9 @@ export default function BattleScene(props: Props) {
     setFloats((fs) => [...fs, { id: floatSeq++, text, color, r, c, born: performance.now() }]);
   }, []);
 
-  /** Float-position (damage/dot/mark numbers) and target-cursor anchor for a
-   * given target id. Cascade arm: NODES coordinates come from the
-   * generated bossCascade.js NODES export, same BOSS_AT anchor the
-   * swarm uses; `nodeBox` (scenes/cascadeCompose.ts) gives the node's actual
-   * on-stage footprint so the number lands centered above the node box
-   * regardless of which node it is (node 0's box is taller/wider — the "big"
-   * head node). Bob is irrelevant here (a float/cursor position, not a
-   * render pass), so this always reads the bob-0 box. */
+  /** Float (damage/dot/mark numbers) and cursor anchor for a target id.
+   * Cascade centers above the node's real footprint (`nodeBox`, bob 0);
+   * node 0 is larger than the rest. */
   const batCell = useCallback((s: BattleState, targetId: number): [number, number] => {
     if (s.boss.kind === CASCADE_ID) {
       const box = nodeBox(targetId, 0);
@@ -387,27 +325,19 @@ export default function BattleScene(props: Props) {
       return [BOSS_AT[0] + r, BOSS_AT[1] + c + 7];
     }
     if (s.boss.kind === SILENT_FAILURE_ID) {
-      // The real on-stage footprint: the armor's own bounding box
-      // (SF_ARMOR_BOX, derived from PIECES), top edge, mid column, the same
-      // "float above the box, centered" convention Cascade uses against
-      // `nodeBox`.
+      // Centered above the armor's bounding box, like Cascade's nodes.
       return [BOSS_AT[0] + SF_ARMOR_BOX.top, BOSS_AT[1] + SF_ARMOR_MID_COL];
     }
     if (s.boss.kind === IMPOSTER_ID) {
-      // The shared-origin contract: this computes from `imposterBatAnchor`,
-      // which internally keys off the exact same
-      // `stampOrigin` function `scenes/imposter.ts`'s `composeBoss` stamps
-      // its canvas at, so the float/cursor never targets art that isn't
-      // there. Three real homes during CLONES, one per slot.
+      // Keyed off the same `stampOrigin` composeBoss stamps at, so the float
+      // never targets art that isn't there. One home per slot during CLONES.
       return imposterBatAnchor(s.boss, targetId);
     }
     return assertNever(s.boss);
   }, []);
 
-  /** Target-cursor arrow anchor, a separate offset from `batCell`'s float
-   * placement (the arrow sits closer above the sprite than the damage
-   * number). The Cascade arm mirrors Alert Storm's formula against
-   * `nodeBox`. */
+  /** Target-cursor arrow anchor: sits closer above the sprite than the
+   * `batCell` float. */
   const cursorCell = useCallback((s: BattleState, targetId: number): [number, number] => {
     if (s.boss.kind === CASCADE_ID) {
       const box = nodeBox(targetId, 0);
@@ -420,15 +350,11 @@ export default function BattleScene(props: Props) {
       return [BOSS_AT[0] + r - 5, BOSS_AT[1] + c + 5];
     }
     if (s.boss.kind === SILENT_FAILURE_ID) {
-      // The cursor arrow sits above the armor's real bounding box (the same
-      // 5-row/2-col arrow offset Cascade's arm uses against its own box).
-      // This is the fight's ONE cursor home, vanished or not, so the boss
-      // stays selectable the whole fight.
+      // The fight's one cursor home, vanished or not, so the boss stays
+      // selectable the whole fight.
       return [BOSS_AT[0] + SF_ARMOR_BOX.top - 5, BOSS_AT[1] + SF_ARMOR_MID_COL - 2];
     }
     if (s.boss.kind === IMPOSTER_ID) {
-      // Same shared-origin contract as `batCell` above, through
-      // `imposterCursorAnchor` (a fixed offset from the float anchor).
       return imposterCursorAnchor(s.boss, targetId);
     }
     return assertNever(s.boss);
@@ -454,10 +380,8 @@ export default function BattleScene(props: Props) {
         debug: { frames: CAST, ms: CAST_MS },
         fo: { frames: FAN, ms: FAN_MS },
         rb: { frames: RBK, ms: RBK_MS },
-        // Every ability needs real frames here: ROOT/ROOT_MS and
-        // CONV/CONV_MS come from the generated heroBattle.js, because an
-        // empty frames/ms pair makes `Math.min(heroFrame, frames.length - 1)`
-        // evaluate to -1 and index `frames[-1]`.
+        // Every ability needs real frames: an empty pair makes
+        // `Math.min(heroFrame, frames.length - 1)` index `frames[-1]`.
         rc: { frames: ROOT, ms: ROOT_MS },
         conv: { frames: CONV, ms: CONV_MS },
       };
@@ -477,9 +401,8 @@ export default function BattleScene(props: Props) {
           for (const e of events) {
             if (e.type === "damage" || e.type === "dot") {
               const [r, c] = batCell(next, e.batId);
-              // A zero-amount damage event is the vanished-phase attack
-              // whiff (turn consumed, 0 damage, no +1 MP) — floating a
-              // literal "0" would read as a bug, not a deliberate miss.
+              // A zero-amount hit is the vanished whiff; a floating "0" would read
+              // as a bug.
               const text = e.type === "damage" && e.amount === 0 ? "MISS" : String(e.amount);
               pushFloat(text, e.type === "dot" ? "#c9a4ff" : "#ffe9a8", r, c);
             }
@@ -551,10 +474,8 @@ export default function BattleScene(props: Props) {
     [batCell, props, pushFloat, schedule],
   );
 
-  /** Living targets in cycle order. Alert Storm cycles left-to-right by swarm
-   * column; Cascade has no columns to sort by, so cycling by node id order is
-   * the ring order the pulse itself travels. Only `.id` is
-   * read by any caller below, so the two boss kinds share this return shape. */
+  /** Living targets in cycle order: Alert Storm by swarm column, Cascade by
+   * node id (the pulse's ring order). Callers read only `.id`. */
   const livingByColumn = useCallback((s: BattleState): { id: number }[] => {
     if (s.boss.kind === CASCADE_ID) {
       return cascadeNodes(s.boss).filter((n) => n.alive);
@@ -565,24 +486,19 @@ export default function BattleScene(props: Props) {
         .sort((a, b) => SWARM[a.pos][1] - SWARM[b.pos][1]);
     }
     if (s.boss.kind === SILENT_FAILURE_ID) {
-      // Single-entity case: livingTargets is [0] while alive, [] when dead —
-      // correct as-is (the armor stays selectable whether embodied or
-      // vanished; only battleReduce refuses the action).
+      // [0] while alive, [] when dead. The armor stays selectable while
+      // vanished; battleReduce refuses the action.
       return livingTargets(s.boss).map((id) => ({ id }));
     }
     if (s.boss.kind === IMPOSTER_ID) {
-      // [0,1,2] during CLONES (three targetable slots, per the
-      // targeting/rendering overlay), else just the single entity's
-      // [0] — same shape SF's own arm above returns.
+      // [0,1,2] during CLONES, else [0].
       return imposterLivingTargets(s.boss).map((id) => ({ id }));
     }
     return assertNever(s.boss);
   }, []);
 
-  /** Enter target mode for `cmd`. `cmd` is
-   * kept in `pendingCmd` so the keyboard/tap confirm sites in target mode
-   * (below) can look up which ability is being cast; the nested menu has no
-   * flat `cmdIdx` to index `commands` by. */
+  /** Enter target mode. `cmd` is kept in `pendingCmd` for the confirm
+   * sites; the nested menu has no flat index into `commands`. */
   const startTarget = useCallback(
     (cmd: AbilityCommand) => {
       setPendingCmd(cmd);
@@ -607,10 +523,8 @@ export default function BattleScene(props: Props) {
     [livingByColumn, props],
   );
 
-  /** Sound + mode/commit behavior for a `menuReduce` effect (the single
-   * shared helper). Shared by the stateRef-driven keyboard
-   * path (applyMenuInput, below) and the closure-driven row onClick (the
-   * command-panel JSX further down) so both stay in lockstep. */
+  /** Sound and mode/commit handling for a `menuReduce` effect, shared by the
+   * keyboard path and the row onClick so they stay in lockstep. */
   const applyEffect = useCallback(
     (effect: ReturnType<typeof menuReduce>["effect"]) => {
       switch (effect.type) {
@@ -641,10 +555,8 @@ export default function BattleScene(props: Props) {
     [props, startTarget, commit],
   );
 
-  /** Keyboard entry point: reads current menu/commands/mp off `stateRef`
-   * (the keydown listener effect below only resubscribes on a small,
-   * mostly-stable dependency list, so it must read live values through the
-   * ref rather than stale closures). */
+  /** Keyboard entry point. Reads live values off `stateRef`, since the
+   * keydown effect rarely resubscribes. */
   const applyMenuInput = useCallback(
     (input: MenuInput) => {
       const { menu: nextMenu, effect } = menuReduce(
@@ -693,8 +605,7 @@ export default function BattleScene(props: Props) {
       const m = stateRef.current.mode;
 
       if (m === "menu") {
-        // ArrowLeft is `back` ONLY inside a submenu (never an accidental
-        // pause at top).
+        // ArrowLeft is `back` only inside a submenu, never an accidental pause.
         if (k === "ArrowUp" || k === "ArrowDown") {
           applyMenuInput(k === "ArrowUp" ? "up" : "down");
         } else if (k === "Enter" || k === " " || k === "ArrowRight") {
@@ -736,14 +647,9 @@ export default function BattleScene(props: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [applyMenuInput, commit, cycleTarget, onForfeit, onVictory, props, retry]);
 
-  // ---- derived UI values ----
-  // Cascade has no single "real" boss entity to mask or reveal (six
-  // independent nodes, no fake/real identity), so the plate bar sums the
-  // living chain's HP/maxHp in place of Alert Storm's reveal-on-mark rule and
-  // never masks: nodes always show real HP.
-  // The dispatch over boss.kind is exhaustive with a never-typed default. A
-  // boolean shortcut here would let a new boss kind fall silently into the
-  // "alert storm" shape below with no compile error.
+  // Cascade has no real/fake identity, so its plate sums the living chain's
+  // HP and never masks. The switch is exhaustive with a never-typed default
+  // so a new boss kind cannot fall silently into the Alert Storm shape.
   let revealBoss: boolean;
   let livingCount: number;
   let plateHp: { hp: number; maxHp: number };
@@ -768,16 +674,9 @@ export default function BattleScene(props: Props) {
     cursorBatObj = cursorBat !== null ? bats.find((b) => b.id === cursorBat) : null;
     cursorNodeObj = null;
   } else if (state.boss.kind === SILENT_FAILURE_ID) {
-    // Single-entity case: HP always shown. The VANISHED/embodied swap is a
-    // plate-LABEL concern (labelFor), not this HP-bar-vs-hiddenLabel reveal
-    // flag.
-    // cursorNodeObj reuses Cascade's variable and branch rather than adding a
-    // third one, because this boss's display rule is IDENTICAL to Cascade's:
-    // no masking, HP shown as-is, regardless of alive/marked
-    // (cursorRead's cascade branch never checks either field). The literal
-    // below satisfies CascadeNode's shape structurally; it isn't a real
-    // cascade node, just the same read contract. The boss stays the
-    // cursor's one selectable target for the whole fight, embodied or vanished.
+    // HP always shown; VANISHED is a label concern (labelFor). Reuses
+    // Cascade's cursorNodeObj because the display rule is identical; the
+    // literal only satisfies CascadeNode's shape.
     revealBoss = true;
     livingCount = state.boss.hp > 0 ? 1 : 0;
     plateHp = { hp: state.boss.hp, maxHp: state.boss.maxHp };
@@ -787,13 +686,8 @@ export default function BattleScene(props: Props) {
         ? { id: SF_TARGET_ID, hp: state.boss.hp, maxHp: state.boss.maxHp, alive: state.boss.hp > 0, marked: state.boss.marked }
         : null;
   } else if (state.boss.kind === IMPOSTER_ID) {
-    // Real HP shown always: the puzzle is this boss's phases, not its HP,
-    // the same no-mask rule Cascade and the Silent Failure follow.
-    // cursorNodeObj reuses that structural shape (only `.id` is
-    // ever read below). `cursorBat` during CLONES is the clone slot
-    // (0/1/2), otherwise always 0; every slot reads the SAME single boss
-    // entity's hp/maxHp/marked, since clone slots have no HP of their own
-    // (they're a targeting/rendering overlay only).
+    // HP always shown: the puzzle is the phases. Clone slots have no HP, so
+    // every slot reads the one boss entity through cursorNodeObj.
     revealBoss = true;
     livingCount = state.boss.hp > 0 ? 1 : 0;
     plateHp = { hp: state.boss.hp, maxHp: state.boss.maxHp };
@@ -813,10 +707,8 @@ export default function BattleScene(props: Props) {
     : cursorNodeObj
       ? `${cursorNodeObj.hp}/${cursorNodeObj.maxHp}` // no masking
       : "";
-  // Thin wrapper over layout.ts's cellRect. Returns only {left, top}, not
-  // the full Rect, because a call site below spreads this whole object into
-  // an inline style (`...cellPx(...)`), where width/height would set CSS
-  // properties the element is not meant to carry.
+  // Only {left, top}: a call site spreads this into an inline style, where
+  // width/height would set properties the element must not carry.
   const cellPx = (r: number, c: number) => {
     const rect = cellRect({ scale, stageW, stageH, stageLeft, stageTop }, r, c);
     return { left: rect.left, top: rect.top };
@@ -1026,10 +918,8 @@ export default function BattleScene(props: Props) {
               flex: "0 0 auto",
             }}
           >
-            {/* At the top level the label reads "COMMAND"; in a submenu it is
-                a clickable/tappable "◂ TITLE" breadcrumb (the mobile back
-                affordance) that ascends via the same applyMenuInput("back")
-                the ArrowLeft binding uses. */}
+            {/* "COMMAND" at the top level; in a submenu a "◂ TITLE" breadcrumb
+                (the mobile back affordance) that ascends like ArrowLeft. */}
             <span
               role={mode === "menu" && view.title ? "button" : undefined}
               onClick={mode === "menu" && view.title ? () => applyMenuInput("back") : undefined}
@@ -1097,9 +987,8 @@ export default function BattleScene(props: Props) {
                   </div>
                 );
               })}
-              {/* Bottom fade + chevron scroll affordance, on any menu level
-                  whose rows overflow. Purely visual, pointer-events none so
-                  it never intercepts row clicks. */}
+              {/* Scroll affordance for overflowing rows. pointer-events none so it
+                  never intercepts row clicks. */}
               {overflowing && (
                 <div
                   style={{

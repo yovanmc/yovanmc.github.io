@@ -1,23 +1,20 @@
 // Canon extractor: design-lab assets are extracted verbatim, never retyped.
 //
-// Station source:
-//   docs/battle-prototypes/station-glass.html
+// Station source: docs/battle-prototypes/station-glass.html
 //
-// Transform contract (re-runnable byte-for-byte; verify mode re-runs it and diffs):
+// Transform (re-runnable byte-for-byte; verify mode re-runs it and diffs):
 //   1. Take the single <script> block of station-glass.html.
-//   2. Strip the two trailing DOM writes (everything from the line containing
+//   2. Strip the two trailing DOM writes (from the line containing
 //      `document.getElementById('station')` onward).
-//   3. Wrap the remaining body, verbatim and untouched, as
-//      `buildStationCanon(idSuffix = ""): string`, appending the id-suffix rename
-//      (fcL/skL/wtL, needed when two station copies share one document) and a full
-//      <svg viewBox="-510 -510 1020 1020"> return wrapper.
-//   4. Emit src/generated/stationCanon.js under a generated header ("verbatim"
-//      means verbatim BELOW the header; strict tsconfig cannot compile the lab JS,
-//      so the module is .js with a hand-written .d.ts).
+//   3. Wrap the body, untouched, as `buildStationCanon(idSuffix = ""): string`,
+//      adding the id-suffix rename (fcL/skL/wtL, needed when two station copies
+//      share one document) and an <svg viewBox="-510 -510 1020 1020"> wrapper.
+//   4. Emit src/generated/stationCanon.js under a generated header. It is .js
+//      with a hand-written .d.ts because strict tsconfig cannot compile the lab JS.
 //
-// Drift guard (3-copy problem): dive-intro.html embeds its own hand-wrapped copy of
-// the station builder (`buildStationString`). Verify mode also normalizes that body
-// and diffs it against the canon body, so the lab copy cannot drift silently.
+// Drift guard: dive-intro.html embeds its own hand-wrapped copy of the station
+// builder (`buildStationString`). Verify mode normalizes that body and diffs it
+// against the canon body.
 //
 // Usage:  node tools/extract-canon.mjs           (regenerate)
 //         node tools/extract-canon.mjs --verify  (diff only; exit 1 on drift)
@@ -44,7 +41,7 @@ const OUT_CASCADE = resolve(root, "src/generated/bossCascade.js");
 const OUT_SF = resolve(root, "src/generated/bossSilentFailure.js");
 const OUT_IMP = resolve(root, "src/generated/bossImposter.js");
 
-// Every symbol the dive lab's pure block declares — all exported, no cherry-picking.
+// Every symbol the dive lab's pure block declares, all exported.
 const TIMELINE_EXPORTS = [
   "PAL", "SPR_HERO", "STAGE_W", "STAGE_H", "SCX", "SCY",
   "T_CUT", "FLIP0", "FLIP1", "T_TOUCH", "RV0", "RV1", "RV_MAX",
@@ -87,9 +84,8 @@ return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-510 -510 1020 1020" wi
 `;
 }
 
-// Normalize a builder body for the lab-copy drift diff: strip blank lines and
-// trailing whitespace so wrapper-shape differences (function vs top-level) don't
-// mask or fake real drift.
+// Strips blank lines and trailing whitespace so wrapper-shape differences
+// (function vs top-level) neither mask nor fake drift.
 function normalize(s) {
   return s
     .split("\n")
@@ -112,23 +108,20 @@ function extractTimelineBody() {
   return m[1].replace(/\s+$/, "");
 }
 
-// ---- Battle extractions ----
+// Battle extractions: two-anchor slices, verbatim below their headers.
 //
-// Three two-anchor slices, verbatim below their headers. PAL ownership: exactly one
-// module (diveTimeline.js) EXPORTS PAL; hero/battlefield slices keep their verbatim
-// local `const PAL` and the appended footer re-exports diveTimeline's (legal ES:
-// a re-export creates no local binding, so no collision). The PAL-equality guard
-// below asserts all four lab palettes stay value-identical.
+// Only diveTimeline.js exports PAL. The hero/battlefield slices keep their
+// verbatim local `const PAL` and the footer re-exports diveTimeline's (a
+// re-export creates no local binding). The PAL-equality guard below keeps all
+// four lab palettes value-identical.
 //
-// The boss slice ends BEFORE `function drawCrop`: drawCrop/drawGrid (lab lines
-// 622-640) reference PAL/ROWS/COLS from the lab's embedded-hero half, outside the
-// slice, so they would throw on call. Lines 374-621 are self-contained. The lab's
-// monolithic stormOf/STORM_* reels ride along inertly (verbatim slice, never
-// carved); the renderer composes the swarm from per-bat primitives instead.
+// The boss slice ends before `function drawCrop`: drawCrop/drawGrid reference
+// PAL/ROWS/COLS from the lab's embedded-hero half, outside the slice, and would
+// throw. The lab's stormOf/STORM_* reels ride along unused; the renderer
+// composes the swarm from per-bat primitives.
 //
-// The boss lab's embedded hero copy (its first half) is an older scale reference
-// that no longer matches the hero art this extractor emits. It is never extracted,
-// so it gets no drift guard.
+// The boss lab's embedded hero copy is an older scale reference that does not
+// match the emitted hero art. It is never extracted, so it has no drift guard.
 
 const HERO_EXPORTS = [
   "ROWS", "COLS", "BX", "buildFrame",
@@ -159,11 +152,9 @@ const BF_EXPORTS = [
   "varAS", "varCC", "varSF", "corruptGlass", "glitchScene", "varIS", "erosionStage",
 ];
 
-// Cascade slice: start `const EROWS`, end before `function drawGrid`. The lab's
-// own draft reels (draftA/B/C, DR_*, PATH, NODES) ride along inertly (never
-// carved out of a verbatim slice), same as the alert-storm boss slice's
-// OPT_A/B/C. Every top-level declaration in the slice is exported, no
-// cherry-picking (same policy as TIMELINE_EXPORTS/HERO_EXPORTS).
+// Cascade slice: from `const EROWS` to before `function drawGrid`. The lab's
+// draft reels (draftA/B/C, DR_*, PATH, NODES) ride along unused. Every
+// top-level declaration is exported.
 const CASCADE_EXPORTS = [
   "EROWS", "ECOLS", "newG", "eP", "eR", "eCarve", "eOutline",
   "PATH", "draftA", "NODES", "draftB", "draftC", "DR_A", "DR_B", "DR_C",
@@ -174,12 +165,10 @@ const CASCADE_EXPORTS = [
   "cascadeDark", "cascadeAshes", "CAS_DIE",
 ];
 
-// Silent Failure slice: start `const EROWS`, end before `function drawGrid`
-// (boss-silent-failure.html design lab, anchors at lines 372/689, slice =
-// 372-688 inclusive). `buildSilAtk()` is invoked INSIDE the slice (line 670)
-// after its PIECES (648) / pieceShift (659) dependencies, so no reordering is
-// needed. Every top-level declaration in the slice is exported, no
-// cherry-picking (same policy as CASCADE_EXPORTS).
+// Silent Failure slice: from `const EROWS` to before `function drawGrid`.
+// `buildSilAtk()` runs inside the slice after its PIECES/pieceShift
+// dependencies, so no reordering is needed. Every top-level declaration is
+// exported.
 const SILENT_FAILURE_EXPORTS = [
   "EROWS", "ECOLS", "newG", "eP", "eR", "eCarve", "eOutline", "eDither",
   "draftA", "draftB", "draftC", "DRAFT_A", "DRAFT_B", "DRAFT_C",
@@ -190,24 +179,18 @@ const SILENT_FAILURE_EXPORTS = [
   "PIECES", "pieceShift", "SEP_MOVES", "FALL_MOVES", "silentHeap", "SIL_DIE",
 ];
 
-// Imposter Syndrome slice: start `function remapOf`, end before `function
-// drawGrid` (boss-imposter-syndrome.html design lab, anchors at lines
-// 372/445, file 469 lines). This is the one slice that is not
-// self-contained: remapOf recolors the HERO's own IDLE/ATK frames (the
-// "stolen technique" effect), so the slice free-references six hero symbols
-// instead of declaring its own enemy-grid primitives. Every top-level
-// declaration in the slice is exported, no cherry-picking (same policy as
-// CASCADE_EXPORTS/SILENT_FAILURE_EXPORTS).
+// Imposter Syndrome slice: from `function remapOf` to before `function
+// drawGrid`. The one slice that is not self-contained: remapOf recolors the
+// hero's own IDLE/ATK frames, so it references six hero symbols. Every
+// top-level declaration is exported.
 const IMPOSTER_EXPORTS = [
   "remapOf", "IMPOSTER_MAP", "eyes", "IMP_IDLE", "IMP_SLASH", "glitchOf",
   "GLITCH_A", "GLITCH_B", "IMP_REEL", "IMP_ATK", "IMP_HIT", "hDither", "VOID", "IMP_DIE",
 ];
 
-// The only six identifiers the imposter slice references that it does not
-// itself declare, measured against the slice above with comments stripped.
-// Any other free identifier, or a missing one, means the slice's anchors
-// moved and this list needs re-deriving rather than silently padding out:
-// importing more than what is actually free just hides real drift.
+// The only identifiers the imposter slice references without declaring
+// (comments stripped). Any change means the anchors moved: re-derive the list
+// rather than padding it, since extra imports hide real drift.
 const IMPOSTER_HERO_IMPORTS = ["IDLE", "ATK", "overlay", "flashOf", "ROWS", "COLS"];
 
 // Two-anchor slice; the cut lands at the START of the line holding endAnchor.
@@ -323,14 +306,14 @@ const generatedImp = buildImposterModule(
   sliceBetween(impHtml, "function remapOf", "function drawGrid", "boss-imposter-syndrome.html"),
 );
 
-// Drift guard first — the lab's embedded copy must match canon regardless of mode.
+// Drift guard first: the lab's embedded copy must match canon in either mode.
 const diveBody = extractDiveStationBody();
 if (normalize(diveBody) !== normalize(body)) {
   fail("DRIFT: dive-intro.html's embedded station copy no longer matches station-glass.html canon");
 }
 
-// PAL-equality guard: all four lab palettes must stay value-identical
-// (diveTimeline.js — the one exporter — is itself byte-guarded against dive-intro.html).
+// All four lab palettes must stay value-identical (diveTimeline.js, the one
+// exporter, is itself byte-guarded against dive-intro.html).
 const palRef = canonicalJson(parsePal(readLf(DIVE_LAB), "dive-intro.html"));
 for (const [html, name] of [
   [heroHtml, "hero-battle.html"],

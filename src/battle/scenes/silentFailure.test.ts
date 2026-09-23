@@ -1,10 +1,5 @@
-// The Silent Failure's scene module. Monolithic reels (single boss, no
-// per-entity state): SIL_BODY/SIL_EMPTY selected by phase, SIL_DIE once
-// defeated (forceBodyForDeath covers why that is still correct for a
-// vanished-phase DoT kill), SIL_ATK on the vanished-phase ambush via the
-// shell's existing fx.ripple signal, the same field Alert Storm's own
-// boss-volley animation drives. SIL_HIT has no fx signal to key off and stays
-// unwired; see composeBoss's own doc comment.
+// The Silent Failure's scene module: SIL_BODY/SIL_EMPTY by phase, SIL_DIE
+// once defeated, SIL_ATK on the ambush via fx.ripple.
 import { describe, expect, it } from "vitest";
 import { battleReduce, initBattle } from "../engine";
 import type { BattleState } from "../engine";
@@ -79,8 +74,7 @@ describe("silentFailureScene.composeBoss", () => {
       0,
       {},
     );
-    // fx={} is deathFrame's "no signal yet" case: frame 0, the boss just
-    // died and is still whole, not the sparse terminal frame.
+    // fx={} is frame 0: the boss just died and is still whole.
     expect(gEmbodiedDeath).toEqual(SIL_DIE[0][0]);
     expect(gVanishedDeath).toEqual(SIL_DIE[0][0]);
   });
@@ -156,8 +150,8 @@ describe("moteOverlay anchoring (uses PIECES[0], the helmet box, so motes read a
 
 describe("composeBoss reachability: a DoT kill while vanished has a real render path", () => {
   it("a Silent Failure killed by a DoT while vanished reaches composeBoss with forceBodyForDeath true, and composeBoss selects SIL_DIE for it", () => {
-    // Drives battleReduce rather than a hand-built boss, so this proves the
-    // ENGINE's output actually reaches this SCENE function end to end.
+    // Drives battleReduce, proving the engine's output reaches this scene
+    // function end to end.
     const base = initBattle({ seed: 42, defeatedBosses: ["alert-storm", "cascade"] });
     const boss: SilentFailureBoss = {
       ...spawnSilentFailure(),
@@ -172,9 +166,8 @@ describe("composeBoss reachability: a DoT kill while vanished has a real render 
     expect(s1.boss.hp).toBe(0);
     expect(s1.boss.forceBodyForDeath).toBe(true);
 
-    // fx={} at the moment of death is deathFrame's frame-0 case; this test
-    // checks reachability at this instant, not the specific frame index
-    // (that is deathFrame's own describe block below).
+    // Checks reachability at the instant of death, not the frame index
+    // (deathFrame's own tests cover that).
     const g = silentFailureScene.composeBoss(s1.boss, false, 0, {});
     expect(g).toEqual(SIL_DIE[0][0]);
   });

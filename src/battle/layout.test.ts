@@ -1,7 +1,5 @@
-// Coverage for the pure stage/panel geometry in layout.ts, which mirrors
-// BattleScene.tsx's inline geometry. The math lives in a `.ts` module so it is
-// matched by vitest.config.ts's `src/battle/**/*.ts` coverage globs; `.tsx`
-// files are not.
+// Pure stage/panel geometry. It lives in a `.ts` module because the coverage
+// globs match `src/battle/**/*.ts`, not `.tsx`.
 import { describe, expect, it } from "vitest";
 import {
   cellRect,
@@ -27,22 +25,19 @@ import type { BossState } from "./engine";
 
 const identityDraw = (r: number) => r;
 
-/** Mirrors scenes/imposter.test.ts's own `fresh`, duplicated here rather than
- * importing a .test.ts file across modules. */
+/** Same as scenes/imposter.test.ts's `fresh`; test files do not import each
+ * other. */
 function fresh(overrides: Partial<ImposterBoss> = {}): ImposterBoss {
   return { ...spawnImposter(0, identityDraw).boss, ...overrides };
 }
 
 describe("stageMetrics", () => {
-  // Hand-computed expectations: the correctness oracle, independent of the
-  // implementation and of the DOM. toBeCloseTo, not toBe, because 1440x720's
-  // stageTop evaluates to 57.60000000000002 in IEEE doubles.
+  // Hand-computed expectations, independent of the implementation. toBeCloseTo
+  // because 1440x720's stageTop is 57.60000000000002 in IEEE doubles.
   it.each([
     { vw: 1440, vh: 900, isMobile: false, scale: 4.5, stageW: 1152, stageH: 648, stageLeft: 144, stageTop: 63 },
     { vw: 1440, vh: 720, isMobile: false, scale: 3.5, stageW: 896, stageH: 504, stageLeft: 272, stageTop: 57.6 },
     // Drives the Math.max(2, ...) scale clamp (raw floor(fit*2)/2 = 1.5).
-    // Math.max is a function call, not an instrumented branch, so this case
-    // contributes nothing to the branch count; it is here for correctness.
     { vw: 1280, vh: 360, isMobile: false, scale: 2, stageW: 512, stageH: 288, stageLeft: 384, stageTop: 10.8 },
     // Drives the Math.max(8, ...) stageTop floor.
     { vw: 1280, vh: 340, isMobile: false, scale: 2, stageW: 512, stageH: 288, stageLeft: 384, stageTop: 8 },
@@ -62,11 +57,9 @@ describe("stageMetrics", () => {
     },
   );
 
-  // A DOM cross-check, deliberately separate from the hand-computed cases
-  // above: it only proves this module and the live app agree, not that either
-  // is correct. ±0.5px tolerance because browser layout snaps to 1/64 CSS px
-  // (1440x720's container-relative canvas left measures 57.59375 against the
-  // exact 57.6 arithmetic value, a real subpixel snap, not flakiness).
+  // DOM cross-check: proves only that this module and the live app agree.
+  // ±0.5px because browser layout snaps to 1/64 CSS px (57.59375 measured
+  // against the exact 57.6).
   it("agrees with real headless-Edge measurements at every measured viewport", () => {
     for (const row of MEASURED_LAYOUT) {
       const m = stageMetrics(row.vw, row.vh, row.isMobile);
@@ -129,9 +122,8 @@ describe("gridRect", () => {
 });
 
 describe("rectsIntersect", () => {
-  // Full truth table: each of the four AABB conjuncts must independently
-  // evaluate false at least once (v8 branch coverage), plus one true
-  // overlap. a is fixed at {0,0,10,10} throughout except where noted.
+  // Each of the four AABB conjuncts must evaluate false at least once (branch
+  // coverage), plus one true overlap. `a` is fixed unless noted.
   const a = { left: 0, top: 0, width: 10, height: 10 };
 
   it("false: b entirely right of a (with a gap)", () => {
@@ -168,23 +160,14 @@ describe("rectsIntersect", () => {
 });
 
 describe("clip invariant: leftmost clone and hero vs COMMAND panel", () => {
-  // At every swept viewport, the leftmost clone's painted rect must not
-  // intersect the COMMAND panel rect. Both rects are derived through the REAL
-  // public seams (stampOrigin/composeBoss), never from hardcoded numbers, so
-  // any change to the geometry is picked up automatically.
+  // At every swept viewport, neither the leftmost clone's painted rect nor the
+  // hero's (`IDLE[0]` at `HERO_AT`; the panel can clip his legs at 360x640) may
+  // intersect the COMMAND panel. Both come from the real public seams, never
+  // hardcoded numbers.
   //
-  // The hero is guarded the same way: the panel can clip the hero's legs at
-  // 360x640, not just the clones. `IDLE[0]` is the same public seam
-  // BattleScene.tsx reads for the hero's idle pose (`IDLE[flutter]`, its
-  // `heroBase`), stamped at the real `HERO_AT` anchor, never a hardcoded rect.
-  //
-  // One parameterized case per row rather than a single test looping every
-  // row: an internal loop stops at the first failing assertion and so reports
-  // only the first bad viewport, while a case per row reports them all.
-  //
-  // boss/stampOrigin/grid/heroGrid are viewport-independent (CLONES-phase
-  // composition and the hero's idle pose do not vary by viewport), so they are
-  // computed once here rather than per row, still through the same seams.
+  // One case per viewport, not one looping test, so every bad viewport is
+  // reported, not just the first. The composition is viewport-independent, so
+  // it is computed once here.
   const boss = fresh({ phase: "clones" });
   const [r0, c0] = imposterScene.stampOrigin!(boss);
   const grid = imposterScene.composeBoss(boss, false, 0, {});
@@ -196,9 +179,8 @@ describe("clip invariant: leftmost clone and hero vs COMMAND panel", () => {
       const m = stageMetrics(row.vw, row.vh, row.isMobile);
       const clone = gridRect(m, r0, c0, grid)!;
       const panel = commandPanelRect(row.vw, row.containerHeight, row.isMobile, row.panelHeight);
-      // AABB overlap depth on each axis, independent of rectsIntersect's
-      // strict-inequality convention. It only feeds the failure message, so
-      // the assertion still checks the boolean, not the overlap amount.
+      // Overlap depth per axis, for the failure message only; the assertion
+      // checks the boolean.
       const overlapX = Math.min(clone.left + clone.width, panel.left + panel.width) - Math.max(clone.left, panel.left);
       const overlapY = Math.min(clone.top + clone.height, panel.top + panel.height) - Math.max(clone.top, panel.top);
       expect(
@@ -227,10 +209,9 @@ describe("clip invariant: leftmost clone and hero vs COMMAND panel", () => {
 describe("panelMaxHeight unit cases", () => {
   // Desktop probe: commandPanelRect(vw, containerHeight, false, 1) -> left 38,
   // width 262, top = containerHeight - 38 - 1. bottomOffset is always 38 on
-  // this arm regardless of panelHeight (the probe-then-subtract trick).
+  // this arm (the probe-then-subtract trick).
   it("an actor entirely clear of the panel's x-band is ignored (ceiling wins)", () => {
-    // Panel x-band is [38, 300) at 1440x900 desktop. This actor sits to the
-    // right of it entirely (left 500), so it must not constrain the budget.
+    // The panel x-band is [38, 300) at 1440x900; this actor sits right of it.
     const clearActor = { left: 500, top: 0, width: 50, height: 900 };
     expect(panelMaxHeight(1440, 900, false, [clearActor])).toBe(MENU_PANEL_CEILING);
   });
@@ -240,15 +221,13 @@ describe("panelMaxHeight unit cases", () => {
   });
 
   it("result is never negative even when an actor overlaps the panel's whole x-band down to the floor", () => {
-    // Actor spans the full panel x-band and reaches all the way to the
-    // container's bottom edge, the tightest possible squeeze.
+    // Spans the whole x-band down to the container bottom: the tightest squeeze.
     const floorActor = { left: 0, top: 0, width: 1440, height: 900 };
     expect(panelMaxHeight(1440, 900, false, [floorActor])).toBe(0);
   });
 
   it("an overlapping actor above the panel constrains the budget below the ceiling", () => {
-    // Actor bottom edge at y=700, well above the container's bottom (900), so
-    // budget = containerHeight - bottomOffset(38) - actorBottom(700) = 162.
+    // Bottom at y=700, so budget = 900 - 38 - 700 = 162.
     const actor = { left: 38, top: 650, width: 262, height: 50 };
     expect(panelMaxHeight(1440, 900, false, [actor])).toBe(162);
   });
@@ -264,13 +243,10 @@ describe("commandPanelRect", () => {
   });
 });
 
-// The generated fixture carries a per-level `levels.{top,skills,spells}`
-// breakdown, walked across every cursor position within each level with the
-// max kept: panel height is cursor-dependent, since the footer renders the
-// active row's description and long ones wrap to a second line.
+// The fixture's per-level heights are the max over every cursor position:
+// the footer shows the active row's description, and long ones wrap.
 describe("rendered panel height honored at every measured viewport", () => {
-  // ±0.5 for the known 1/64-px browser snap, the same tolerance the
-  // stageMetrics DOM cross-check uses.
+  // ±0.5 for the 1/64-px browser snap.
   it.each(MEASURED_LAYOUT)("$vw x $vh — panelHeight (max over levels) <= menuPanelMaxHeight + 0.5", (row) => {
     const budget = menuPanelMaxHeight(row.vw, row.vh, row.containerHeight, row.isMobile);
     expect(row.panelHeight, `${row.vw}x${row.vh}: panelHeight=${row.panelHeight} budget=${budget}`).toBeLessThanOrEqual(
@@ -280,9 +256,8 @@ describe("rendered panel height honored at every measured viewport", () => {
 });
 
 describe("scroll acceptance", () => {
-  // Both directions are load-bearing: the "nothing else scrolls anywhere" half
-  // is what catches a compaction regression leaking scroll onto a real
-  // viewport, so this is NOT weakened to a one-directional check.
+  // Both directions matter: "nothing else scrolls" is what catches a
+  // compaction regression, so this stays an exact-set check.
   it("the scrollable set is EXACTLY {(800x600,top), (800x600,skills), (800x600,spells)}", () => {
     const actual = new Set<string>();
     for (const row of MEASURED_LAYOUT) {
@@ -296,10 +271,8 @@ describe("scroll acceptance", () => {
 });
 
 describe("per-boss clip invariant", () => {
-  // The actor set is re-derived here rather than imported from panelBudget.ts's
-  // own WORST_BOSSES, the same way panelBudget.test.ts's ALL_ACTORS does it:
-  // the test checks the fixture's panelHeight against the same public seams
-  // panelBudget.ts uses instead of trusting its internals.
+  // Re-derived rather than imported from panelBudget.ts's WORST_BOSSES, so the
+  // check goes through the public seams, not panelBudget's internals.
   const ALL_ACTORS: { label: string; boss: BossState }[] = [
     { label: "alertStorm", boss: spawnAlertStorm(0, identityDraw).boss },
     { label: "cascade", boss: spawnCascade() },

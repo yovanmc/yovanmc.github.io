@@ -1,35 +1,21 @@
 // CDP-over-headless-Edge measurement and capture rig for the battle screen.
-// Measures all three command-menu levels (top/skills/spells), walking every
-// cursor position within each level and keeping the max panel height per
-// level: panel height is cursor-dependent, because the footer renders the
-// active row's description and a long one wraps to a second line, so the
-// landing cursor alone reports a best case rather than the worst case a
-// player can actually hit.
+// Walks every cursor position in each command-menu level (top/skills/spells)
+// and keeps the max panel height: the footer shows the active row's
+// description and a long one wraps, so the landing cursor is a best case.
 //
-// Why CDP, not a browser automation pane, not `msedge --screenshot`:
-//   - A pane's resize does not fire a page `resize` event, so App.tsx's w/h
-//     state (only updated from the real `resize` listener, App.tsx:516-521)
-//     would keep stale desktop values at a mobile viewport.
-//     CDP's Emulation.setDeviceMetricsOverride changes the ACTUAL viewport
-//     before first paint, so App.tsx's initial useState(window.innerWidth)
-//     already reads the right numbers with no resize event needed at all.
-//   - `--headless=new` + the `--screenshot` CLI flag writes no PNG on this
-//     machine; CDP's Page.captureScreenshot sidesteps that flag entirely.
-//   - The battle is a single <canvas>, so pixels are the only visual evidence
-//     available for comparing renders.
+// Why CDP:
+//   - A pane resize fires no `resize` event, so App.tsx's w/h state would stay
+//     at desktop values. Emulation.setDeviceMetricsOverride sets the real
+//     viewport before first paint, so the initial useState reads it.
+//   - `--headless=new` with `--screenshot` writes no PNG on this machine.
+//   - The battle is one <canvas>, so pixels are the only visual evidence.
 //
-// CDP key-name note: always dispatch the full key name
-// ("ArrowDown"/"Enter"/"Escape"), never a short form like "Down"/"Return".
-// Short forms have been observed to produce an EMPTY `e.key` on this machine
-// when replayed through some automation surfaces, silently dropping the
-// keystroke. This rig uses full names throughout.
+// Always dispatch full key names ("ArrowDown", "Enter", "Escape"). Short forms
+// like "Down" can produce an empty `e.key` and silently drop the keystroke.
 //
-// Node-version note: this machine runs Node 20.13.1, where the global
-// WebSocket is undefined unless `--experimental-websocket` is passed; CI
-// pins Node 22, which has it natively and would error on an unknown flag in
-// some Node versions, so the flag is never hardcoded into the npm script.
-// This file re-execs itself with the flag ONLY when the global is missing,
-// which makes it correct on both.
+// Node 20 lacks a global WebSocket without `--experimental-websocket`, and
+// some Node versions reject that flag, so it is not in the npm script: this
+// file re-execs itself with the flag only when the global is missing.
 import { spawn, spawnSync, execSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
@@ -49,20 +35,16 @@ if (typeof WebSocket === "undefined") {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const EDGE_PATH = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 
-// Output root, chosen per run. This rig used to hardcode a single output
-// directory, which meant a later run silently overwrote an earlier run's
-// baseline frames and measured.json. Pass the docs/battle-prototypes/<dir>
-// name to write into as argv[2]; keep the default below pointing at the
-// directory currently in use, never at one whose captures still matter.
+// Output dir name under docs/battle-prototypes/, as argv[2], so a run never
+// overwrites another run's baseline frames and measured.json. Keep the
+// default pointing at the directory currently in use.
 const MILESTONE_DIR = process.argv[2] || process.env.MEASURE_MILESTONE_DIR || "m12-menu";
 const OUT_DIR = resolve(root, "docs/battle-prototypes", MILESTONE_DIR);
 const MEASURED_JSON = resolve(OUT_DIR, "measured.json");
 const FIXTURE_TS = resolve(root, "src/battle/__fixtures__/measuredLayout.ts");
 
-// Optional before/after capture-label subdirectory, for when a rig run
-// happens BEFORE a fix lands and needs a second AFTER pass to compare
-// against. Output goes flat into OUT_DIR by default; pass "before" or
-// "after" as argv[3] to opt into the subdirectory scheme instead.
+// Optional argv[3] "before" or "after" writes into that subdirectory, for
+// comparing a run before and after a change.
 const CAPTURE_LABEL = process.argv[3] === "before" || process.argv[3] === "after" ? process.argv[3] : null;
 const FRAMES_DIR = CAPTURE_LABEL ? resolve(OUT_DIR, CAPTURE_LABEL) : OUT_DIR;
 
@@ -87,23 +69,17 @@ const VIEWPORTS = [
   { vw: 360, vh: 640 },
 ];
 
-// Fixed row counts for the full 8-ability kit (the boot URL below unlocks all
-// of them). top = Attack/Skills/Spells (always 3); skills = Critical
-// Thinking/Power Through/Debug (3); spells = Fan Out/Rollback/Root
-// Cause/Conviction (4). If a kit change makes this wrong, the rig's own
-// data-cmd-level mismatch check (below) fails loudly rather than silently
-// walking the wrong number of rows.
+// Row counts for the full 8-ability kit the boot URL unlocks. A kit change
+// that breaks these fails the data-cmd-level check below instead of walking
+// the wrong number of rows.
 const LEVEL_ROW_COUNTS = { top: 3, skills: 3, spells: 4 };
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Bind to port 0 to let the OS pick a free ephemeral port, then release it.
- * Used for BOTH the CDP remote-debugging port and letting vite pick its own
- * dev-server port from stdout. This function only serves the CDP port; the
- * dev server's actual bound port is read from its own stdout rather than
- * assumed to be 5173. */
+/** Binds port 0 so the OS picks a free port, then releases it. For the CDP
+ * port; the dev server's port is read from its stdout. */
 function freePort() {
   return new Promise((res, rej) => {
     const srv = createServer();
@@ -117,11 +93,8 @@ function freePort() {
 
 function startDevServer() {
   return new Promise((resolvePort, reject) => {
-    // Invoke vite's own JS entry point directly with `node`, bypassing the
-    // node_modules/.bin/vite(.cmd) shim entirely: on Windows, spawn() without
-    // shell:true cannot exec a .cmd shim (EINVAL), and shell:true would add
-    // a cmd.exe layer between us and the real vite/node process, complicating
-    // clean-shutdown PID tracking for no benefit.
+    // Run vite's JS entry with `node`: on Windows spawn() cannot exec the .cmd
+    // shim without shell:true, and a cmd.exe layer complicates PID cleanup.
     const viteEntry = resolve(root, "node_modules/vite/bin/vite.js");
     const proc = spawn(process.execPath, [viteEntry], { cwd: root });
     let buf = "";
@@ -187,10 +160,8 @@ async function getFirstPageTarget(port) {
   return page;
 }
 
-/** Minimal CDP JSON-RPC-over-WebSocket client — this repo has no CDP/Puppeteer
- * dependency (verified: no puppeteer-core/chrome-remote-interface/playwright/ws
- * in node_modules), so a raw client using the global WebSocket is the whole
- * dependency footprint (zero new devDependencies). */
+/** Minimal CDP JSON-RPC client over the global WebSocket, so the rig adds no
+ * dependencies. */
 class CdpClient {
   constructor(wsUrl) {
     this.ws = new WebSocket(wsUrl);
@@ -252,11 +223,9 @@ class CdpClient {
   }
 }
 
-/** Base geometry snapshot: viewport-relative and container-relative rects,
- * plus the raw window dimensions and the mobile-chrome tell. Independent of
- * command-menu state, since the canvas never moves when the menu navigates.
- * `[data-cmd-panel]` / `[data-cmd-level]` are the test-only attributes
- * BattleScene.tsx carries for exactly this selection. */
+/** Base geometry: viewport- and container-relative rects, window size and the
+ * mobile-chrome tell. The canvas never moves with the menu. Selects on
+ * BattleScene's `[data-cmd-panel]` / `[data-cmd-level]` test attributes. */
 const BASE_MEASURE_EXPR = `
 (() => {
   const rectOf = (el) => {
@@ -295,12 +264,9 @@ const BASE_MEASURE_EXPR = `
 `;
 
 /** Per-cursor level measurement. `panel.children[1]` is the scrollable row
- * container in menu mode (children[0] = header, children[1] = row container,
- * children[2] = footer when present): a positional selector, safe here
- * because this rig only ever measures menu mode, never target mode, which
- * has a different children[1] shape. Also asserts `data-cmd-level` matches
- * what the rig expects to be showing, so a silent wrong-level read fails
- * loudly instead of being recorded as a measurement. */
+ * container in menu mode (header, rows, optional footer); target mode differs,
+ * and this rig only measures menu mode. Fails when `data-cmd-level` is not
+ * the expected level instead of recording a wrong read. */
 const LEVEL_MEASURE_EXPR = `
 (() => {
   const panel = document.querySelector('[data-cmd-panel]');
@@ -324,9 +290,7 @@ async function dispatchKey(client, type, key, code, keyCode) {
   });
 }
 
-/** rawKeyDown + keyUp for a named key. ALWAYS pass the full key name
- * ("ArrowDown", never "Down"); see the CDP key-name note at the top of this
- * file. */
+/** rawKeyDown + keyUp. Pass the full key name (see the note at the top). */
 async function pressKey(client, key, code, keyCode) {
   await dispatchKey(client, "rawKeyDown", key, code, keyCode);
   await dispatchKey(client, "keyUp", key, code, keyCode);
@@ -351,12 +315,8 @@ async function evalOn(client, expr) {
   return res.result.value;
 }
 
-/** Walk every row of the CURRENTLY SHOWING level (cursor already at row 0),
- * pressing ArrowDown between measurements, and return the max panelHeight
- * plus whether any row was scrollable. Panel height is cursor-dependent
- * because the footer renders the active row's description and long ones
- * wrap, so only walking every row and keeping the max reports the true
- * worst case. */
+/** Walks every row of the showing level from row 0 and returns the max
+ * panelHeight and whether any row scrolled. */
 async function walkLevel(client, expectedLevel, rowCount) {
   let maxPanelHeight = -Infinity;
   let scrollable = false;
@@ -386,10 +346,8 @@ async function main() {
   console.log(`measure-battle-layout: dev server up on port ${devPort} (pid ${devProc.pid})`);
 
   const cdpPort = await freePort();
-  // Portable per-run profile dir under the OS temp root, never a path
-  // hardcoded at authoring time: a baked-in path would leak the author's
-  // machine and username into a public repo, and a machine-specific directory
-  // would not exist on a later run of this rig anyway.
+  // Fresh per-run profile under the OS temp root: a hardcoded path would leak
+  // the machine's username into a public repo.
   const userDataDir = mkdtempSync(join(tmpdir(), "battle-edge-"));
   const edgeProc = await startEdge(cdpPort, userDataDir);
   console.log(`measure-battle-layout: Edge headless up, CDP port ${cdpPort} (pid ${edgeProc.pid})`);
@@ -424,7 +382,7 @@ async function main() {
       // finish before measuring/capturing.
       await sleep(1400);
 
-      // ---- base geometry (container/canvas/panel rects at TOP, cursor 0) ----
+      // Base geometry at TOP, cursor 0.
       const base = await evalOn(client, BASE_MEASURE_EXPR);
       if (base.error) {
         throw new Error(
@@ -436,8 +394,7 @@ async function main() {
       const shot0 = await client.send("Page.captureScreenshot", { format: "png" });
       writeFileSync(resolve(FRAMES_DIR, `${label}.png`), Buffer.from(shot0.data, "base64"));
 
-      // ---- Walk every command-menu level ----
-      // TOP: already showing, cursor at row 0 (fresh mount).
+      // TOP is already showing, cursor at row 0.
       const top = await walkLevel(client, "top", LEVEL_ROW_COUNTS.top);
       // TOP's cursor is now on its last row (Spells, index 2) after the walk.
       const shotTop = await client.send("Page.captureScreenshot", { format: "png" });
@@ -504,12 +461,9 @@ async function main() {
   writeFileSync(MEASURED_JSON, JSON.stringify(results, null, 2) + "\n");
   console.log(`measure-battle-layout: wrote ${MEASURED_JSON}`);
 
-  // Generated TS fixture: the human-readable measured.json above cannot be
-  // imported from a src/**/*.test.ts file in this repo (no resolveJsonModule;
-  // docs/ is outside tsconfig.app.json's "include": ["src"]; and "types":
-  // ["vite/client"] excludes @types/node so node:fs would not resolve inside
-  // src either). This generated .ts module is what the tests import. Do not
-  // hand-edit it; regenerate by re-running `npm run measure:layout`.
+  // Generated TS fixture for the tests: they cannot import measured.json (no
+  // resolveJsonModule, docs/ is outside tsconfig.app.json's include, and no
+  // @types/node in src). Do not hand-edit; rerun `npm run measure:layout`.
   const levelLit = (l) => `{ panelHeight: ${l.panelHeight}, scrollable: ${l.scrollable} }`;
   const fixtureRows = results.map(
     ({ vw, vh, isMobile, containerHeight, panelHeight, canvasRectContainerRelative, levels }) =>
@@ -572,18 +526,12 @@ function killTree(pid, label) {
   }
 }
 
-/** `taskkill /pid X /T /F` on Edge's launcher PID does not reap its children
- * on this machine: Edge's headless launcher
- * re-execs into the real browser process, which then owns
- * crashpad-handler/gpu-process/utility/renderer children outside the
- * launcher PID's own process-tree, so `/T` never reaches them and every run
- * leaked a full orphan subtree. Fix: enumerate `msedge.exe` processes via
- * WMI (`Win32_Process`) and match each one's OWN command line against this
- * run's unique `--user-data-dir` path (created fresh per run by
- * `mkdtempSync`, so the match is unambiguous to this invocation), then kill
- * each matched PID individually with `taskkill /PID <pid> /F`. Deliberately
- * NEVER filters on image name alone: unrelated msedge.exe processes are
- * usually running, and killing by name would take them out too. */
+/** `taskkill /T` on Edge's launcher PID leaves orphans: the launcher re-execs
+ * into a browser whose crashpad/gpu/utility/renderer children sit outside its
+ * process tree. So enumerate msedge.exe via WMI, match each command line
+ * against this run's unique `--user-data-dir`, and kill those PIDs one by
+ * one. Never filter on image name alone: unrelated Edge processes are
+ * usually running. */
 function killEdgeByProfile(userDataDir, label) {
   const psLiteral = userDataDir.replace(/'/g, "''");
   const psScript =

@@ -1,5 +1,3 @@
-// Pure command-menu model. No React, no DOM: every dependency (commands,
-// mp) is injected.
 import { describe, expect, it } from "vitest";
 import {
   deriveMenuView,
@@ -234,13 +232,9 @@ describe("row cap guard across every valid rush prefix", () => {
 });
 
 describe("partition completeness + full-kit reachability", () => {
-  // The row-cap guard above is an upper bound only (rows.length <= 4). It does
-  // not assert that SKILLS_IDS union SPELLS_IDS union {"attack"} COVERS every
-  // id in ABILITY_ORDER. A 9th ability id landing in abilities.ts (a future
-  // boss adding new abilities) would show up in commandsForKit's output but
-  // match neither category constant, so it would render in NO menu level:
-  // silently unreachable to the player, with the rest of the suite still
-  // green. This test is the loud failure a new ability id should hit.
+  // The row-cap guard above is an upper bound only. A new ability id matching
+  // neither category constant would render in no menu level, unreachable,
+  // with the rest of the suite green. This is the loud failure it should hit.
   it("every ABILITY_ORDER id is in exactly one of {attack} / SKILLS_IDS / SPELLS_IDS (no orphans, no phantoms)", () => {
     for (const id of ABILITY_ORDER) {
       const memberships = [id === "attack", SKILLS_IDS.includes(id), SPELLS_IDS.includes(id)];
@@ -252,8 +246,8 @@ describe("partition completeness + full-kit reachability", () => {
           `decision for commandMenu.ts's SKILLS_IDS/SPELLS_IDS (or the row-cap guard above), not a test to relax.`,
       ).toBe(1);
     }
-    // Reverse direction: no category constant names an id that no longer
-    // exists in ABILITY_ORDER (a phantom left behind by a future removal).
+    // Reverse direction: no category constant names an id missing from
+    // ABILITY_ORDER.
     for (const id of [...SKILLS_IDS, ...SPELLS_IDS]) {
       expect(
         ABILITY_ORDER.includes(id),
@@ -281,8 +275,7 @@ describe("partition completeness + full-kit reachability", () => {
 });
 
 describe("commandMenu.ts strings: punctuation gate", () => {
-  // Same assertion pattern as scenes/punctuation.test.ts: unicode-escaped
-  // banned characters so this file never contains a banned literal itself.
+  // Banned characters are unicode-escaped so this file never contains one.
   const lockedView = deriveMenuView(BASE_KIT_COMMANDS, "top");
   const unlockedView = deriveMenuView(FULL_KIT, "top");
   const skillsView = deriveMenuView(FULL_KIT, "skills");

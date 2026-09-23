@@ -1,12 +1,7 @@
-// Unlock map. Turns `defeatedBosses` into "which project slugs may the play
-// path open". A leaf module: no content.ts import here, so unlocks.ts is keyed
-// by slug strings and checked against real content only by the test file. See
-// unlocks.test.ts for the CATS cross-check.
-//
-// BOSS_NAMES comes from battle/rushOrder for guardingBoss's display-name
-// lookup. That module is a leaf too (no content.ts, no battle engine
-// runtime): the "no content.ts import" rule above is specifically about
-// content.ts, not a blanket ban on every other import.
+// Maps `defeatedBosses` to the project slugs the play path may open. Must not
+// import content.ts: slugs are plain strings here, and unlocks.test.ts
+// cross-checks them against CATS. battle/rushOrder is a leaf, so its
+// BOSS_NAMES import is fine.
 import { BOSS_NAMES } from "../battle/rushOrder";
 
 /** Slugs visible in the play path before any boss is beaten. */
@@ -30,9 +25,8 @@ export function unlockedSlugs(defeated: string[]): Set<string> {
   return set;
 }
 
-/** True when this item is gated at all. Non-project items never are: the 2
- * experience items and 3 contact items are never locked in either
- * path. An undefined slug (contact items have none) is never gateable. */
+/** Only project items are ever gated; an undefined slug (contact items) never
+ * is. */
 export function isGateable(categoryKey: string, slug: string | undefined): boolean {
   return categoryKey === "projects" && slug !== undefined;
 }
@@ -42,10 +36,7 @@ const BOSS_BY_SLUG: Readonly<Record<string, string>> = Object.fromEntries(
   Object.entries(UNLOCK_BY_BOSS).map(([bossId, slug]) => [slug, bossId]),
 );
 
-/** The display name of the boss guarding this slug, or null when the slug
- * isn't gated by any boss (a seed-unlocked project, a non-project item, or
- * an unrecognized slug). Powers the sealed line's boss interpolation
- * everywhere a locked item's detail is shown. */
+/** The guarding boss's display name, or null when no boss gates the slug. */
 export function guardingBoss(slug: string): string | null {
   const bossId = BOSS_BY_SLUG[slug];
   return bossId ? BOSS_NAMES[bossId] : null;

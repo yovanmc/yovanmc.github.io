@@ -6,11 +6,8 @@ import { resolve } from "node:path";
 export default defineConfig({
   resolve: {
     alias: {
-      // Components that import "virtual:build-facts" (the vite
-      // plugin's own module) need something to resolve to under vitest,
-      // which never runs the vite plugin pipeline. null is the same value
-      // the real plugin yields in dev/serve mode; a test that needs
-      // populated numbers uses vi.mock("virtual:build-facts") instead.
+      // vitest never runs the vite plugin, so resolve the virtual module to the
+      // same null serve mode yields. Tests needing numbers vi.mock it.
       "virtual:build-facts": resolve(__dirname, "src/site/buildFactsNull.ts"),
     },
   },

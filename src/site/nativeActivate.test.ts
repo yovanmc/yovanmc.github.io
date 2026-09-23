@@ -1,20 +1,10 @@
-// The global keydown handler must step aside when a native activation target
-// already has focus, so Enter/Space on a focused <a>/<button>/etc. isn't
-// double-handled (once by the browser's own activation, once by App's
-// arrow-key/menu logic). The predicate checks the FOCUSED ELEMENT ONLY - no
-// closest()/ancestor walk - so a tabindex="-1" child sitting under a
-// tabindex="0" role=button root (the play command-menu rows, which
-// intentionally stay non-focusable divs) never falsely matches through its
-// ancestor.
-//
-// Tested against plain object literals, not a real DOM Element: this repo's
-// vitest config runs a node environment with no jsdom.
-// isNativeActivationTarget() is written against the small structural
-// ActivationElement interface (tagName/hasAttribute/getAttribute) rather than
-// calling el.matches(...) directly, so it is equivalent in behavior to the
-// selector `a[href],button,input,textarea,select,[role=button][tabindex='0']`
-// for any real DOM Element (which satisfies this interface natively) while
-// staying testable without a DOM at all.
+// The keydown handler must step aside when a native activation target has
+// focus, or Enter/Space would be handled twice. Only the focused element is
+// checked, no ancestor walk, so a tabindex="-1" child under a focusable
+// role=button root never matches. Tested with plain objects (no jsdom); the
+// predicate is equivalent to
+// `a[href],button,input,textarea,select,[role=button][tabindex='0']` for any
+// real Element.
 import { describe, expect, it } from "vitest";
 import { isNativeActivationTarget, type ActivationElement } from "./nativeActivate";
 

@@ -1,10 +1,9 @@
 /**
  * Computes the facts shown on the /build/ page.
  *
- * TypeScript, not .mjs, because it is imported straight from vite.config.ts
- * (tsconfig.node.json has no allowJs, so a .mjs sibling would not type check
- * as part of that project). All inputs are read from disk under rootDir so
- * this stays pure and testable against a temp directory fixture.
+ * TypeScript, not .mjs: vite.config.ts imports it and tsconfig.node.json has
+ * no allowJs. Inputs are read from disk under rootDir, so it tests against a
+ * temp directory fixture.
  *
  * Inputs:
  *   coverage/vitest-report.json   vitest json reporter (numTotalTests, testResults, startTime)
@@ -12,11 +11,9 @@
  *   package.json                  dependencies count
  *   CATS (src/content.ts)         the same slug walk shareShells uses in vite.config.ts
  *
- * mode "serve" always returns null without touching the filesystem (the dev
- * server has no reason to require a fresh test run before it will start).
- * mode "build" throws BuildFactsError, naming the missing or stale input, so
- * a build with untrustworthy numbers fails loudly instead of publishing
- * quietly wrong ones.
+ * mode "serve" returns null without touching the filesystem. mode "build"
+ * throws BuildFactsError naming the missing or stale input, so a build never
+ * publishes quietly wrong numbers.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -132,9 +129,7 @@ export function computeBuildFacts(options: ComputeBuildFactsOptions): BuildFacts
     );
   }
 
-  // Only compare against source files when there are some to compare
-  // against - an empty list is "nothing to say it is stale", not proof of
-  // freshness, so it is not itself an error.
+  // An empty list says nothing about staleness, so it is not an error.
   const sourceFiles = listFiles(rootDir);
   if (sourceFiles.length > 0) {
     const newestSourceMtime = Math.max(...sourceFiles.map((f) => statSync(join(rootDir, f)).mtimeMs));
@@ -152,11 +147,8 @@ export function computeBuildFacts(options: ComputeBuildFactsOptions): BuildFacts
 
   const runtimeDeps = Object.keys(pkg.dependencies ?? {}).length;
 
-  // shellPaths() is the single list share-shells (vite.config.ts) actually
-  // writes shells for: every project/experience slug plus /work/ and /build/.
-  // Reading its length here, instead of a second hand-rolled CATS walk, is
-  // what keeps this number from drifting out of sync with what the build
-  // actually produces.
+  // The same list share-shells writes, so this count cannot drift from what
+  // the build produces.
   const shareShells = shellPaths().length;
 
   return {

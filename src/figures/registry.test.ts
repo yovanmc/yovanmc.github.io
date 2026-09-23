@@ -137,14 +137,9 @@ describe("log viewport sweep, in the container domain", () => {
   const logThreshold = uniformLogThresholdPx(logFigures);
 
   it("both log figures are stacked at a 320 viewport and inline at 1440 (a mode actually occurs at both ends)", () => {
-    // Real content, not a shape assertion: if logModeFor always returned
-    // "stacked" (or always "inline"), every `if (mode === "inline") ...`
-    // check below would still pass vacuously. Pin both actual endpoints
-    // instead. Verified against the registry's real strings: the widest
-    // lines are 39 chars ("the-failure-that-left-no-logs", ~292px) and 40
-    // chars ("notification-dispatch", ~300px) against a 226px text width at
-    // 320 (both exceed it: stacked) and an 818px text width at 1440 (both
-    // fit: inline).
+    // Pin both endpoints: a logModeFor that always returned one mode would
+    // pass the checks below vacuously. The widest lines (39 and 40 chars)
+    // exceed the 226px text width at 320 and fit the 818px width at 1440.
     const contentAt320 = contentWidthForViewport(320);
     const contentAt1440 = contentWidthForViewport(1440);
     for (const [slug, fig] of Object.entries(FIGURES)) {
@@ -161,14 +156,10 @@ describe("log viewport sweep, in the container domain", () => {
   });
 
   it("resolves to the SAME mode for every log figure, at every width in the sweep — derived per figure from its own data, not from one shared call", () => {
-    // At 390px the widest lines in the registry are 39 chars (~292.1px,
-    // fits) and 40 chars (~299.6px, does not), so a per-figure rule would let
-    // "the-failure-that-left-no-logs" render inline while
-    // "notification-dispatch" rendered stacked, on the same device. A
-    // Set-of-one built from a single cached call would pass vacuously
-    // regardless of whether the threshold is actually shared, so each
-    // figure's own widest line is genuinely computed here (and checked
-    // against the shared threshold) before the mode itself is collected.
+    // At 390px the widest lines (39 chars fits, 40 does not) would split
+    // under a per-figure rule. Each figure's widest line is computed and
+    // checked against the shared threshold, since a Set built from one cached
+    // call would pass vacuously.
     for (const vw of VIEWPORTS) {
       const contentPx = contentWidthForViewport(vw);
       const modes = new Set(

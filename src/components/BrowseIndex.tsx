@@ -8,29 +8,24 @@ const MONO = "'JetBrains Mono',monospace";
 const SERIF = "'Marcellus',serif";
 
 /**
- * The browse path. One flat, scannable index over the dimmed
- * scene: every item visible under three section headers, no tabs, no second
- * navigation surface. Rows delegate to App's existing
- * activate() semantics, so projects and experience open their case-study
- * pages and contact rows copy or link. Everything is reachable and ctrl-F-able.
+ * The browse path: one flat, scannable index over the dimmed scene, every
+ * item under three section headers, no tabs. Rows reuse App's activate(), so
+ * projects and experience open case-study pages and contact rows copy or
+ * link.
  */
 
 interface BrowseIndexProps {
   isMobile: boolean;
-  /** Reuses App.activate(ri, si), the single source of item semantics. */
+  /** App.activate(ri, si), the single source of item semantics. */
   onItem: (ri: number, si: number) => void;
-  /** Optional so every caller keeps compiling unchanged. When present, a
-   * click routes in-app via goPhase("build"); when absent the anchor still
-   * hard-navigates to /build/, so it never no-ops. */
+  /** When absent the anchor still hard-navigates to /build/. */
   onBuild?: () => void;
-  /** Back to the landing page. Optional for the same reason as onBuild: the
-   * anchor hard-navigates to / when no handler is given. */
+  /** When absent the anchor hard-navigates to /. */
   onBack?: () => void;
 }
 
 export function BrowseIndex({ isMobile, onItem, onBuild, onBack }: BrowseIndexProps) {
-  // The /build/ page's entry row, listed with the projects. Same row anatomy
-  // as the category items.
+  // The /build/ entry row, listed with the projects in the same row anatomy.
   const buildRow = (
     <a
       href="/build/"
@@ -98,11 +93,8 @@ export function BrowseIndex({ isMobile, onItem, onBuild, onBack }: BrowseIndexPr
         padding: isMobile ? "0" : "48px 20px 40px",
       }}
     >
-      {/* Visually-hidden page heading: the visible
-          "Yovan" wordmark above is a persistent site header repeated on every
-          browse view, not a page-specific "All work" heading, so it stays as
-          plain chrome and this h1 carries the one-per-surface a11y title
-          instead. */}
+      {/* Visually hidden h1: the visible wordmark is a persistent site
+          header, not this page's heading. */}
       <h1 style={{ position: "absolute", left: "-9999px" }}>{nameLine}</h1>
       <div
         style={{

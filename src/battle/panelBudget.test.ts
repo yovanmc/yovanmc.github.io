@@ -16,10 +16,8 @@ import type { BossState } from "./engine";
 
 const identityDraw = (r: number) => r;
 
-// Independently re-derived here (not imported from panelBudget.ts's own
-// WORST_BOSSES) so the property test proves panelBudget's internals against
-// the SAME real public seams, rather than trusting its own module-private
-// array.
+// Re-derived, not imported from panelBudget.ts's WORST_BOSSES, so the
+// property test checks it through the public seams.
 const ALL_ACTORS: { label: string; boss: BossState }[] = [
   { label: "alertStorm", boss: spawnAlertStorm(0, identityDraw).boss },
   { label: "cascade", boss: spawnCascade() },

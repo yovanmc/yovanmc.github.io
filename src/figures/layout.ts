@@ -1,12 +1,10 @@
 import type { FlowFigure, LogFigure, Orientation, LogMode } from "./types";
 
 /**
- * Narrowest a node may render and still hold its longest word on one line.
- * Measured from a real render of "ORCHESTRATOR" at max-content with the node's
- * 9px 10px padding (nodeMinPx: 109.765625, recorded in
- * src/figures/__fixtures__/measuredFigureType.ts) and rounded UP to 110: a
- * too-generous floor stacks a row that would have fit (safe), a too-tight one
- * ships an unreadable node (not safe).
+ * Narrowest a node may render and still hold its longest word on one line:
+ * "ORCHESTRATOR" at max-content with 9px 10px padding measured 109.765625
+ * (measuredFigureType.ts), rounded UP. Too generous stacks a row that would
+ * have fit (safe); too tight ships an unreadable node.
  */
 export const NODE_MIN_PX = 110;
 /** Gap + arrow glyph + gap between two nodes. */
@@ -22,12 +20,9 @@ export const FIGURE_PAD_PX = 20;
 /** Left rule (2px) plus the stacked-mode value indent. */
 export const LOG_INDENT_PX = 12;
 /**
- * Advance width of one JetBrains Mono char at the figure's 11px + .08em.
- * Measured (monoChPx: 7.480078125, recorded in
- * src/figures/__fixtures__/measuredFigureType.ts) and rounded UP to 7.49, to
- * 2 decimal places and no further: anything above 7.5 drops
- * maxLabelWordChars() from 12 to 11 and makes ORCHESTRATOR, the registry's
- * longest label, illegal.
+ * Advance of one JetBrains Mono char at 11px + .08em: measured 7.480078125,
+ * rounded UP to 2 decimals only. Above 7.5, maxLabelWordChars() drops from 12
+ * to 11 and ORCHESTRATOR, the longest label, becomes illegal.
  */
 export const MONO_CH_PX = 7.49;
 
@@ -52,12 +47,10 @@ export function pagePadPx(vw: number): number {
 }
 
 /**
- * Figure content-box width at a viewport width. This is a REPLICATION of the
- * CSS chain, not a measurement, and it exists so the viewport sweep can assert
- * in the domain the layout functions actually consume. It is pinned to reality
- * at one point: a test asserts it agrees with the measured fixture at 320px.
- * If the page's padding or the figure's chrome changes, that test is what
- * fails.
+ * Figure content-box width at a viewport width. A replication of the CSS
+ * chain, not a measurement, so the viewport sweep asserts in the domain the
+ * layout functions consume. A test pins it to the measured fixture at 320px;
+ * that test fails if the page padding or figure chrome changes.
  */
 export function contentWidthForViewport(vw: number): number {
   return Math.min(960, vw) - 2 * pagePadPx(vw) - 2 * FIGURE_PAD_PX - 2;
@@ -75,12 +68,10 @@ export function nodeWidthPx(nodeCount: number, availablePx: number): number {
 }
 
 /**
- * The one width at which EVERY flow figure in the registry flips orientation.
- * Deriving a single threshold across the whole registry is what makes the
- * uniformity claim true. A per-figure `rows.every(rowFits)` test would let a
- * 3-node figure render horizontally while a 4-node one stacked, on the same
- * device, in a real band of viewport widths. A single fixed stack-below
- * constant claims a uniformity it does not deliver.
+ * The one width at which every flow figure in the registry flips orientation.
+ * A per-figure fit test would let a 3-node figure stay horizontal while a
+ * 4-node one stacks on the same device; a fixed constant would not track the
+ * registry.
  */
 export function uniformRowThresholdPx(figures: FlowFigure[]): number {
   let widest = 0;
@@ -104,15 +95,10 @@ export function logLineWidthPx(line: { channel: string; value: string }): number
 }
 
 /**
- * The one width at which EVERY log figure in the registry flips mode.
- * Mirrors `uniformRowThresholdPx`: deriving a single threshold across the
- * whole registry is what makes the uniformity claim true. A per-figure
- * "does this figure's own widest line fit" rule lets one log figure render
- * inline while another renders stacked at the same viewport. Concretely, at a
- * 390px viewport the widest lines in the registry are 39 chars (~292.1px,
- * fits the ~296px text width) and 40 chars (~299.6px, does not), so
- * `the-failure-that-left-no-logs` would render inline while
- * `notification-dispatch` rendered stacked on the same device.
+ * The one width at which every log figure in the registry flips mode, for the
+ * same reason as `uniformRowThresholdPx`: at 390px a per-figure rule would
+ * render `the-failure-that-left-no-logs` (39 chars, fits) inline and
+ * `notification-dispatch` (40 chars, does not) stacked.
  */
 export function uniformLogThresholdPx(figures: LogFigure[]): number {
   let widest = 0;

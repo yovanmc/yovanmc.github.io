@@ -1,12 +1,8 @@
-// Punctuation rule over the site shell: no em dash
-// (U+2014) or en dash (U+2013) anywhere in index.html, public/404.html,
-// vite.config.ts, or src/landingCopy.ts, including comments. Semicolons are
-// NOT checked file-wide here (vite.config.ts and landingCopy.ts are code, so
-// every statement-terminating semicolon would trip a naive scan) - the
-// scene-copy semicolon gate lives at src/battle/scenes/punctuation.test.ts
-// instead, scoped to actual copy string values. Banned chars are built via
-// String.fromCharCode (never a literal glyph or escape sequence in source)
-// so this file never contains a banned literal itself.
+// No em dash (U+2014) or en dash (U+2013) anywhere in index.html,
+// public/404.html, vite.config.ts or src/landingCopy.ts, comments included.
+// Semicolons are not checked file-wide (code uses them); the copy semicolon
+// gate is src/battle/scenes/punctuation.test.ts. Banned chars are built with
+// String.fromCharCode so this file never contains one.
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -28,8 +24,8 @@ describe("shell punctuation gate", () => {
     });
   }
 
-  // Vacuity check: prove the rule actually fires on a planted dash, so an
-  // empty or miswired regex can't pass this suite silently.
+  // Proves the rule fires on a planted dash, so a miswired regex cannot pass
+  // silently.
   it("vacuity check: a planted em dash IS caught by the rule", () => {
     expect(BANNED.test(`placeholder ${EM_DASH} text`)).toBe(true);
   });

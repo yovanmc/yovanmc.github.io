@@ -1,11 +1,7 @@
-// Forfeit lands the player in the play menu, not the gate (App.tsx
-// onBattleForfeit), so every visible forfeit-trigger label has to say that
-// rather than promise "back to the gate". landingCopy.skipToWork is the single
-// source both the pause overlay (BattleScene.tsx) and every boss scene's
-// defeatCopy.leaveCta read from, so the label cannot drift out of sync with
-// the real behavior. The phase transition itself (onBattleForfeit lands in
-// "play") has no DOM harness in this vitest config (node env, no jsdom) and is
-// checked by hand in the running app instead.
+// Forfeit lands in the play menu, not the gate, so every forfeit label must
+// say so. landingCopy.skipToWork is the single source for the pause overlay
+// and every scene's defeatCopy.leaveCta. The phase transition itself has no
+// DOM harness here and is checked by hand in the running app.
 import { describe, expect, it } from "vitest";
 import { skipToWork } from "../landingCopy";
 import { SCENE_MODULES } from "./scenes";

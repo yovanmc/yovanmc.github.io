@@ -1,17 +1,10 @@
-// computeBuildFacts run against this repo's own, real coverage output,
-// cross-checked against independent counts. Skipped when
-// coverage/vitest-report.json is not on disk yet (a fresh checkout, or CI's
-// very first npm test before any coverage/ dir exists), so this file never
-// blocks a clean-checkout run.
+// computeBuildFacts against this repo's real coverage output, cross-checked
+// with independent counts. Skipped when coverage/vitest-report.json is absent.
 //
-// Note this means the file is ALWAYS skipped when it runs as part of
-// npm test itself: the v8 coverage provider clears coverage/ at the start
-// of every --coverage run, before the json/json-summary reporters get a
-// chance to write their own output at the end, so vitest-report.json does
-// not exist yet at collection time. These assertions only exercise real
-// code when this file is run on its own (for example
-// npx vitest run src/site/buildFacts.real.test.ts) after a prior npm test
-// has already populated coverage/. This is expected, not a bug.
+// That means it always skips inside `npm test` itself: the v8 provider clears
+// coverage/ at the start of the run and the reporters write only at the end.
+// It exercises real code only when run alone after an `npm test`, e.g.
+// npx vitest run src/site/buildFacts.real.test.ts
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";

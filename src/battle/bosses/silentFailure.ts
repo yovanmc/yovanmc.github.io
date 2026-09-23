@@ -1,39 +1,27 @@
-// The Silent Failure: boss 3's single-entity vanish-cycle state and mechanics.
-// This module is pure mechanics. Battle boot wiring and the targetability GATE
-// that decides whether pt/debug/fo are legal (in engine.ts's pre-validate
-// block) both live outside this file.
+// The Silent Failure: single-entity vanish-cycle mechanics, pure.
 //
-// Swing/ambush damage (boss -> hero) routes through engine.ts's `takenDamage`
-// (CT/Conviction-aware), same as Cascade's jolt/storm.
-//
-// The whiff rule (attack while vanished deals 0, no MP gain) and the
-// `forceBodyForDeath` flag for a DoT kill are both engine.ts call-site
-// concerns, not this module's: `damageSilentFailure` is a plain, unconditional
-// hp-reduction, so callers decide what amount to pass in and what to do with a
-// killing blow that lands while vanished.
+// Swing/ambush damage to the hero goes through engine.ts's `takenDamage`.
+// The targetability gate, the whiff rule (attack while vanished deals 0, no
+// MP) and `forceBodyForDeath` are engine.ts call-site concerns:
+// `damageSilentFailure` is a plain hp reduction.
 import { takenDamage } from "../engine";
 
-/** Canonical definition lives in ../rushOrder, like cascade.ts's CASCADE_ID
- * re-export: bootParams.ts needs it without pulling the
- * engine.ts<->silentFailure.ts cycle into the eagerly loaded landing
- * bundle. */
+/** Defined in ../rushOrder so bootParams.ts can import it without pulling the
+ * engine.ts<->silentFailure.ts cycle into the landing bundle. */
 export { SILENT_FAILURE_ID } from "../rushOrder";
 
 export interface SilentFailureBoss {
   kind: "silent-failure";
   hp: number;
   maxHp: number;
-  /** Debug's mark, permanent for this fight once set; unlike Cascade's mark,
-   * nothing in this module ever clears it. */
+  /** Debug's mark, permanent for the fight (unlike Cascade's). */
   marked: boolean;
   phase: "embodied" | "vanished";
   phaseTurnsLeft: number;
   /** One CT extension per embodied window, max 3 turns total. */
   extendedThisWindow: boolean;
-  /** Set by engine.ts's DoT-tick call site when a tick kills it while
-   * vanished, so the scene forces the body frame family for SIL_DIE and the
-   * death beat never plays over an empty-armor frame. Never touched by this
-   * module's own functions. */
+  /** Set by engine.ts when a DoT tick kills the boss while vanished, so the
+   * death reel plays over the body, not empty armor. */
   forceBodyForDeath: boolean;
 }
 
@@ -43,9 +31,7 @@ const VANISHED_AMBUSH = 18;
 const EMBODIED_WINDOW = 2;
 const VANISHED_WINDOW = 2;
 
-/** Target id 0 is the boss itself (the engine's batId/targetId channel and
- * the DoT anchor both key off it) — the single-entity degenerate case of
- * Alert Storm's bats[]/Cascade's nodes[]. */
+/** The boss itself: the target id and DoT anchor for this single entity. */
 export const SF_TARGET_ID = 0;
 
 export function spawnSilentFailure(): SilentFailureBoss {
@@ -66,25 +52,20 @@ export function livingTargets(boss: SilentFailureBoss): number[] {
   return boss.hp > 0 ? [SF_TARGET_ID] : [];
 }
 
-/** Untargetable while vanished — targeted abilities (pt/debug/fo) are
- * invalid; `attack` is exempted from this check at the engine.ts call site
- * and resolves as a whiff instead. The armor itself stays SELECTABLE for the
- * whole fight (the cursor never loses its home); this function only answers
- * whether an action against it is legal right now. */
+/** Targeted abilities are invalid while vanished; engine.ts exempts `attack`,
+ * which whiffs. The armor stays selectable the whole fight; this only answers
+ * whether an action is legal now. */
 export function isTargetable(boss: SilentFailureBoss): boolean {
   return boss.phase === "embodied";
 }
 
-/** Unconditional hp reduction, clamped at 0. A no-op against an already-dead
- * boss (same contract as Cascade's damageNode against a dead node). Callers
- * decide the amount (e.g. 0 for the vanished-attack whiff) — this function
- * has no phase-awareness of its own. */
+/** Unconditional hp reduction, clamped at 0; no-op on a dead boss. Callers
+ * pick the amount (0 for the whiff). */
 export function damageSilentFailure(boss: SilentFailureBoss, amount: number): SilentFailureBoss {
   if (boss.hp <= 0) return boss;
   return { ...boss, hp: Math.max(0, boss.hp - amount) };
 }
 
-/** Debug's mark — permanent for this fight. */
 export function markSilentFailure(boss: SilentFailureBoss): SilentFailureBoss {
   return { ...boss, marked: true };
 }
@@ -94,26 +75,18 @@ export type SilentFailureTurnOutcome = "swing" | "ambush";
 export interface SilentFailureTurnResult {
   boss: SilentFailureBoss;
   outcome: SilentFailureTurnOutcome;
-  /** Damage the HERO takes this boss turn. Already CT/Conviction-adjusted via
-   * `takenDamage` — apply as-is. */
+  /** Damage the hero takes this boss turn, already CT/Conviction-adjusted. */
   heroDamage: number;
 }
 
-/** Resolves one boss turn. Deals the phase's damage (embodied 12 = swing,
- * vanished 18 = ambush, both via `takenDamage`),
- * THEN decrements `phaseTurnsLeft`. When it reaches 0:
+/** Deals the phase's damage (embodied swing 12, vanished ambush 18), then
+ * decrements `phaseTurnsLeft`. At 0:
  *
- * - embodied AND `ct` is active (read here, in the boss phase, BEFORE the
- *   engine's end-of-turn `ctTurns` decrement) AND not yet extended this
- *   window -> extend: `phaseTurnsLeft = 1`, `extendedThisWindow = true`
- *   (window becomes 3 turns total, capped — CT cast on the LAST vanish turn
- *   covers both base embodied turns and lands the extension; CT cast on the
- *   FIRST vanish turn has already expired by the time this check runs on the
- *   second embodied turn, so it extends nothing — it just buffed the two
- *   swings it was still up for).
- * - otherwise -> flip phase, `phaseTurnsLeft = 2`, `extendedThisWindow =
- *   false`. Vanished windows are always exactly 2 and never extend,
- *   regardless of `ct`. */
+ * - embodied, CT active (read before the engine's end-of-turn CT decrement)
+ *   and not yet extended this window: extend by 1 turn (3 max). CT cast on
+ *   the last vanish turn lands the extension; CT cast on the first has
+ *   expired by the check.
+ * - otherwise: flip phase with 2 turns. Vanished windows never extend. */
 export function resolveSilentFailureBossTurn(
   boss: SilentFailureBoss,
   ct: boolean,

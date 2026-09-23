@@ -1,9 +1,5 @@
-// The build-time sitemap.xml emitter (vite.config.ts share-shells plugin)
-// must never drift from the actual shells it writes. sitemapUrls() is the pure
-// list both the plugin's closeBundle and this test read from, so a slug added
-// to content.ts shows up here automatically without a second source of truth.
-// sitemapUrls() and shellPaths() both cover /build/ as well: same invariant,
-// one more route.
+// sitemap.xml must match the shells the build writes: sitemapUrls() is the
+// one list the plugin and this test read, /build/ included.
 import { describe, expect, it } from "vitest";
 import { sitemapUrls, shellPaths } from "../../vite.config";
 import { CATS } from "../content";
@@ -45,8 +41,7 @@ describe("sitemap urls", () => {
   });
 });
 
-// No dist/ read: the shell test is a pure assertion on the same list
-// computeBuildFacts's shareShells count reads from.
+// Pure: asserts on the same list computeBuildFacts's shareShells count reads.
 describe("shellPaths", () => {
   it("includes /build/ and /work/", () => {
     const paths = shellPaths();
