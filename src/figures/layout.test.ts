@@ -9,7 +9,6 @@ import {
   logTextWidthPx,
   maxLabelWordChars,
   maxLogValueChars,
-  nodeWidthPx,
   orientationFor,
   rowFits,
   uniformLogThresholdPx,
@@ -169,13 +168,5 @@ describe("maxLabelWordChars / maxLogValueChars", () => {
 
   it("maxLogValueChars(238) holds the registry's longest log value, \"depth and lag exported\" (22 chars), with zero margin to spare", () => {
     expect(maxLogValueChars(238)).toBeGreaterThanOrEqual(22);
-  });
-});
-
-describe("nodeWidthPx", () => {
-  it("splits available width evenly minus connectors", () => {
-    expect(nodeWidthPx(0, 100)).toBe(0);
-    const w = nodeWidthPx(2, 222);
-    expect(w).toBeCloseTo((222 - CONNECTOR_PX) / 2, 6);
   });
 });

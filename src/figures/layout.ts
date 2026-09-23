@@ -61,12 +61,6 @@ export function rowFits(nodeCount: number, availablePx: number): boolean {
   return nodeCount * NODE_MIN_PX + (nodeCount - 1) * CONNECTOR_PX <= availablePx;
 }
 
-export function nodeWidthPx(nodeCount: number, availablePx: number): number {
-  if (nodeCount <= 0) return 0;
-  const connectors = (nodeCount - 1) * CONNECTOR_PX;
-  return (availablePx - connectors) / nodeCount;
-}
-
 /**
  * The one width at which every flow figure in the registry flips orientation.
  * A per-figure fit test would let a 3-node figure stay horizontal while a

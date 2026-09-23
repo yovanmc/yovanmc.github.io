@@ -147,63 +147,6 @@ function buildStageAtmo(host: HTMLDivElement) {
 const MONO = "'JetBrains Mono',monospace";
 
 /**
- * The hero standing at station center after the dive — the intro's end pose,
- * re-rendered in site space so the scene beneath the handoff fade is identical.
- * Position/scale derive from the settled stage mapping: canvas center at stage
- * (576, 288.4) → (cx, cy − 67.6·g), sprite scale 2.6·g where g = size/640.
- */
-export function HeroIdle({ vw, vh, visible }: { vw: number; vh: number; visible: boolean }) {
-  const c0 = useRef<HTMLCanvasElement>(null);
-  const c1 = useRef<HTMLCanvasElement>(null);
-  const [frame, setFrame] = useState(0);
-
-  useEffect(() => {
-    drawHero(c0.current!, 0);
-    drawHero(c1.current!, 1);
-    const iv = window.setInterval(() => setFrame((f) => 1 - f), 440);
-    return () => window.clearInterval(iv);
-  }, []);
-
-  const g = siteStationGeometry(vw, vh);
-  const s = g.size / 640;
-  const cvs = (ref: React.RefObject<HTMLCanvasElement>, fi: number) => (
-    <canvas
-      ref={ref}
-      width={48}
-      height={60}
-      style={{
-        position: "absolute",
-        left: "-24px",
-        top: "-30px",
-        width: "48px",
-        height: "60px",
-        imageRendering: "pixelated",
-        display: frame === fi ? "block" : "none",
-      }}
-    />
-  );
-  return (
-    <div
-      aria-hidden
-      style={{
-        position: "absolute",
-        left: g.cx + "px",
-        top: g.cy - 67.6 * s + "px",
-        transform: `scale(${2.6 * s})`,
-        transformOrigin: "0 0",
-        zIndex: 4,
-        pointerEvents: "none",
-        opacity: visible ? 1 : 0,
-        transition: "opacity .5s ease",
-      }}
-    >
-      {cvs(c0, 0)}
-      {cvs(c1, 1)}
-    </div>
-  );
-}
-
-/**
  * Reads `prefers-reduced-motion` once in a lazy useState initializer, so
  * there is no flip after mount. Renders DiveIntroReduced when set, unless the
  * visitor chose "Play the full intro". `forceFull` is not persisted, so a

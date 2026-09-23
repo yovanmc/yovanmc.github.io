@@ -3,7 +3,6 @@ import {
   damageNode,
   fallForwardIfCarrierDied,
   fanOutNodes,
-  headNode,
   isCascadeDefeated,
   livingNodeIds,
   markNode,
@@ -46,21 +45,16 @@ describe("spawnCascade", () => {
   });
 });
 
-describe("livingNodeIds / headNode: head = lowest-index LIVING node", () => {
+describe("livingNodeIds", () => {
   it("ring order is every alive node ascending by id", () => {
     expect(livingNodeIds(spawnCascade())).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
-  it("dead nodes stay as husks in the ring: skipped by livingNodeIds, head shifts to the next living id", () => {
+  it("dead nodes stay as husks in the ring: skipped by livingNodeIds", () => {
     let boss = spawnCascade();
     boss = kill(boss, 0);
     boss = kill(boss, 1);
     expect(livingNodeIds(boss)).toEqual([2, 3, 4, 5]);
-    expect(headNode(boss)).toBe(2);
-  });
-
-  it("head node on the fresh boss is node 0", () => {
-    expect(headNode(spawnCascade())).toBe(0);
   });
 });
 
