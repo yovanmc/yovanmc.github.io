@@ -230,15 +230,6 @@ describe("critical thinking", () => {
     s = battleReduce(s, { type: "attack", target: real().id }); // turn 4, still active
     expect(hpBefore - real().hp).toBe(18);
   });
-
-  it("is invalid without 2 MP: no cast, no turn advance", () => {
-    const s0 = initBattle({ seed: 42 });
-    const broke = { ...s0, hero: { ...s0.hero, mp: 1 } };
-    const s1 = battleReduce(broke, { type: "ct" });
-    expect(s1.events.some((e) => e.type === "invalid")).toBe(true);
-    expect(s1.turn).toBe(1);
-    expect(s1.ctTurns).toBe(0);
-  });
 });
 
 describe("power through", () => {
@@ -255,15 +246,6 @@ describe("power through", () => {
     const real = bats(s1).find((b) => b.real)!;
     const s2 = battleReduce(s1, { type: "pt", target: real.id });
     expect(real.hp - bats(s2).find((b) => b.id === real.id)!.hp).toBe(42);
-  });
-
-  it("is invalid without 3 MP", () => {
-    const s0 = initBattle({ seed: 42 });
-    const real = bats(s0).find((b) => b.real)!;
-    const broke = { ...s0, hero: { ...s0.hero, mp: 2 } };
-    const s1 = battleReduce(broke, { type: "pt", target: real.id });
-    expect(s1.events.some((e) => e.type === "invalid")).toBe(true);
-    expect(s1.turn).toBe(1);
   });
 });
 
@@ -544,13 +526,25 @@ describe("Fan Out (base 8, hits all living targets, single reshuffle)", () => {
     const s1 = battleReduce(rigged, { type: "fo" });
     expect(s1.events.some((e) => e.type === "reshuffle")).toBe(false);
   });
+});
 
-  it("is invalid without 3 MP", () => {
-    const s0 = initBattle({ seed: 42, defeatedBosses: ["alert-storm"] });
-    const broke = { ...s0, hero: { ...s0.hero, mp: 2 } };
-    const s1 = battleReduce(broke, { type: "fo" });
+describe("MP gate: one MP short of the cost is invalid, with no cast and no turn advance", () => {
+  it.each<{ name: string; cost: number; defeatedBosses: string[]; action: (s: BattleState) => BattleAction }>([
+    { name: "critical thinking", cost: 2, defeatedBosses: [], action: () => ({ type: "ct" }) },
+    {
+      name: "power through",
+      cost: 3,
+      defeatedBosses: [],
+      action: (s) => ({ type: "pt", target: bats(s).find((b) => b.real)!.id }),
+    },
+    { name: "fan out", cost: 3, defeatedBosses: ["alert-storm"], action: () => ({ type: "fo" }) },
+  ])("$name is invalid without $cost MP", ({ cost, defeatedBosses, action }) => {
+    const s0 = initBattle({ seed: 42, defeatedBosses });
+    const broke = { ...s0, hero: { ...s0.hero, mp: cost - 1 } };
+    const s1 = battleReduce(broke, action(s0));
     expect(s1.events.some((e) => e.type === "invalid")).toBe(true);
     expect(s1.turn).toBe(1);
+    expect(s1.ctTurns).toBe(0);
   });
 });
 

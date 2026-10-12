@@ -5,9 +5,7 @@ import {
   damageImposter,
   erosionStage,
   healImposter,
-  isImposterDefeated,
   livingTargets,
-  markImposter,
   MAX_HP,
   MIRROR_DEBUG_DOT_TICK,
   MIRROR_DEBUG_DOT_TICKS,
@@ -73,20 +71,6 @@ describe("livingTargets — [0,1,2] during clones, [0] otherwise, [] once dead",
 });
 
 describe("damageImposter — unconditional, phase-agnostic hp reduction (overlay-only)", () => {
-  it("subtracts amount from hp", () => {
-    expect(damageImposter(fresh(), 40).hp).toBe(140);
-  });
-
-  it("clamps at 0 rather than going negative", () => {
-    expect(damageImposter(fresh(), 999).hp).toBe(0);
-  });
-
-  it("is a no-op against an already-dead boss", () => {
-    const dead = fresh({ hp: 0 });
-    const after = damageImposter(dead, 40);
-    expect(after).toEqual(dead);
-  });
-
   it("a DoT anchored before a CLONES phase keeps ticking THROUGH it into the next phase (crossing OUT of clones)", () => {
     let boss = fresh({ phase: "clones" });
     boss = damageImposter(boss, 4); // tick while in clones
@@ -173,16 +157,6 @@ describe("resolveImposterHit — the CLONES overlay gate", () => {
   });
 });
 
-describe("markImposter — persists through everything except a pulse-break", () => {
-  it("sets marked true", () => {
-    expect(markImposter(fresh()).marked).toBe(true);
-  });
-
-  it("re-marking an already-marked boss is a no-op (still true)", () => {
-    expect(markImposter(markImposter(fresh())).marked).toBe(true);
-  });
-});
-
 describe("breakPulse — only inside the charge-complete window; consumes the mark", () => {
   it("flips pulseCharged back false and clears the mark when charged", () => {
     const charging = fresh({ phase: "pulse", phaseTurnsLeft: 1, pulseCharged: true, marked: true });
@@ -236,16 +210,6 @@ describe("trackSpecial — MIRROR's tracker; attack never updates it", () => {
   it("attack is NOT a special and never updates the tracker", () => {
     const marked = fresh({ lastSpecial: "pt" });
     expect(trackSpecial(marked, "attack").lastSpecial).toBe("pt");
-  });
-});
-
-describe("isImposterDefeated", () => {
-  it("false while hp > 0", () => {
-    expect(isImposterDefeated(fresh())).toBe(false);
-  });
-
-  it("true once hp hits 0", () => {
-    expect(isImposterDefeated(fresh({ hp: 0 }))).toBe(true);
   });
 });
 

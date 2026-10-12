@@ -26,10 +26,10 @@ describe("shell punctuation gate", () => {
 
   // Proves the rule fires on a planted dash, so a miswired regex cannot pass
   // silently.
-  it("vacuity check: a planted em dash IS caught by the rule", () => {
-    expect(BANNED.test(`placeholder ${EM_DASH} text`)).toBe(true);
-  });
-  it("vacuity check: a planted en dash IS caught by the rule", () => {
-    expect(BANNED.test(`placeholder ${EN_DASH} text`)).toBe(true);
+  it.each([
+    { name: "em dash", char: EM_DASH },
+    { name: "en dash", char: EN_DASH },
+  ])("vacuity check: a planted $name IS caught by the rule", ({ char }) => {
+    expect(BANNED.test(`placeholder ${char} text`)).toBe(true);
   });
 });

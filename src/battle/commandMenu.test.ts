@@ -280,41 +280,30 @@ describe("commandMenu.ts strings: punctuation gate", () => {
   const unlockedView = deriveMenuView(FULL_KIT, "top");
   const skillsView = deriveMenuView(FULL_KIT, "skills");
   const spellsView = deriveMenuView(FULL_KIT, "spells");
-  const strings: { label: string; value: string }[] = [
-    { label: "top.skills.label", value: (lockedView.rows[1] as { label: string }).label },
-    { label: "top.skills.desc", value: (lockedView.rows[1] as { desc: string }).desc },
-    { label: "top.spells.label (locked)", value: (lockedView.rows[2] as { label: string }).label },
-    { label: "top.spells.desc (locked)", value: (lockedView.rows[2] as { desc: string }).desc },
-    { label: "top.spells.desc (unlocked)", value: (unlockedView.rows[2] as { desc: string }).desc },
-    { label: "skills.title", value: skillsView.title! },
-    { label: "spells.title", value: spellsView.title! },
+  const strings: { label: string; value: string | null; pinned: string }[] = [
+    { label: "top.skills.label", value: (lockedView.rows[1] as { label: string }).label, pinned: "Skills" },
+    { label: "top.skills.desc", value: (lockedView.rows[1] as { desc: string }).desc, pinned: "Core moves. Always ready." },
+    { label: "top.spells.label (locked)", value: (lockedView.rows[2] as { label: string }).label, pinned: "Spells" },
+    {
+      label: "top.spells.desc (locked)",
+      value: (lockedView.rows[2] as { desc: string }).desc,
+      pinned: "Sealed until a boss falls.",
+    },
+    {
+      label: "top.spells.desc (unlocked)",
+      value: (unlockedView.rows[2] as { desc: string }).desc,
+      pinned: "Spells won from fallen bosses.",
+    },
+    { label: "skills.title", value: skillsView.title, pinned: "SKILLS" },
+    { label: "spells.title", value: spellsView.title, pinned: "SPELLS" },
   ];
 
-  for (const { label, value } of strings) {
-    it(`${label} has no em dash, en dash, or semicolon`, () => {
-      expect(BANNED.test(value)).toBe(false);
-    });
-  }
+  it.each(strings)("$label has no em dash, en dash, or semicolon", ({ value }) => {
+    expect(value).not.toBeNull();
+    expect(BANNED.test(value!)).toBe(false);
+  });
 
-  it("skills row 1 label matches the pinned default", () => {
-    expect((lockedView.rows[1] as { label: string }).label).toBe("Skills");
-  });
-  it("skills row 1 desc matches the pinned default", () => {
-    expect((lockedView.rows[1] as { desc: string }).desc).toBe("Core moves. Always ready.");
-  });
-  it("spells row label matches the pinned default", () => {
-    expect((lockedView.rows[2] as { label: string }).label).toBe("Spells");
-  });
-  it("spells row locked desc matches the pinned default", () => {
-    expect((lockedView.rows[2] as { desc: string }).desc).toBe("Sealed until a boss falls.");
-  });
-  it("spells row unlocked desc matches the pinned default", () => {
-    expect((unlockedView.rows[2] as { desc: string }).desc).toBe("Spells won from fallen bosses.");
-  });
-  it("skills submenu title matches the pinned default", () => {
-    expect(skillsView.title).toBe("SKILLS");
-  });
-  it("spells submenu title matches the pinned default", () => {
-    expect(spellsView.title).toBe("SPELLS");
+  it.each(strings)("$label matches the pinned default", ({ value, pinned }) => {
+    expect(value).toBe(pinned);
   });
 });
