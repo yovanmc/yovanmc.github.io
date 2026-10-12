@@ -30,6 +30,10 @@ describe("onIntroInput during the intro", () => {
     expect(onIntroInput("intro", key("Spacebar"))).toBe("skip");
   });
 
+  it("passes a key event that reports no key", () => {
+    expect(onIntroInput("intro", { kind: "key", focusAtRoot: true, target: "other" })).toBe("pass");
+  });
+
   it("passes an unlisted key", () => {
     expect(onIntroInput("intro", key("a"))).toBe("pass");
     expect(onIntroInput("intro", key("Escape"))).toBe("pass");
