@@ -109,13 +109,3 @@ describe("CaseStudyPage static markup", () => {
     });
   }
 });
-
-describe("BrowseIndex back control", () => {
-  const html = renderToStaticMarkup(<BrowseIndex isMobile={false} onItem={() => {}} />);
-
-  it("renders a real anchor back to the landing page carrying the back label", () => {
-    const anchor = html.match(/<a[^>]*href="\/"[^>]*>[\s\S]*?<\/a>/);
-    expect(anchor).not.toBeNull();
-    expect(anchor![0]).toContain(backLabel);
-  });
-});

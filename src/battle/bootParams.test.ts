@@ -29,10 +29,6 @@ describe("parseBoss (`boss=` capture key — whitelist = IMPLEMENTED_BOSSES, def
   it("falls back to alert-storm for an id outside the whitelist", () => {
     expect(parseBoss("not-a-real-boss")).toBe("alert-storm");
   });
-
-  it("rejects garbage input, falling back to alert-storm", () => {
-    expect(parseBoss("not-a-real-boss")).toBe("alert-storm");
-  });
 });
 
 describe("parseDefeatedBosses (`defeated=` capture key — rush-order PREFIX validation after dedupe)", () => {
