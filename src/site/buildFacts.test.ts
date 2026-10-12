@@ -14,8 +14,12 @@ let rootDir: string;
 function writeReport(overrides: Partial<{ numTotalTests: number; startTime: number; fileCount: number }> = {}) {
   const fileCount = overrides.fileCount ?? 30;
   const testResults = Array.from({ length: fileCount }, () => ({ assertionResults: [{ status: "passed" }] }));
+  // vitest counts describe blocks in numTotalTestSuites, so a real report's
+  // value is larger than its file count. The fixture mirrors that to catch a
+  // testFiles computed from the wrong field.
   const report = {
     numTotalTests: overrides.numTotalTests ?? fileCount,
+    numTotalTestSuites: fileCount * 3,
     startTime: overrides.startTime ?? Date.now(),
     testResults,
   };
