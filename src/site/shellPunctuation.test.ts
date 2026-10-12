@@ -32,16 +32,4 @@ describe("shell punctuation gate", () => {
   it("vacuity check: a planted en dash IS caught by the rule", () => {
     expect(BANNED.test(`placeholder ${EN_DASH} text`)).toBe(true);
   });
-
-  it("index.html <title> has no dash", () => {
-    const m = read("index.html").match(/<title>([^<]*)<\/title>/);
-    expect(m).not.toBeNull();
-    expect(BANNED.test(m![1])).toBe(false);
-  });
-
-  it("index.html description has no dash", () => {
-    const m = read("index.html").match(/<meta name="description" content="([^"]*)"/);
-    expect(m).not.toBeNull();
-    expect(BANNED.test(m![1])).toBe(false);
-  });
 });

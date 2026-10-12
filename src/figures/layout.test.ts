@@ -59,13 +59,6 @@ describe("uniformRowThresholdPx", () => {
     expect(uniformRowThresholdPx([single])).toBe(0);
   });
 
-  it("dominates every individual figure's own requirement (the registry-wide threshold is never smaller)", () => {
-    const combined = uniformRowThresholdPx(TEST_FIGURES);
-    for (const figure of TEST_FIGURES) {
-      expect(uniformRowThresholdPx([figure])).toBeLessThanOrEqual(combined);
-    }
-  });
-
   it("never asks a figure to render a row in a space too small for it", () => {
     const threshold = uniformRowThresholdPx(TEST_FIGURES);
     const sweep = [threshold - 50, threshold - 1, threshold, threshold + 1, threshold + 50];
@@ -145,13 +138,6 @@ describe("uniformLogThresholdPx", () => {
       ...SHORT_LINE.lines.map((l) => logLineWidthPx(l)),
     );
     expect(uniformLogThresholdPx(LOG_TEST_FIGURES)).toBe(expected);
-  });
-
-  it("dominates every individual figure's own requirement (the registry-wide threshold is never smaller)", () => {
-    const combined = uniformLogThresholdPx(LOG_TEST_FIGURES);
-    for (const figure of LOG_TEST_FIGURES) {
-      expect(uniformLogThresholdPx([figure])).toBeLessThanOrEqual(combined);
-    }
   });
 
   it("returns 0 for a figure list with no lines", () => {

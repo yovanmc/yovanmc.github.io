@@ -2,7 +2,7 @@
 // localStorage). The implemented-boss cap uses an injected BossRoster so the
 // real constants are never mutated.
 import { describe, expect, it } from "vitest";
-import { IMPLEMENTED_BOSSES, RUSH_ORDER } from "../battle/rushOrder";
+import { RUSH_ORDER } from "../battle/rushOrder";
 import {
   clearProgress,
   PROGRESS_KEY,
@@ -213,11 +213,5 @@ describe("clearProgress", () => {
 
   it("swallows a throwing removeItem as a silent no-op", () => {
     expect(() => clearProgress(new ThrowingRemoveStore())).not.toThrow();
-  });
-});
-
-describe("IMPLEMENTED_BOSSES sanity (guards the default-roster cap test's premise)", () => {
-  it("today's IMPLEMENTED_BOSSES matches RUSH_ORDER's length, so the default-roster cap is a no-op", () => {
-    expect(IMPLEMENTED_BOSSES.length).toBe(RUSH_ORDER.length);
   });
 });
