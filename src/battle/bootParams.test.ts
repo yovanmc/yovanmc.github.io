@@ -2,28 +2,15 @@ import { describe, expect, it } from "vitest";
 import { coerceRushPrefix, parseActions, parseBoss, parseDefeatedBosses } from "./bootParams";
 
 describe("parseBoss (`boss=` capture key — whitelist = IMPLEMENTED_BOSSES, default alert-storm)", () => {
-  it("defaults to alert-storm when the param is absent", () => {
-    expect(parseBoss(null)).toBe("alert-storm");
+  it.each([
+    { param: null, state: "absent" },
+    { param: "", state: "empty" },
+  ])("defaults to alert-storm when the param is $state", ({ param }) => {
+    expect(parseBoss(param)).toBe("alert-storm");
   });
 
-  it("defaults to alert-storm when the param is empty", () => {
-    expect(parseBoss("")).toBe("alert-storm");
-  });
-
-  it("accepts alert-storm", () => {
-    expect(parseBoss("alert-storm")).toBe("alert-storm");
-  });
-
-  it("accepts cascade", () => {
-    expect(parseBoss("cascade")).toBe("cascade");
-  });
-
-  it("accepts silent-failure", () => {
-    expect(parseBoss("silent-failure")).toBe("silent-failure");
-  });
-
-  it("accepts imposter-syndrome", () => {
-    expect(parseBoss("imposter-syndrome")).toBe("imposter-syndrome");
+  it.each(["alert-storm", "cascade", "silent-failure", "imposter-syndrome"])("accepts %s", (id) => {
+    expect(parseBoss(id)).toBe(id);
   });
 
   it("falls back to alert-storm for an id outside the whitelist", () => {
@@ -121,20 +108,13 @@ describe("parseActions (`actions=` capture key)", () => {
     expect(parseActions("")).toBeUndefined();
   });
 
-  it("parses a bare ct token", () => {
-    expect(parseActions("ct")).toEqual([{ type: "ct" }]);
-  });
-
-  it("parses a bare fo token (Fan Out hits all living targets, no target id)", () => {
-    expect(parseActions("fo")).toEqual([{ type: "fo" }]);
-  });
-
-  it("parses a bare rb token (Rollback is untargeted)", () => {
-    expect(parseActions("rb")).toEqual([{ type: "rb" }]);
-  });
-
-  it("parses a bare conv token (Conviction is untargeted)", () => {
-    expect(parseActions("conv")).toEqual([{ type: "conv" }]);
+  it.each([
+    { token: "ct", why: "Critical Thinking is untargeted" },
+    { token: "fo", why: "Fan Out hits all living targets, no target id" },
+    { token: "rb", why: "Rollback is untargeted" },
+    { token: "conv", why: "Conviction is untargeted" },
+  ])("parses a bare $token token ($why)", ({ token }) => {
+    expect(parseActions(token)).toEqual([{ type: token }]);
   });
 
   it("parses a targeted rc token (Root Cause carries a target id)", () => {

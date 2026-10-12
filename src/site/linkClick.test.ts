@@ -10,23 +10,13 @@ describe("shouldRouteInApp", () => {
     expect(shouldRouteInApp(plain)).toBe(true);
   });
 
-  it("cmd/meta-click does not route in-app", () => {
-    expect(shouldRouteInApp({ ...plain, metaKey: true })).toBe(false);
-  });
-
-  it("ctrl-click does not route in-app", () => {
-    expect(shouldRouteInApp({ ...plain, ctrlKey: true })).toBe(false);
-  });
-
-  it("shift-click does not route in-app", () => {
-    expect(shouldRouteInApp({ ...plain, shiftKey: true })).toBe(false);
-  });
-
-  it("middle click (button !== 0) does not route in-app", () => {
-    expect(shouldRouteInApp({ ...plain, button: 1 })).toBe(false);
-  });
-
-  it("right click (button 2) does not route in-app", () => {
-    expect(shouldRouteInApp({ ...plain, button: 2 })).toBe(false);
+  it.each([
+    { name: "cmd/meta-click", event: { ...plain, metaKey: true } },
+    { name: "ctrl-click", event: { ...plain, ctrlKey: true } },
+    { name: "shift-click", event: { ...plain, shiftKey: true } },
+    { name: "middle click (button !== 0)", event: { ...plain, button: 1 } },
+    { name: "right click (button 2)", event: { ...plain, button: 2 } },
+  ])("$name does not route in-app", ({ event }) => {
+    expect(shouldRouteInApp(event)).toBe(false);
   });
 });

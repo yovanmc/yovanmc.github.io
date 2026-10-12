@@ -63,19 +63,12 @@ describe("findBrowseBuildOffenders (unit, synthetic fixtures)", () => {
     expect(offenders).toHaveLength(1);
   });
 
-  it("does not flag a line where browse and build are both on the same line", () => {
-    const offenders = findBrowseBuildOffenders(['const x = p === "build" ? a : "browse";']);
-    expect(offenders).toEqual([]);
-  });
-
-  it("does not flag a browse line when build is on the line directly before it", () => {
-    const offenders = findBrowseBuildOffenders(["// build", 'const x = "browse";']);
-    expect(offenders).toEqual([]);
-  });
-
-  it("does not flag a browse line when build is on the line directly after it", () => {
-    const offenders = findBrowseBuildOffenders(['const x = "browse";', "// build"]);
-    expect(offenders).toEqual([]);
+  it.each([
+    { where: "on the same line", lines: ['const x = p === "build" ? a : "browse";'] },
+    { where: "on the line directly before it", lines: ["// build", 'const x = "browse";'] },
+    { where: "on the line directly after it", lines: ['const x = "browse";', "// build"] },
+  ])("does not flag a browse line when build is $where", ({ lines }) => {
+    expect(findBrowseBuildOffenders(lines)).toEqual([]);
   });
 
   it("vacuity check: the gate-line exception DOES suppress a hypothetical offender that matches it exactly", () => {

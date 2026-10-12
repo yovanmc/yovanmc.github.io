@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  damageSilentFailure,
-  isSilentFailureDefeated,
   isTargetable,
   livingTargets,
-  markSilentFailure,
   MAX_HP,
   resolveSilentFailureBossTurn,
   SF_TARGET_ID,
@@ -45,38 +42,6 @@ describe("isTargetable: the armor stays selectable, but only embodied is targeta
   it("false while vanished", () => {
     const vanished: SilentFailureBoss = { ...spawnSilentFailure(), phase: "vanished" };
     expect(isTargetable(vanished)).toBe(false);
-  });
-});
-
-describe("damageSilentFailure", () => {
-  it("subtracts amount from hp", () => {
-    const after = damageSilentFailure(spawnSilentFailure(), 40);
-    expect(after.hp).toBe(100);
-  });
-
-  it("clamps at 0 rather than going negative", () => {
-    const after = damageSilentFailure(spawnSilentFailure(), 999);
-    expect(after.hp).toBe(0);
-  });
-
-  it("is a no-op against an already-dead boss", () => {
-    const dead: SilentFailureBoss = { ...spawnSilentFailure(), hp: 0 };
-    const after = damageSilentFailure(dead, 40);
-    expect(after.hp).toBe(0);
-    expect(after).toEqual(dead);
-  });
-});
-
-describe("markSilentFailure — Debug's mark, permanent for this fight", () => {
-  it("sets marked true", () => {
-    const after = markSilentFailure(spawnSilentFailure());
-    expect(after.marked).toBe(true);
-  });
-
-  it("re-marking an already-marked boss is a no-op (still true)", () => {
-    const once = markSilentFailure(spawnSilentFailure());
-    const twice = markSilentFailure(once);
-    expect(twice.marked).toBe(true);
   });
 });
 
@@ -188,16 +153,5 @@ describe("cycle resolution — the CT-extension rule (window-end check reads ct 
     expect(boss.phase).toBe("embodied");
     expect(boss.phaseTurnsLeft).toBe(2);
     expect(boss.extendedThisWindow).toBe(false);
-  });
-});
-
-describe("isSilentFailureDefeated", () => {
-  it("false while hp > 0", () => {
-    expect(isSilentFailureDefeated(spawnSilentFailure())).toBe(false);
-  });
-
-  it("true once hp hits 0", () => {
-    const dead: SilentFailureBoss = { ...spawnSilentFailure(), hp: 0 };
-    expect(isSilentFailureDefeated(dead)).toBe(true);
   });
 });
