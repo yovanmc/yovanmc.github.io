@@ -34,7 +34,7 @@ export interface TierSpec {
   column: number;
   /** Narrowest viewport the tier takes. */
   minWidth: number;
-  /** Viewport height the whole landing needs with three menu rows. */
+  /** Viewport height the whole landing needs with three menu rows, measured with the landing fonts loaded. */
   height3: number;
   /** Extra height per menu row beyond three. */
   perRow: number;
@@ -49,8 +49,8 @@ export interface TierSpec {
 }
 
 export const TIERS: Record<CopyTier, TierSpec> = {
-  L: { column: 540, minWidth: 1200, height3: 728, perRow: 54, name: 108, indent: 70, bio: 17, bioWidth: 480, rule: 380 },
-  M: { column: 470, minWidth: 960, height3: 702, perRow: 54, name: 84, indent: 54, bio: 17, bioWidth: 430, rule: 340 },
+  L: { column: 540, minWidth: 1200, height3: 731, perRow: 54, name: 108, indent: 70, bio: 17, bioWidth: 480, rule: 380 },
+  M: { column: 470, minWidth: 960, height3: 714, perRow: 54, name: 84, indent: 54, bio: 17, bioWidth: 430, rule: 340 },
   S: { column: 400, minWidth: 0, height3: 0, perRow: 54, name: 64, indent: 42, bio: 17, bioWidth: 380, rule: 300 },
 };
 
