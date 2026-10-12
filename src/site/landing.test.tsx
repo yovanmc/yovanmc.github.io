@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Landing } from "../components/Landing";
 import { bioLine, phoneNote, rowContinue, rowNewGame } from "../landingCopy";
 import { contactLinks } from "./landingRows";
+import { h1Count } from "../testing/markup";
 
 const noop = () => {};
 function render(hasProgress: boolean, vw = 1440) {
@@ -30,7 +31,7 @@ describe("Landing static markup", () => {
   const html = render(false);
 
   it("renders exactly one h1 and it holds the name Yovan Collins", () => {
-    expect((html.match(/<h1[ >]/g) ?? []).length).toBe(1);
+    expect(h1Count(html)).toBe(1);
     const m = html.match(/<h1[^>]*>([^<]*)<\/h1>/);
     expect(m![1]).toBe("Yovan Collins");
   });

@@ -9,19 +9,15 @@ import { BrowseIndex } from "../components/BrowseIndex";
 import { CaseStudyPage } from "../components/CaseStudyPage";
 import { CATS } from "../content";
 import { buildEntryTitle, buildEntryMeta, backLabel } from "../buildCopy";
+import { blankTargetAnchors, h1Count } from "../testing/markup";
 
-function count(html: string, tagOpen: RegExp): number {
-  return (html.match(tagOpen) ?? []).length;
-}
-
-const H1 = /<h1[ >]/g;
 const H2 = /<h2[ >]/g;
 
 describe("BrowseIndex static markup", () => {
   const html = renderToStaticMarkup(<BrowseIndex isMobile={false} onItem={() => {}} />);
 
   it("renders exactly one h1", () => {
-    expect(count(html, H1)).toBe(1);
+    expect(h1Count(html)).toBe(1);
   });
 
   it("every project/experience item with a slug links to its case-study shell path", () => {
@@ -64,7 +60,7 @@ describe("BrowseIndex static markup", () => {
   });
 
   it("every target=_blank anchor also carries rel=noopener noreferrer", () => {
-    const blankAnchors = html.match(/<a\b[^>]*target="_blank"[^>]*>/g) ?? [];
+    const blankAnchors = blankTargetAnchors(html);
     expect(blankAnchors.length).toBeGreaterThan(0);
     for (const tag of blankAnchors) {
       expect(tag).toContain('rel="noopener noreferrer"');
@@ -82,8 +78,8 @@ describe("CaseStudyPage static markup", () => {
 
       describe(item.slug!, () => {
         it("has zero h1 and exactly one h2 (CaseStudyPage stays a dialog, not <main>)", () => {
-          expect(count(html, H1)).toBe(0);
-          expect(count(html, H2)).toBe(1);
+          expect(h1Count(html)).toBe(0);
+          expect((html.match(H2) ?? []).length).toBe(1);
         });
 
         it("the outbound repo/announcement button, if present, is a real anchor with rel=noopener noreferrer", () => {
@@ -100,8 +96,7 @@ describe("CaseStudyPage static markup", () => {
           for (const s of item.sources ?? []) {
             expect(html).toContain(`href="${s.url}"`);
           }
-          const sourceAnchors = html.match(/<a\b[^>]*target="_blank"[^>]*>/g) ?? [];
-          for (const tag of sourceAnchors) {
+          for (const tag of blankTargetAnchors(html)) {
             expect(tag).toContain('rel="noopener noreferrer"');
           }
         });

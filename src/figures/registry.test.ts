@@ -15,6 +15,7 @@ import {
   uniformRowThresholdPx,
 } from "./layout";
 import { MEASURED_FIGURE_TYPE } from "./__fixtures__/measuredFigureType";
+import { COPY_RULE } from "../testing/punctuation";
 
 const NARROWEST_CONTENT_PX = MEASURED_FIGURE_TYPE.narrowestContentPx;
 
@@ -53,7 +54,7 @@ describe("punctuation rule", () => {
   it("no figure string contains an em dash, en dash, or semicolon", () => {
     for (const [slug, fig] of Object.entries(FIGURES)) {
       for (const s of allStrings(fig)) {
-        expect(s, `"${slug}": "${s}"`).not.toMatch(/[—–;]/);
+        expect(s, `"${slug}": "${s}"`).not.toMatch(COPY_RULE);
       }
     }
   });

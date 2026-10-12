@@ -1,14 +1,10 @@
 // No em dash, en dash or semicolon in any scene module's copy (middle dots
-// are fine). Banned chars are unicode-escaped so this file never contains
-// one, test titles included.
+// are fine). The rule comes from src/testing/punctuation.ts, so this file
+// never contains a banned char, test titles included.
 import { describe, expect, it } from "vitest";
+import { COPY_RULE } from "../../testing/punctuation";
 import { initBattle } from "../engine";
 import { SCENE_MODULES } from "./index";
-
-const EM_DASH = "\u2014";
-const EN_DASH = "\u2013";
-const SEMICOLON = "\u003B";
-const BANNED = new RegExp(`[${EM_DASH}${EN_DASH}${SEMICOLON}]`);
 
 function copyStringsFor(scene: (typeof SCENE_MODULES)[string]): { label: string; value: string }[] {
   const out: { label: string; value: string }[] = [
@@ -49,7 +45,7 @@ describe("scene module copy - punctuation gate", () => {
     describe(scene.id, () => {
       for (const { label, value } of copyStringsFor(scene)) {
         it(`${label} has no em dash, en dash, or semicolon`, () => {
-          expect(BANNED.test(value)).toBe(false);
+          expect(COPY_RULE.test(value)).toBe(false);
         });
       }
     });

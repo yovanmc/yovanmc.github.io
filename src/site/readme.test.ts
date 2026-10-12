@@ -3,10 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-
-const EM_DASH = String.fromCharCode(0x2014);
-const EN_DASH = String.fromCharCode(0x2013);
-const BANNED = new RegExp(`[${EM_DASH}${EN_DASH}]`);
+import { DASH_RULE } from "../testing/punctuation";
 
 function read(path: string): string {
   return readFileSync(resolve(process.cwd(), path), "utf8");
@@ -28,7 +25,7 @@ describe("README", () => {
   const proseOnly = readme.replace(/```[\s\S]*?```/g, "");
 
   it("has no em dash or en dash anywhere", () => {
-    expect(BANNED.test(readme)).toBe(false);
+    expect(DASH_RULE.test(readme)).toBe(false);
   });
 
   it("every backticked repo path exists on disk", () => {
