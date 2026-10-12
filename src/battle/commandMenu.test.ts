@@ -9,11 +9,7 @@ import { ABILITY_ORDER, commandsForKit } from "./abilities";
 import { deriveKit } from "./engine";
 import { RUSH_ORDER } from "./rushOrder";
 import { SKILLS_IDS, SPELLS_IDS } from "./commandMenu";
-
-const EM_DASH = "\u2014";
-const EN_DASH = "\u2013";
-const SEMICOLON = "\u003B";
-const BANNED = new RegExp(`[${EM_DASH}${EN_DASH}${SEMICOLON}]`);
+import { COPY_RULE } from "../testing/punctuation";
 
 const FULL_KIT = commandsForKit(["attack", "ct", "pt", "debug", "fo", "rb", "rc", "conv"]);
 const BASE_KIT_COMMANDS = commandsForKit(["attack", "ct", "pt", "debug"]); // no spells unlocked
@@ -275,7 +271,6 @@ describe("partition completeness + full-kit reachability", () => {
 });
 
 describe("commandMenu.ts strings: punctuation gate", () => {
-  // Banned characters are unicode-escaped so this file never contains one.
   const lockedView = deriveMenuView(BASE_KIT_COMMANDS, "top");
   const unlockedView = deriveMenuView(FULL_KIT, "top");
   const skillsView = deriveMenuView(FULL_KIT, "skills");
@@ -300,7 +295,7 @@ describe("commandMenu.ts strings: punctuation gate", () => {
 
   it.each(strings)("$label has no em dash, en dash, or semicolon", ({ value }) => {
     expect(value).not.toBeNull();
-    expect(BANNED.test(value!)).toBe(false);
+    expect(COPY_RULE.test(value!)).toBe(false);
   });
 
   it.each(strings)("$label matches the pinned default", ({ value, pinned }) => {
