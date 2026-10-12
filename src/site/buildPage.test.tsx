@@ -88,20 +88,22 @@ describe("BuildPage - populated facts", () => {
 // No semicolon in any buildCopy.ts string value (statement semicolons are
 // code, not copy).
 describe("buildCopy.ts punctuation", () => {
-  function stringLiterals(): string[] {
-    const source = readFileSync(resolve(process.cwd(), "src/buildCopy.ts"), "utf8");
+  function stringLiterals(source: string): string[] {
     return source.match(/"(?:[^"\\]|\\.)*"/g) ?? [];
   }
 
+  function literalsWithSemicolon(source: string): string[] {
+    return stringLiterals(source).filter((s) => s.includes(";"));
+  }
+
   it("no string literal value contains a semicolon", () => {
-    const strings = stringLiterals();
-    expect(strings.length).toBeGreaterThan(0);
-    for (const s of strings) {
-      expect(s).not.toContain(";");
-    }
+    const source = readFileSync(resolve(process.cwd(), "src/buildCopy.ts"), "utf8");
+    expect(stringLiterals(source).length).toBeGreaterThan(0);
+    expect(literalsWithSemicolon(source)).toEqual([]);
   });
 
-  it("vacuity check: the semicolon regex DOES flag a planted semicolon", () => {
-    expect('"a string with a ; semicolon"'.includes(";")).toBe(true);
+  it("vacuity check: a planted semicolon inside a literal is flagged, statement semicolons are not", () => {
+    const planted = 'export const a = "clean";\nexport const b = "say \\"hi\\"; then go";\n';
+    expect(literalsWithSemicolon(planted)).toEqual(['"say \\"hi\\"; then go"']);
   });
 });
