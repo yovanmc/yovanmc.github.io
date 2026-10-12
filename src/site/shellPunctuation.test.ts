@@ -1,5 +1,6 @@
 // No em dash (U+2014) or en dash (U+2013) anywhere in index.html,
-// public/404.html, vite.config.ts or src/landingCopy.ts, comments included.
+// public/404.html, vite.config.ts, src/landingCopy.ts or src/buildCopy.ts,
+// comments included.
 // Semicolons are not checked file-wide (code uses them); the copy semicolon
 // gate is src/battle/scenes/punctuation.test.ts. Both rules live in
 // src/testing/punctuation.ts, and the vacuity checks below cover every gate
@@ -21,6 +22,15 @@ describe("shell punctuation gate", () => {
       expect(DASH_RULE.test(read(file))).toBe(false);
     });
   }
+
+  // The share-shell build in vite.config.ts rewrites these two tags with a
+  // .replace that silently does nothing when a tag is missing or reshaped.
+  it.each([
+    { tag: "title", pattern: /<title>[^<]*<\/title>/ },
+    { tag: "description meta", pattern: /<meta name="description"[^>]*\/>/ },
+  ])("index.html carries the $tag the share shells rewrite", ({ pattern }) => {
+    expect(read("index.html")).toMatch(pattern);
+  });
 
   // Proves each rule fires on a planted character, so a miswired regex cannot
   // pass silently.
