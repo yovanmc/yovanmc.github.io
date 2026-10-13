@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { shouldRouteInApp } from "../site/linkClick";
-import { contactLinks, landingRows, nextRowIndex, type LandingRow } from "../site/landingRows";
+import { contactLinks, landingRows, menuKeyAction, nextRowIndex, type LandingRow } from "../site/landingRows";
 import type { LandingProps } from "./Landing";
 
 /**
@@ -32,17 +32,16 @@ export function useLandingMenu(
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Old Edge/IE key names, cheap to honor.
-      const k = e.key.replace(/^(Right|Left|Up|Down)$/, "Arrow$1");
       const ae = document.activeElement;
       const nothingFocused = !ae || ae === document.body;
-      if (k === "Enter" && nothingFocused) {
+      const k = menuKeyAction(e.key, nothingFocused, blocked());
+      if (k === "play") {
         e.preventDefault();
         playEnter();
         onPlay();
         return;
       }
-      if (k !== "ArrowUp" && k !== "ArrowDown") return;
+      if (k === "none") return;
       e.preventDefault();
       const focusedRow = rowRefs.current.findIndex((el) => el !== null && el === ae);
       // Nothing focused: step from the rest row so the first key visibly moves

@@ -54,3 +54,12 @@ export function nextRowIndex(current: number | null, key: "ArrowUp" | "ArrowDown
   const step = key === "ArrowDown" ? 1 : -1;
   return (current + step + count) % count;
 }
+
+/** What a keydown does to the menu: Enter with nothing focused starts the
+ * game unless the menu is blocked, arrows move the focus (old Edge/IE key
+ * names included), and everything else is left alone. */
+export function menuKeyAction(key: string, nothingFocused: boolean, blocked: boolean): "play" | "ArrowUp" | "ArrowDown" | "none" {
+  const k = key.replace(/^(Right|Left|Up|Down)$/, "Arrow$1");
+  if (k === "Enter") return nothingFocused && !blocked ? "play" : "none";
+  return k === "ArrowUp" || k === "ArrowDown" ? k : "none";
+}

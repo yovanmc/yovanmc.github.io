@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contactLinks, landingRows, nextRowIndex } from "./landingRows";
+import { contactLinks, landingRows, menuKeyAction, nextRowIndex } from "./landingRows";
 import { bioLine, footerEmail, footerGithub, footerLinkedin, ogRootDescription, phoneNote } from "../landingCopy";
 
 describe("landingRows", () => {
@@ -57,6 +57,30 @@ describe("nextRowIndex", () => {
   it("a single row always resolves to itself", () => {
     expect(nextRowIndex(0, "ArrowDown", 1)).toBe(0);
     expect(nextRowIndex(null, "ArrowUp", 1)).toBe(0);
+  });
+});
+
+describe("menuKeyAction", () => {
+  it("Enter with nothing focused starts the game", () => {
+    expect(menuKeyAction("Enter", true, false)).toBe("play");
+  });
+
+  it("Enter with nothing focused does nothing while the menu is blocked", () => {
+    expect(menuKeyAction("Enter", true, true)).toBe("none");
+  });
+
+  it("Enter on a focused row is left to the row", () => {
+    expect(menuKeyAction("Enter", false, false)).toBe("none");
+  });
+
+  it("arrows move the focus, blocked or not, old key names included", () => {
+    expect(menuKeyAction("ArrowDown", true, false)).toBe("ArrowDown");
+    expect(menuKeyAction("Up", false, true)).toBe("ArrowUp");
+  });
+
+  it("other keys do nothing", () => {
+    expect(menuKeyAction("a", true, false)).toBe("none");
+    expect(menuKeyAction("ArrowLeft", true, false)).toBe("none");
   });
 });
 
