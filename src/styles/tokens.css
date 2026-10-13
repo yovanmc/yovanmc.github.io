@@ -133,3 +133,121 @@ body {
   color: #fff;
   padding: 8px 12px;
 }
+
+/* ----- desktop landing ----- */
+/* Metric-matched fallbacks, so the landing fonts swap in without moving the copy. */
+@font-face {
+  font-family: "Bodoni Moda Fallback";
+  src: local("Georgia Italic"), local("Georgia-Italic"), local("Georgia");
+  font-style: italic;
+  font-weight: 500;
+  size-adjust: 98.7%;
+  ascent-override: 114%;
+  descent-override: 41%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Josefin Sans Fallback";
+  src: local("Arial");
+  font-weight: 400;
+  size-adjust: 101.5%;
+  ascent-override: 74%;
+  descent-override: 25%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Josefin Sans Fallback";
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Arial");
+  font-weight: 600;
+  size-adjust: 103.6%;
+  ascent-override: 72%;
+  descent-override: 24%;
+  line-gap-override: 0%;
+}
+
+/* Every animation under the landing waits on its first frame until the
+   root gains lnd-play on the intro's first visible frame. */
+.lnd-root:not(.lnd-play) * {
+  animation-play-state: paused !important;
+}
+/* Copy entrance, timed against the scene's intro (keyframes ship with the scene). */
+.lnd-in-role {
+  animation: lndLeft 0.7s cubic-bezier(0.2, 0.8, 0.25, 1) 0.45s both;
+}
+.lnd-in-name {
+  animation: lndWipe 0.85s cubic-bezier(0.65, 0, 0.25, 1) 0.6s both;
+}
+.lnd-in-glint {
+  animation: lndGlint 0.9s cubic-bezier(0.3, 0, 0.2, 1) 1.3s both;
+}
+.lnd-in-rule {
+  animation: lndRule 0.8s cubic-bezier(0.65, 0, 0.25, 1) 1.05s both;
+}
+.lnd-in-bio {
+  animation: lndUp 0.75s cubic-bezier(0.2, 0.8, 0.25, 1) 1.2s both;
+}
+.lnd-in-tab {
+  animation: lndLeft 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.05) 1.45s both;
+}
+.lnd-in-row0 {
+  animation: lndLeft 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.05) 1.55s both;
+}
+.lnd-in-row1 {
+  animation: lndLeft 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.05) 1.65s both;
+}
+.lnd-in-row2 {
+  animation: lndLeft 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.05) 1.75s both;
+}
+.lnd-in-row3 {
+  animation: lndLeft 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.05) 1.85s both;
+}
+.lnd-in-cursor {
+  animation:
+    lndFade 0.35s cubic-bezier(0.3, 0, 0.2, 1) 1.7s both,
+    lndCursor 1.4s cubic-bezier(0.45, 0, 0.55, 1) 2.05s infinite;
+}
+.lnd-in-footer {
+  animation: lndFade 0.5s cubic-bezier(0.3, 0, 0.2, 1) 1.9s both;
+}
+.lnd-in-hints {
+  animation: lndFade 0.5s cubic-bezier(0.3, 0, 0.2, 1) 1.95s both;
+}
+.lnd-root a:focus-visible,
+.lnd-root button:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+.lnd-foot {
+  color: inherit;
+  text-decoration: none;
+}
+.lnd-foot:hover,
+.lnd-foot:focus-visible {
+  color: #f2e4b0;
+}
+@keyframes lndSettleFade {
+  from {
+    opacity: 0;
+  }
+}
+/* Reduced motion: the settled frame through one fade, with no particles and
+   no loops. Class-scoped and !important, so the global rule above neither
+   shortens the fade nor pops elements in at their delays. */
+@media (prefers-reduced-motion: reduce) {
+  .lnd-root * {
+    animation: none !important;
+  }
+  .lnd-root .lnd-motes {
+    display: none;
+  }
+  .lnd-root.lnd-fade {
+    animation: lndSettleFade 0.8s ease-out both !important;
+  }
+}
+@media (forced-colors: active) {
+  .lnd-root [data-selected] {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+  }
+}

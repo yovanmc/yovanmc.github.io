@@ -15,7 +15,8 @@ interface CaseStudyPageProps {
   onClose: () => void;
 }
 
-function buildGlints(): ReactNode {
+/** Paused while the page is closed: it stays mounted under the landing. */
+function buildGlints(running: boolean): ReactNode {
   const r = rng(131);
   const items: ReactNode[] = [];
   for (let i = 0; i < 26; i++) {
@@ -30,6 +31,7 @@ function buildGlints(): ReactNode {
       boxShadow: `0 0 7px 1px rgba(185,218,255,${op})`,
       transform: "rotate(45deg)",
       animation: `twinkle ${(3 + r() * 3.5).toFixed(2)}s ease-in-out ${(-r() * 5).toFixed(2)}s infinite`,
+      animationPlayState: running ? "running" : "paused",
     };
     items.push(<span key={"g" + i} style={style} />);
   }
@@ -39,8 +41,8 @@ function buildGlints(): ReactNode {
 const mono = "'JetBrains Mono',monospace";
 
 export function CaseStudyPage({ page, isMobile, onClose }: CaseStudyPageProps) {
-  const glints = useMemo(() => buildGlints(), []);
   const open = !!page;
+  const glints = useMemo(() => buildGlints(open), [open]);
   const cat = page ? CATS[page.ri] : null;
   const item = page && cat ? cat.items[page.si] : null;
   const showPeriod = !!(item && cat && cat.key !== "projects" && item.stat);

@@ -21,11 +21,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "json", "json-summary"],
-      include: ["src/battle/**/*.ts", "src/progress/**/*.ts", "src/figures/**/*.ts"],
+      include: ["src/battle/**/*.ts", "src/progress/**/*.ts", "src/figures/**/*.ts", "src/site/landingIntro.ts", "src/site/landingLayout.ts"],
       thresholds: {
         "src/battle/**/*.ts": { branches: 95 },
         "src/progress/**/*.ts": { branches: 95 },
         "src/figures/**/*.ts": { branches: 95 },
+        "src/site/landingIntro.ts": { branches: 95 },
+        "src/site/landingLayout.ts": { branches: 95 },
       },
     },
   },
