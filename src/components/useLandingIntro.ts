@@ -129,7 +129,7 @@ export function useLandingIntro(rootRef: RefObject<HTMLElement>, played: boolean
       return r.consume;
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (inTail(e, { type: "keydown", key: e.key })) return;
+      if (inTail(e, { type: "keydown", key: e.key, repeat: e.repeat })) return;
       const verdict = onIntroInput(phaseRef.current, {
         kind: "key",
         key: e.key,

@@ -99,15 +99,19 @@ describe("onGestureTail", () => {
   const afterPress: GestureTail = { key: null, pointer: true };
 
   it("consumes the skipping key's repeats, then its keyup, and lets the next key through", () => {
-    let r = onGestureTail(afterKey("Enter"), { type: "keydown", key: "Enter" });
+    let r = onGestureTail(afterKey("Enter"), { type: "keydown", key: "Enter", repeat: true });
     expect(r.consume).toBe(true);
     r = onGestureTail(r.tail, { type: "keyup", key: "Enter" });
     expect(r).toEqual({ consume: true, tail: NO_TAIL });
-    expect(onGestureTail(r.tail, { type: "keydown", key: "Enter" }).consume).toBe(false);
+    expect(onGestureTail(r.tail, { type: "keydown", key: "Enter", repeat: false }).consume).toBe(false);
+  });
+
+  it("lets a fresh press of the skipping key through and closes the tail when its keyup was lost", () => {
+    expect(onGestureTail(afterKey("Enter"), { type: "keydown", key: "Enter", repeat: false })).toEqual({ consume: false, tail: NO_TAIL });
   });
 
   it("leaves other keys alone while a key tail is open", () => {
-    expect(onGestureTail(afterKey("Enter"), { type: "keydown", key: "a" })).toEqual({ consume: false, tail: afterKey("Enter") });
+    expect(onGestureTail(afterKey("Enter"), { type: "keydown", key: "a", repeat: false })).toEqual({ consume: false, tail: afterKey("Enter") });
     expect(onGestureTail(afterKey("Enter"), { type: "keyup", key: "a" })).toEqual({ consume: false, tail: afterKey("Enter") });
   });
 

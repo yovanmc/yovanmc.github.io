@@ -124,6 +124,11 @@ describe("hintsLayout", () => {
     expect(hintsLayout(vw, vh, sceneFit(vw, vh, copyRightAt(vw, vh)))).toBe(layout);
   });
 
+  it.each([760, 1000, 1280, 1920])("at %i wide keeps the hints down to 344 px of height and drops them below", (vw) => {
+    expect(hintsLayout(vw, 344, sceneFit(vw, 344, copyRightAt(vw, 344)))).toBe("stacked");
+    expect(hintsLayout(vw, 343, sceneFit(vw, 343, copyRightAt(vw, 343)))).toBe("none");
+  });
+
   it("keeps the row once the reflection sits more than 16 scene px to its left", () => {
     const fit = sceneFit(1280, 800, copyRightAt(1280, 800));
     const rowLeft = 1280 - HINTS.right - HINTS.width;

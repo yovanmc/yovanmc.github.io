@@ -70,7 +70,8 @@ export interface GestureTail {
 export const NO_TAIL: GestureTail = { key: null, pointer: false };
 
 export type TailEvent =
-  | { type: "keydown" | "keyup"; key: string }
+  | { type: "keydown"; key: string; repeat: boolean }
+  | { type: "keyup"; key: string }
   | { type: "pointerdown" | "pointerup" | "mousedown" | "mouseup" | "click" }
   | { type: "pointercancel" | "contextmenu" | "auxclick" | "blur" };
 
@@ -78,13 +79,14 @@ export type TailEvent =
  * Whether an event belongs to the open tail (and is consumed), and the tail
  * after it. A tail closes on its own end (the keyup, the click), and also
  * when that end can no longer come: a right-click or a cancelled pointer, a
- * new press, or the window losing focus. So a lost end never swallows the
- * next real gesture.
+ * new press or a fresh press of the same key, or the window losing focus. So
+ * a lost end never swallows the next real gesture.
  */
 export function onGestureTail(tail: GestureTail, e: TailEvent): { consume: boolean; tail: GestureTail } {
   switch (e.type) {
     case "keydown":
-      return { consume: e.key === tail.key, tail };
+      if (e.key !== tail.key) return { consume: false, tail };
+      return e.repeat ? { consume: true, tail } : { consume: false, tail: { ...tail, key: null } };
     case "keyup":
       return e.key === tail.key ? { consume: true, tail: { ...tail, key: null } } : { consume: false, tail };
     case "pointerdown":
