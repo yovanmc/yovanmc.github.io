@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { bioLine, footerEmail, footerGithub, footerLinkedin, nameLine, roleLine } from "../landingCopy";
-import { TIERS, copyLeft, copyTier } from "../site/landingLayout";
+import { HINTS, TIERS, copyLeft, copyTier, hintsShown, sceneFit } from "../site/landingLayout";
 import type { LandingProps } from "./Landing";
 import { LandingScene } from "./LandingScene";
 import { useLandingIntro } from "./useLandingIntro";
@@ -45,6 +45,7 @@ export function DesktopLanding(props: LandingProps) {
   const tier = copyTier(vw, vh, rows.length);
   const t = TIERS[tier];
   const [copyRight, setCopyRight] = useState(() => copyLeft(vw) + t.column);
+  const showHints = hintsShown(vw, vh, sceneFit(vw, vh, copyRight));
 
   // The scene's scale depends on where the copy column ends. Measured here,
   // the column's own parent, so the ref is set on mount.
@@ -245,24 +246,26 @@ export function DesktopLanding(props: LandingProps) {
         </div>
       </div>
 
-      <div
-        aria-hidden
-        className={seq("lnd-in-hints")}
-        style={{ position: "fixed", right: "52px", bottom: "32px", display: "flex", alignItems: "center", gap: "28px", fontFamily: SANS, fontWeight: 600, fontSize: "12px", letterSpacing: ".3em", textTransform: "uppercase", color: "#b0b2c8", pointerEvents: "none" }}
-      >
-        <span style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-          <svg viewBox="0 0 16 14" width="16" height="14" style={{ display: "block" }}>
-            <path d="M4 12.5 L4 1.5 M1 4.5 L4 1.5 L7 4.5 M12 1.5 L12 12.5 M9 9.5 L12 12.5 L15 9.5" fill="none" style={{ stroke: ACCENT, strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" }} />
-          </svg>
-          <span>NAVIGATE</span>
-        </span>
-        <span style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-          <svg viewBox="0 0 16 14" width="16" height="14" style={{ display: "block" }}>
-            <path d="M14 1.5 L14 8 L3 8 M6.5 4.5 L3 8 L6.5 11.5" fill="none" style={{ stroke: ACCENT, strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" }} />
-          </svg>
-          <span>SELECT</span>
-        </span>
-      </div>
+      {showHints && (
+        <div
+          aria-hidden
+          className={seq("lnd-in-hints")}
+          style={{ position: "fixed", right: HINTS.right + "px", bottom: HINTS.bottom + "px", display: "flex", alignItems: "center", gap: "28px", fontFamily: SANS, fontWeight: 600, fontSize: "12px", letterSpacing: ".3em", textTransform: "uppercase", color: "#b0b2c8", pointerEvents: "none" }}
+        >
+          <span style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+            <svg viewBox="0 0 16 14" width="16" height="14" style={{ display: "block" }}>
+              <path d="M4 12.5 L4 1.5 M1 4.5 L4 1.5 L7 4.5 M12 1.5 L12 12.5 M9 9.5 L12 12.5 L15 9.5" fill="none" style={{ stroke: ACCENT, strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" }} />
+            </svg>
+            <span>NAVIGATE</span>
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+            <svg viewBox="0 0 16 14" width="16" height="14" style={{ display: "block" }}>
+              <path d="M14 1.5 L14 8 L3 8 M6.5 4.5 L3 8 L6.5 11.5" fill="none" style={{ stroke: ACCENT, strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" }} />
+            </svg>
+            <span>SELECT</span>
+          </span>
+        </div>
+      )}
     </main>
   );
 }

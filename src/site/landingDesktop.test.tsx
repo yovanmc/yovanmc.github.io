@@ -69,6 +69,11 @@ describe("desktop landing markup", () => {
     for (const s of [roleLine, footerGithub, footerLinkedin, footerEmail]) expect(t).toContain(s);
   });
 
+  it("drops the key hints where they would sit on the pool", () => {
+    expect(text(render())).toContain("NAVIGATE");
+    expect(text(render({ vw: 800, vh: 1000 }))).not.toContain("NAVIGATE");
+  });
+
   // Forced colors draws a backplate behind the name that is larger than its
   // lines. The role line and the rule paint above it, and the rule is art.
   it("keeps the role line and the rule above the name's backplate in forced colors", () => {

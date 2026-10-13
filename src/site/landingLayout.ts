@@ -19,6 +19,8 @@ export interface Box {
 export const MOON: Box = { left: 672, top: 74, right: 1072, bottom: 426 };
 /** The moon body united with its pool below, in scene px. */
 export const FOCAL: Box = { left: 672, top: 74, right: 1072, bottom: 690 };
+/** The pool under the moon, in scene px. */
+export const POOL: Box = { left: 700, top: 500, right: 1050, bottom: 690 };
 /** The moon at its largest intro pose (scale 1.32 about its base), in scene px. */
 export const INTRO_MOON: Box = { left: 608, top: 35.5, right: 1136, bottom: 500 };
 
@@ -78,6 +80,7 @@ export interface SceneFit {
   focal: Box;
   moon: Box;
   introMoon: Box;
+  pool: Box;
 }
 
 function place(b: Box, scale: number, x: number, y: number): Box {
@@ -106,5 +109,19 @@ export function sceneFit(vw: number, vh: number, copyRight: number): SceneFit {
     focal: place(FOCAL, scale, x, y),
     moon: place(MOON, scale, x, y),
     introMoon: place(INTRO_MOON, scale, x, y),
+    pool: place(POOL, scale, x, y),
   };
+}
+
+/** The key hints' box at the bottom right, in viewport px (it does not scale). */
+export const HINTS = { right: 52, bottom: 32, width: 236, height: 14 };
+/** Scene px the hints keep below the pool where they overlap its width. */
+export const HINTS_CLEARANCE = 40;
+
+/** The hints show unless they would sit on the pool's glow. */
+export function hintsShown(vw: number, vh: number, fit: SceneFit): boolean {
+  const left = vw - HINTS.right - HINTS.width;
+  const top = vh - HINTS.bottom - HINTS.height;
+  const overlapsWidth = left < fit.pool.right && fit.pool.left < vw - HINTS.right;
+  return !overlapsWidth || top - fit.pool.bottom >= HINTS_CLEARANCE * fit.scale;
 }

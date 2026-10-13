@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COPY_GAP, TIERS, copyLeft, copyTier, sceneFit } from "./landingLayout";
+import { COPY_GAP, TIERS, copyLeft, copyTier, hintsShown, sceneFit } from "./landingLayout";
 
 // [vw, vh, tier, scale, frame x, frame y] for a three-row menu, computed by
 // plain arithmetic apart from the module. Includes zoomed laptop sizes
@@ -98,5 +98,29 @@ describe("sceneFit", () => {
   it("returns scale 0, never negative, when the copy leaves no room", () => {
     expect(sceneFit(760, 600, 760 - COPY_GAP).scale).toBe(0);
     expect(sceneFit(760, 600, 2000).scale).toBe(0);
+  });
+});
+
+// The key hints sit fixed at the bottom right. Where the scene is small they
+// land on the pool's glow, so they give way below 40 scene px of clearance.
+describe("hintsShown", () => {
+  it.each([
+    [1280, 800, true],
+    [1440, 900, true],
+    [1600, 640, true],
+    [1024, 600, true],
+    [1920, 1080, true],
+    [1093, 526, true],
+    [800, 1000, false],
+    [760, 600, false],
+    [911, 438, false],
+    [853, 480, false],
+  ])("at %ix%i shows the hints: %s", (vw, vh, shown) => {
+    expect(hintsShown(vw, vh, sceneFit(vw, vh, copyRightAt(vw, vh)))).toBe(shown);
+  });
+
+  it("shows the hints when they clear the pool's width, however close below", () => {
+    const fit = sceneFit(800, 1000, copyRightAt(800, 1000));
+    expect(hintsShown(800 + 400, 1000, { ...fit, pool: { ...fit.pool, left: fit.pool.left - 400, right: fit.pool.right - 400 } })).toBe(true);
   });
 });
