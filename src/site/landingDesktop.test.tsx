@@ -69,6 +69,17 @@ describe("desktop landing markup", () => {
     for (const s of [roleLine, footerGithub, footerLinkedin, footerEmail]) expect(t).toContain(s);
   });
 
+  // Forced colors draws a backplate behind the name that is larger than its
+  // lines. The role line and the rule paint above it, and the rule is art.
+  it("keeps the role line and the rule above the name's backplate in forced colors", () => {
+    const html = render();
+    const role = html.match(/<div[^>]*style="([^"]*)"[^>]*><span aria-hidden="true"[^>]*><\/span><span>/)![1];
+    expect(role).toMatch(/position:relative;?.*z-index:1/);
+    const rule = html.match(/<div aria-hidden="true"[^>]*style="([^"]*height:12px[^"]*)"/)![1];
+    expect(rule).toContain("z-index:1");
+    expect(rule).toContain("forced-color-adjust:none");
+  });
+
   it("mounts the entrance classes when motion is allowed", () => {
     expect(render()).toMatch(/class="lnd-in-/);
   });

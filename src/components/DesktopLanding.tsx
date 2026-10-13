@@ -118,7 +118,7 @@ export function DesktopLanding(props: LandingProps) {
         <div ref={copyRef} style={{ width: t.column + "px", marginTop: "auto" }}>
           <div
             className={seq("lnd-in-role")}
-            style={{ display: "flex", alignItems: "center", gap: "16px", fontFamily: SANS, fontWeight: 600, fontSize: "12.5px", letterSpacing: ".44em", textTransform: "uppercase", color: "#b5b7cc" }}
+            style={{ display: "flex", alignItems: "center", gap: "16px", fontFamily: SANS, fontWeight: 600, fontSize: "12.5px", letterSpacing: ".44em", textTransform: "uppercase", color: "#b5b7cc", position: "relative", zIndex: 1 }}
           >
             <span aria-hidden style={{ display: "block", width: "34px", height: "1px", background: "linear-gradient(90deg, rgba(226,224,245,0), #e2e0f5)" }} />
             <span>{roleLine}</span>
@@ -155,7 +155,9 @@ export function DesktopLanding(props: LandingProps) {
             </div>
           </div>
 
-          <div aria-hidden className={seq("lnd-in-rule")} style={{ transformOrigin: "left center", position: "relative", width: t.rule + "px", height: "12px", margin: "20px 0" }}>
+          {/* Above the name's forced-colors backplate, which is larger than its
+              lines; the role line above sits there too. The rule is art. */}
+          <div aria-hidden className={seq("lnd-in-rule")} style={{ transformOrigin: "left center", position: "relative", zIndex: 1, forcedColorAdjust: "none", width: t.rule + "px", height: "12px", margin: "20px 0" }}>
             <div style={{ position: "absolute", left: 0, top: "6px", width: t.rule + "px", height: "1px", background: "linear-gradient(90deg, #ece8f6 0%, rgba(236,232,246,.5) 45%, rgba(236,232,246,0) 100%)" }} />
             <div style={{ ...diamond(8, ACCENT, true), position: "absolute", left: 0, top: "2px" }} />
           </div>
