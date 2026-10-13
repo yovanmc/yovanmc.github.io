@@ -12,6 +12,11 @@
 //   4. Emit src/generated/stationCanon.js under a generated header. It is .js
 //      with a hand-written .d.ts because strict tsconfig cannot compile the lab JS.
 //
+// Landing source: docs/battle-prototypes/landing-moon.html. The markup between
+// its scene:start and scene:end comments and its <style id="sequence"> block
+// become src/generated/landingScene.js, verbatim, with the list of ambient
+// loops the landing keeps running after its intro.
+//
 // Drift guard: dive-intro.html embeds its own hand-wrapped copy of the station
 // builder (`buildStationString`). Verify mode normalizes that body and diffs it
 // against the canon body.
@@ -40,6 +45,15 @@ const OUT_BF = resolve(root, "src/generated/battlefieldScene.js");
 const OUT_CASCADE = resolve(root, "src/generated/bossCascade.js");
 const OUT_SF = resolve(root, "src/generated/bossSilentFailure.js");
 const OUT_IMP = resolve(root, "src/generated/bossImposter.js");
+const LANDING_LAB = resolve(root, "docs/battle-prototypes/landing-moon.html");
+const OUT_LANDING = resolve(root, "src/generated/landingScene.js");
+
+// The infinite loops that keep running once the landing settles: eleven in
+// the scene and the hand cursor in the copy column.
+const LANDING_LOOPS = [
+  "lndHalo", "lndRaySway", "lndRayBreath", "lndC1", "lndC2", "lndP4",
+  "lndTwinkleA", "lndTwinkleB", "lndAshFallA", "lndAshFallB", "lndMoteRise", "lndCursor",
+];
 
 // Every symbol the dive lab's pure block declares, all exported.
 const TIMELINE_EXPORTS = [
@@ -252,6 +266,23 @@ function buildImposterModule(body) {
     "export { " + IMPOSTER_EXPORTS.join(", ") + " };\n";
 }
 
+function extractLanding() {
+  const html = readLf(LANDING_LAB);
+  const a = html.indexOf("<!-- scene:start -->");
+  const b = html.indexOf("<!-- scene:end -->");
+  if (a < 0 || b < a) fail("scene:start / scene:end anchors not found in landing-moon.html");
+  const m = html.match(/<style id="sequence">\n([\s\S]*?)\n<\/style>/);
+  if (!m) fail('no <style id="sequence"> block found in landing-moon.html');
+  return { scene: html.slice(a + "<!-- scene:start -->".length, b), css: m[1] };
+}
+
+function buildLandingModule({ scene, css }) {
+  return battleHeader("landing-moon.html", "The scene markup and its sequence CSS, as strings. The landing scales the 1280x800 frame itself.") +
+    "export const landingSceneHtml = " + JSON.stringify(scene) + ";\n" +
+    "export const landingSequenceCss = " + JSON.stringify(css) + ";\n" +
+    "export const landingAmbientLoops = " + JSON.stringify(LANDING_LOOPS) + ";\n";
+}
+
 // PAL-equality guard: parse each lab's PAL literal and deep-compare VALUES
 // (text differs legitimately: quoting/layout).
 function parsePal(html, name) {
@@ -306,6 +337,8 @@ const generatedImp = buildImposterModule(
   sliceBetween(impHtml, "function remapOf", "function drawGrid", "boss-imposter-syndrome.html"),
 );
 
+const generatedLanding = buildLandingModule(extractLanding());
+
 // Drift guard first: the lab's embedded copy must match canon in either mode.
 const diveBody = extractDiveStationBody();
 if (normalize(diveBody) !== normalize(body)) {
@@ -338,6 +371,7 @@ if (process.argv.includes("--verify")) {
     [OUT_CASCADE, generatedCascade, "bossCascade.js"],
     [OUT_SF, generatedSf, "bossSilentFailure.js"],
     [OUT_IMP, generatedImp, "bossImposter.js"],
+    [OUT_LANDING, generatedLanding, "landingScene.js"],
   ];
   for (const [path, fresh, name] of targets) {
     let committed;
@@ -348,7 +382,7 @@ if (process.argv.includes("--verify")) {
     }
     if (committed !== fresh) fail("DRIFT: committed " + name + " differs from a fresh extraction");
   }
-  console.log("verify:canon OK — station/timeline/hero/boss/battlefield/cascade/silent-failure/imposter modules match canon; lab station copy + PAL values match");
+  console.log("verify:canon OK — station/timeline/hero/boss/battlefield/cascade/silent-failure/imposter/landing modules match canon; lab station copy + PAL values match");
 } else {
   mkdirSync(dirname(OUT_JS), { recursive: true });
   writeFileSync(OUT_JS, generated);
@@ -359,10 +393,11 @@ if (process.argv.includes("--verify")) {
   writeFileSync(OUT_CASCADE, generatedCascade);
   writeFileSync(OUT_SF, generatedSf);
   writeFileSync(OUT_IMP, generatedImp);
+  writeFileSync(OUT_LANDING, generatedLanding);
   console.log(
     "extract-canon: wrote stationCanon.js (" + generated.length + " b) + diveTimeline.js (" + generatedTimeline.length +
     " b) + heroBattle.js (" + generatedHero.length + " b) + bossAlertStorm.js (" + generatedBoss.length +
     " b) + battlefieldScene.js (" + generatedBf.length + " b) + bossCascade.js (" + generatedCascade.length +
-    " b) + bossSilentFailure.js (" + generatedSf.length + " b) + bossImposter.js (" + generatedImp.length + " b)",
+    " b) + bossSilentFailure.js (" + generatedSf.length + " b) + bossImposter.js (" + generatedImp.length + " b) + landingScene.js (" + generatedLanding.length + " b)",
   );
 }
