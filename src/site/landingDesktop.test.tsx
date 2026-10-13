@@ -69,9 +69,14 @@ describe("desktop landing markup", () => {
     for (const s of [roleLine, footerGithub, footerLinkedin, footerEmail]) expect(t).toContain(s);
   });
 
-  it("drops the key hints where they would sit on the pool", () => {
-    expect(text(render())).toContain("NAVIGATE");
-    expect(text(render({ vw: 800, vh: 1000 }))).not.toContain("NAVIGATE");
+  it("stacks the key hints nearer the corner where the row would sit on the pool", () => {
+    const hints = (html: string) => html.match(/<div aria-hidden="true" class="[^"]*lnd-in-hints[^"]*"[^>]*style="([^"]*)"/)![1];
+    const row = render();
+    expect(text(row)).toContain("NAVIGATE");
+    expect(hints(row)).toMatch(/right:52px;bottom:32px;display:flex;flex-direction:row/);
+    const stacked = render({ vw: 800, vh: 1000 });
+    expect(text(stacked)).toMatch(/NAVIGATE.*SELECT/);
+    expect(hints(stacked)).toMatch(/right:24px;bottom:24px;display:flex;flex-direction:column/);
   });
 
   // Forced colors draws a backplate behind the name that is larger than its

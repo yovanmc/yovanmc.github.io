@@ -113,16 +113,26 @@ export function sceneFit(vw: number, vh: number, copyRight: number): SceneFit {
   };
 }
 
-/** The key hints' box at the bottom right, in viewport px (it does not scale). */
-export const HINTS = { right: 52, bottom: 32, width: 236, height: 14 };
+type HintsBox = { right: number; bottom: number; width: number; height: number };
+/** The key hints as one row at the bottom right, in viewport px (it does not scale). */
+export const HINTS: HintsBox = { right: 52, bottom: 32, width: 236, height: 14 };
+/** The key hints stacked, one hint above the other, nearer the corner. */
+export const HINTS_STACKED: HintsBox = { right: 24, bottom: 24, width: 116, height: 36 };
 /** Scene px the hints keep clear of the reflection on every side. */
 export const HINTS_MARGIN = 16;
 
-/** The hints show unless they would sit on, or within the margin of, the moon's reflection. */
-export function hintsShown(vw: number, vh: number, fit: SceneFit): boolean {
+export type HintsLayout = "row" | "stacked" | "none";
+
+function clearsReflection(vw: number, vh: number, fit: SceneFit, h: HintsBox): boolean {
   const m = HINTS_MARGIN * fit.scale;
   const r = fit.reflection;
-  const left = vw - HINTS.right - HINTS.width;
-  const top = vh - HINTS.bottom - HINTS.height;
-  return left >= r.right + m || vw - HINTS.right <= r.left - m || top >= r.bottom + m || top + HINTS.height <= r.top - m;
+  const left = vw - h.right - h.width;
+  const top = vh - h.bottom - h.height;
+  return left >= r.right + m || vw - h.right <= r.left - m || top >= r.bottom + m || top + h.height <= r.top - m;
+}
+
+/** The row where it keeps clear of the moon's reflection, else the stacked block where that does, else none. */
+export function hintsLayout(vw: number, vh: number, fit: SceneFit): HintsLayout {
+  if (clearsReflection(vw, vh, fit, HINTS)) return "row";
+  return clearsReflection(vw, vh, fit, HINTS_STACKED) ? "stacked" : "none";
 }

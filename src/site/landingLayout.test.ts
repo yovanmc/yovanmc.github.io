@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COPY_GAP, TIERS, copyLeft, copyTier, hintsShown, sceneFit } from "./landingLayout";
+import { COPY_GAP, HINTS, HINTS_STACKED, TIERS, copyLeft, copyTier, hintsLayout, sceneFit } from "./landingLayout";
 
 // [vw, vh, tier, scale, frame x, frame y] for a three-row menu, computed by
 // plain arithmetic apart from the module. Includes zoomed laptop sizes
@@ -101,41 +101,49 @@ describe("sceneFit", () => {
   });
 });
 
-// The key hints sit fixed at the bottom right. Where the scene is small they
-// land on the moon's reflection under the pool, so they give way when they
-// come within 16 scene px of it.
-describe("hintsShown", () => {
+// The key hints sit fixed at the bottom right. Where the scene is small the
+// row lands on the moon's reflection under the pool, so the hints stack into
+// a narrower block nearer the corner, and drop out only when that block
+// would also come within 16 scene px of the reflection.
+describe("hintsLayout", () => {
   it.each([
-    [1280, 800, true],
-    [1280, 720, true],
-    [1440, 900, true],
-    [1920, 1080, true],
-    [2560, 1440, true],
-    [1600, 640, false],
-    [1024, 600, false],
-    [1366, 657, false],
-    [1093, 526, false],
-    [800, 1000, false],
-    [760, 600, false],
-    [911, 438, false],
-    [853, 480, false],
-  ])("at %ix%i shows the hints: %s", (vw, vh, shown) => {
-    expect(hintsShown(vw, vh, sceneFit(vw, vh, copyRightAt(vw, vh)))).toBe(shown);
+    [1280, 800, "row"],
+    [1280, 720, "row"],
+    [1440, 900, "row"],
+    [1920, 1080, "row"],
+    [2560, 1440, "row"],
+    [1600, 640, "stacked"],
+    [1024, 600, "stacked"],
+    [1366, 657, "stacked"],
+    [1093, 526, "stacked"],
+    [800, 1000, "stacked"],
+    [760, 600, "stacked"],
+    [911, 438, "stacked"],
+    [853, 480, "stacked"],
+  ])("at %ix%i lays the hints out as %s", (vw, vh, layout) => {
+    expect(hintsLayout(vw, vh, sceneFit(vw, vh, copyRightAt(vw, vh)))).toBe(layout);
   });
 
-  it("shows the hints once the reflection sits more than 16 scene px to their left", () => {
+  it("keeps the row once the reflection sits more than 16 scene px to its left", () => {
     const fit = sceneFit(1280, 800, copyRightAt(1280, 800));
-    const hintsLeft = 1280 - 52 - 236;
-    expect(hintsShown(1280, 800, { ...fit, reflection: { ...fit.reflection, right: hintsLeft - 16.5 } })).toBe(true);
-    expect(hintsShown(1280, 800, { ...fit, reflection: { ...fit.reflection, right: hintsLeft - 15.5 } })).toBe(false);
+    const rowLeft = 1280 - HINTS.right - HINTS.width;
+    expect(hintsLayout(1280, 800, { ...fit, reflection: { ...fit.reflection, right: rowLeft - 16.5 } })).toBe("row");
+    expect(hintsLayout(1280, 800, { ...fit, reflection: { ...fit.reflection, right: rowLeft - 15.5 } })).toBe("stacked");
   });
 
-  it("shows the hints when the reflection clears them to the right, below or above", () => {
+  it("stacks only while the stacked block keeps 16 scene px from the reflection", () => {
+    const fit = sceneFit(1280, 800, copyRightAt(1280, 800));
+    const stackLeft = 1280 - HINTS_STACKED.right - HINTS_STACKED.width;
+    expect(hintsLayout(1280, 800, { ...fit, reflection: { ...fit.reflection, right: stackLeft - 16.5 } })).toBe("stacked");
+    expect(hintsLayout(1280, 800, { ...fit, reflection: { ...fit.reflection, right: stackLeft - 15.5 } })).toBe("none");
+  });
+
+  it("keeps the row when the reflection clears it to the right, below or above, and drops both when it covers the corner", () => {
     const fit = sceneFit(1280, 800, copyRightAt(1280, 800));
     const box = (left: number, top: number, right: number, bottom: number) => ({ ...fit, reflection: { left, top, right, bottom } });
-    expect(hintsShown(1280, 800, box(1250, 0, 1280, 800))).toBe(true);
-    expect(hintsShown(1280, 800, box(0, 0, 1280, 730))).toBe(true);
-    expect(hintsShown(1280, 800, box(0, 790, 1280, 800))).toBe(true);
-    expect(hintsShown(1280, 800, box(0, 0, 1280, 800))).toBe(false);
+    expect(hintsLayout(1280, 800, box(1250, 0, 1280, 800))).toBe("row");
+    expect(hintsLayout(1280, 800, box(0, 0, 1280, 730))).toBe("row");
+    expect(hintsLayout(1280, 800, box(0, 790, 1280, 800))).toBe("row");
+    expect(hintsLayout(1280, 800, box(0, 0, 1280, 800))).toBe("none");
   });
 });

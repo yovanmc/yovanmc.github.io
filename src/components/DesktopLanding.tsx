@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { bioLine, footerEmail, footerGithub, footerLinkedin, nameLine, roleLine } from "../landingCopy";
-import { HINTS, TIERS, copyLeft, copyTier, hintsShown, sceneFit } from "../site/landingLayout";
+import { HINTS, HINTS_STACKED, TIERS, copyLeft, copyTier, hintsLayout, sceneFit } from "../site/landingLayout";
 import type { LandingProps } from "./Landing";
 import { LandingScene } from "./LandingScene";
 import { useLandingIntro } from "./useLandingIntro";
@@ -45,7 +45,8 @@ export function DesktopLanding(props: LandingProps) {
   const tier = copyTier(vw, vh, rows.length);
   const t = TIERS[tier];
   const [copyRight, setCopyRight] = useState(() => copyLeft(vw) + t.column);
-  const showHints = hintsShown(vw, vh, sceneFit(vw, vh, copyRight));
+  const hints = hintsLayout(vw, vh, sceneFit(vw, vh, copyRight));
+  const hintsBox = hints === "row" ? HINTS : HINTS_STACKED;
 
   // The scene's scale depends on where the copy column ends. Measured here,
   // the column's own parent, so the ref is set on mount.
@@ -246,11 +247,11 @@ export function DesktopLanding(props: LandingProps) {
         </div>
       </div>
 
-      {showHints && (
+      {hints !== "none" && (
         <div
           aria-hidden
           className={seq("lnd-in-hints")}
-          style={{ position: "fixed", right: HINTS.right + "px", bottom: HINTS.bottom + "px", display: "flex", alignItems: "center", gap: "28px", fontFamily: SANS, fontWeight: 600, fontSize: "12px", letterSpacing: ".3em", textTransform: "uppercase", color: "#b0b2c8", pointerEvents: "none" }}
+          style={{ position: "fixed", right: hintsBox.right + "px", bottom: hintsBox.bottom + "px", display: "flex", flexDirection: hints === "row" ? "row" : "column", alignItems: hints === "row" ? "center" : "flex-start", gap: hints === "row" ? "28px" : "8px", fontFamily: SANS, fontWeight: 600, fontSize: "12px", letterSpacing: ".3em", textTransform: "uppercase", color: "#b0b2c8", pointerEvents: "none" }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: "9px" }}>
             <svg viewBox="0 0 16 14" width="16" height="14" style={{ display: "block" }}>
