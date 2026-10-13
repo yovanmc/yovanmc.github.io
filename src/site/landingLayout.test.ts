@@ -102,15 +102,19 @@ describe("sceneFit", () => {
 });
 
 // The key hints sit fixed at the bottom right. Where the scene is small they
-// land on the pool's glow, so they give way below 40 scene px of clearance.
+// land on the moon's reflection under the pool, so they give way when they
+// come within 16 scene px of it.
 describe("hintsShown", () => {
   it.each([
     [1280, 800, true],
+    [1280, 720, true],
     [1440, 900, true],
-    [1600, 640, true],
-    [1024, 600, true],
     [1920, 1080, true],
-    [1093, 526, true],
+    [2560, 1440, true],
+    [1600, 640, false],
+    [1024, 600, false],
+    [1366, 657, false],
+    [1093, 526, false],
     [800, 1000, false],
     [760, 600, false],
     [911, 438, false],
@@ -119,8 +123,19 @@ describe("hintsShown", () => {
     expect(hintsShown(vw, vh, sceneFit(vw, vh, copyRightAt(vw, vh)))).toBe(shown);
   });
 
-  it("shows the hints when they clear the pool's width, however close below", () => {
-    const fit = sceneFit(800, 1000, copyRightAt(800, 1000));
-    expect(hintsShown(800 + 400, 1000, { ...fit, pool: { ...fit.pool, left: fit.pool.left - 400, right: fit.pool.right - 400 } })).toBe(true);
+  it("shows the hints once the reflection sits more than 16 scene px to their left", () => {
+    const fit = sceneFit(1280, 800, copyRightAt(1280, 800));
+    const hintsLeft = 1280 - 52 - 236;
+    expect(hintsShown(1280, 800, { ...fit, reflection: { ...fit.reflection, right: hintsLeft - 16.5 } })).toBe(true);
+    expect(hintsShown(1280, 800, { ...fit, reflection: { ...fit.reflection, right: hintsLeft - 15.5 } })).toBe(false);
+  });
+
+  it("shows the hints when the reflection clears them to the right, below or above", () => {
+    const fit = sceneFit(1280, 800, copyRightAt(1280, 800));
+    const box = (left: number, top: number, right: number, bottom: number) => ({ ...fit, reflection: { left, top, right, bottom } });
+    expect(hintsShown(1280, 800, box(1250, 0, 1280, 800))).toBe(true);
+    expect(hintsShown(1280, 800, box(0, 0, 1280, 730))).toBe(true);
+    expect(hintsShown(1280, 800, box(0, 790, 1280, 800))).toBe(true);
+    expect(hintsShown(1280, 800, box(0, 0, 1280, 800))).toBe(false);
   });
 });
