@@ -205,6 +205,9 @@ export default function App() {
   // The dive has run this page load: later play entries skip to the menu, and
   // the hero stands at the station only after he has dived.
   const [hasDived, setHasDived] = useState(false);
+  // The desktop landing's intro plays once per page load.
+  const [landingIntroPlayed, setLandingIntroPlayed] = useState(false);
+  const onLandingIntroPlayed = useCallback(() => setLandingIntroPlayed(true), []);
   // Slugs revealed with "read it anyway". Session-only by design, never
   // persisted, so a reload re-seals everything.
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
@@ -621,6 +624,8 @@ export default function App() {
   }, [snd, showToast]);
 
   const isMobile = w < MOBILE_BREAKPOINT;
+  // The desktop landing brings its own sky, so the shared one stays off there.
+  const desktopLanding = phase === "gate" && !page && !isMobile;
   const cat = CATS[rootIdx];
   const item = cat.items[subIdx] ?? cat.items[0];
   // Locks the project items not yet earned. The browse path always shows
@@ -688,14 +693,14 @@ export default function App() {
         inset: 0,
         overflow: "hidden",
         fontFamily: "'Sora',sans-serif",
-        background: "radial-gradient(ellipse 110% 90% at 50% 16%, #15294d 0%, #0b1226 48%, #070b18 100%)",
+        background: desktopLanding ? "#03040a" : "radial-gradient(ellipse 110% 90% at 50% 16%, #15294d 0%, #0b1226 48%, #070b18 100%)",
         userSelect: "none",
       }}
     >
       <a href="#main" className="skip">
         {skipToContent}
       </a>
-      <Atmosphere />
+      {!desktopLanding && <Atmosphere />}
 
       {/* The station is the dive's landing geometry only. */}
       {stationVisible(phase) && (
@@ -740,6 +745,8 @@ export default function App() {
           vh={h}
           playMove={snd.move}
           playEnter={snd.enter}
+          introPlayed={landingIntroPlayed}
+          onIntroPlayed={onLandingIntroPlayed}
         />
       )}
 

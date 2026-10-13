@@ -24,16 +24,16 @@ function render(hasProgress: boolean, vw = 1440) {
     />,
   );
 }
-// the cursor <span> precedes the label inside every row
-const buttonWith = (label: string) => new RegExp(`<button[^>]*>[\\s\\S]*?${label}<\\/button>`);
+// the glyph precedes the label inside every row; the label may sit in its own span
+const buttonWith = (label: string) => new RegExp(`<button[^>]*>[\\s\\S]*?${label}(<\\/span>)?<\\/button>`);
 
 describe("Landing static markup", () => {
   const html = render(false);
 
   it("renders exactly one h1 and it holds the name Yovan Collins", () => {
     expect(h1Count(html)).toBe(1);
-    const m = html.match(/<h1[^>]*>([^<]*)<\/h1>/);
-    expect(m![1]).toBe("Yovan Collins");
+    const m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/);
+    expect(m![1].replace(/<[^>]+>/g, "")).toBe("Yovan Collins");
   });
 
   it("shows the bio verbatim", () => {
@@ -75,12 +75,10 @@ describe("Landing static markup", () => {
     expect(html).not.toContain(phoneNote);
   });
 
-  it("nothing is autofocused; the cursor glyph rests on New game and only there", () => {
+  it("nothing is autofocused; the selection rests on New game and only there", () => {
     expect(html).not.toMatch(/autofocus/);
-    // each row = <button|a ...><span aria-hidden style="...color:X...">▸</span>label
-    const glyphColors = [...html.matchAll(/<span aria-hidden="true" style="[^"]*?color:([^;"]+)/g)].map((m) => m[1]);
-    expect(glyphColors.length).toBe(3);
-    expect(glyphColors[0]).toBe("#7fb0ff");
-    expect(glyphColors.slice(1)).toEqual(["transparent", "transparent"]);
+    const selected = [...html.matchAll(/<(button|a)[^>]*data-selected="true"[^>]*>([\s\S]*?)<\/\1>/g)];
+    expect(selected.length).toBe(1);
+    expect(selected[0][2].replace(/<[^>]+>/g, "")).toBe(rowNewGame);
   });
 });
