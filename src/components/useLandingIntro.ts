@@ -86,8 +86,8 @@ export function useLandingIntro(rootRef: RefObject<HTMLElement>, played: boolean
       cancelAnimationFrame(raf);
       window.clearTimeout(timer);
       window.clearTimeout(wait);
-      // Unmounted before settling (viewport crossed the breakpoint, phase
-      // changed): the intro counts as played.
+      // Unmounted before settling (viewport crossed the breakpoint, or the
+      // landing closed): the intro counts as played.
       if (phaseRef.current === "intro") onPlayedRef.current();
     };
   }, [start, settle]);

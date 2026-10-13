@@ -41,7 +41,7 @@ const SKIP_KEYS = new Set([" ", "Spacebar", "Enter", "ArrowUp", "ArrowDown", "Ar
 /**
  * "skip" jumps to the settled frame and the caller consumes the gesture, so
  * no row activates. Everything else passes through: unlisted keys, Tab,
- * modified keys, keys while focus is on a control, input on links and
+ * keys held with Ctrl, Alt or Meta, keys while focus is on a control, input on links and
  * controls, and a click on the focused row (a screen reader's synthetic
  * click, which the aria-disabled row ignores).
  */
