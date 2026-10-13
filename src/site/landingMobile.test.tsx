@@ -5,10 +5,16 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Landing } from "../components/Landing";
+import { contactLinks } from "./landingRows";
 
 const noop = () => {};
+// The fixtures hold a placeholder for the contact address, filled from the site's own contact link.
+const contactEmail = contactLinks().email.replace(/^mailto:/, "");
 const fixture = (name: string) =>
-  readFileSync(resolve(__dirname, "__fixtures__", name), "utf8").replace(/\r\n/g, "\n").trimEnd();
+  readFileSync(resolve(__dirname, "__fixtures__", name), "utf8")
+    .replace(/\r\n/g, "\n")
+    .trimEnd()
+    .replaceAll("{{contact-email}}", contactEmail);
 
 describe("phone landing markup", () => {
   it.each([
