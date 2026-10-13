@@ -24,6 +24,8 @@ export const INTRO_MOON: Box = { left: 608, top: 35.5, right: 1136, bottom: 500 
 
 /** Clear space between the copy column's right edge and the focal box. */
 export const COPY_GAP = 32;
+/** Scene px kept clear above the intro moon, so its rim never touches the top edge. */
+export const INTRO_HEADROOM = 8;
 /** The settled moon's top stays at least this share of the viewport height below the top edge. */
 export const TOP_MARGIN = 0.05;
 
@@ -85,15 +87,15 @@ function place(b: Box, scale: number, x: number, y: number): Box {
 /**
  * The scale is the smallest of three limits: cover the viewport, keep the
  * focal box `COPY_GAP` px right of `copyRight`, and keep both the settled
- * moon's top margin and the whole intro moon inside the viewport. A
- * `copyRight` that is not a finite number is read as no copy. Any band the
+ * moon's top margin and the whole intro moon, with its headroom, inside
+ * the viewport. A `copyRight` that is not a finite number is read as no copy. Any band the
  * frame leaves uncovered shows the night behind it.
  */
 export function sceneFit(vw: number, vh: number, copyRight: number): SceneFit {
   const right = Number.isFinite(copyRight) ? copyRight : 0;
   const cover = Math.max(vw / SCENE_W, vh / SCENE_H);
   const focal = (vw - right - COPY_GAP) / (SCENE_W - FOCAL.left);
-  const top = Math.min((vh * (1 - TOP_MARGIN)) / (SCENE_H - MOON.top), vh / (SCENE_H - INTRO_MOON.top));
+  const top = Math.min((vh * (1 - TOP_MARGIN)) / (SCENE_H - MOON.top), vh / (SCENE_H - INTRO_MOON.top + INTRO_HEADROOM));
   const scale = Math.max(0, Math.min(cover, focal, top));
   const x = vw - SCENE_W * scale;
   const y = vh - SCENE_H * scale;

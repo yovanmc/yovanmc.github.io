@@ -5,18 +5,18 @@ import { COPY_GAP, TIERS, copyLeft, copyTier, sceneFit } from "./landingLayout";
 // plain arithmetic apart from the module. Includes zoomed laptop sizes
 // (1366x657 at 125%, 150% and 160%) and the smallest desktop width.
 const SWEEP: [number, number, string, number, number, number][] = [
-  [1024, 600, "S", 0.7848, 19.4, -27.9],
-  [1280, 720, "M", 0.9418, 74.5, -33.4],
+  [1024, 600, "S", 0.7767, 29.8, -21.4],
+  [1280, 720, "M", 0.932, 87.0, -25.6],
   [1280, 800, "L", 1.0, 0.0, 0.0],
-  [1366, 657, "S", 0.8594, 266.0, -30.5],
+  [1366, 657, "S", 0.8505, 277.4, -23.4],
   [1440, 900, "L", 1.125, 0.0, 0.0],
-  [1600, 640, "S", 0.8371, 528.4, -29.7],
-  [1920, 1080, "L", 1.4127, 111.8, -50.2],
-  [2560, 1440, "L", 1.8836, 149.0, -66.9],
+  [1600, 640, "S", 0.8285, 539.5, -22.8],
+  [1920, 1080, "L", 1.3981, 130.5, -38.4],
+  [2560, 1440, "L", 1.8641, 174.0, -51.3],
   [800, 1000, "S", 0.5145, 141.5, 588.4],
   [760, 600, "S", 0.4532, 179.9, 237.4],
-  [1093, 526, "S", 0.688, 212.3, -24.4],
-  [911, 438, "S", 0.5729, 177.7, -20.3],
+  [1093, 526, "S", 0.6809, 221.4, -18.7],
+  [911, 438, "S", 0.567, 185.3, -15.6],
   [853, 480, "S", 0.5956, 90.6, 3.5],
 ];
 
@@ -78,9 +78,9 @@ describe("sceneFit", () => {
     expect(moon.bottom).toBeLessThanOrEqual(vh + 1e-9);
   });
 
-  it.each(SWEEP)("at %ix%i keeps the intro moon wholly inside the viewport", (vw, vh) => {
-    const { introMoon } = sceneFit(vw, vh, copyRightAt(vw, vh));
-    expect(introMoon.top).toBeGreaterThanOrEqual(-1e-9);
+  it.each(SWEEP)("at %ix%i keeps the intro moon wholly inside the viewport, its rim clear of the top", (vw, vh) => {
+    const { introMoon, scale } = sceneFit(vw, vh, copyRightAt(vw, vh));
+    expect(introMoon.top).toBeGreaterThanOrEqual(8 * scale - 1e-9);
     expect(introMoon.right).toBeLessThanOrEqual(vw + 1e-9);
     expect(introMoon.bottom).toBeLessThanOrEqual(vh + 1e-9);
   });
