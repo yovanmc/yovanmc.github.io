@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import { introStart, onIntroInput, type IntroPhase, type IntroTarget } from "../site/landingIntro";
+import { NO_TAIL, introStart, onGestureTail, onIntroInput, type IntroPhase, type IntroTarget, type TailEvent } from "../site/landingIntro";
 
 /** The intro reaches its settled frame within this, measured from its first visible frame. */
 export const INTRO_MS = 3400;
@@ -108,10 +108,10 @@ export function useLandingIntro(rootRef: RefObject<HTMLElement>, played: boolean
   }, [playing, rootRef, settle]);
 
   // The intro input layer, on window in the capture phase so it runs before
-  // the landing's own key handler.
+  // the landing's own key handler. A skipping gesture opens a tail, and the
+  // rest of that gesture is consumed until the tail closes.
   useEffect(() => {
-    let swallowKey: string | null = null;
-    let swallowClick = false;
+    let tail = NO_TAIL;
     const root = () => rootRef.current;
     const focusAtRoot = () => {
       const ae = document.activeElement;
@@ -121,7 +121,15 @@ export function useLandingIntro(rootRef: RefObject<HTMLElement>, played: boolean
       e.preventDefault();
       e.stopImmediatePropagation();
     };
+    /** Runs the event through the open tail; true when the tail consumed it. */
+    const inTail = (e: Event, te: TailEvent) => {
+      const r = onGestureTail(tail, te);
+      tail = r.tail;
+      if (r.consume) consume(e);
+      return r.consume;
+    };
     const onKeyDown = (e: KeyboardEvent) => {
+      if (inTail(e, { type: "keydown", key: e.key })) return;
       const verdict = onIntroInput(phaseRef.current, {
         kind: "key",
         key: e.key,
@@ -133,30 +141,29 @@ export function useLandingIntro(rootRef: RefObject<HTMLElement>, played: boolean
       });
       if (verdict !== "skip") return;
       consume(e);
-      swallowKey = e.key;
+      tail = { ...tail, key: e.key };
       settle();
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (swallowKey === null || e.key !== swallowKey) return;
-      swallowKey = null;
-      consume(e);
+      inTail(e, { type: "keyup", key: e.key });
     };
     const onPointerDown = (e: PointerEvent) => {
+      inTail(e, { type: "pointerdown" });
+      if (e.button !== 0) return;
       const verdict = onIntroInput(phaseRef.current, { kind: "pointer", focusAtRoot: focusAtRoot(), target: targetKind(e.target) });
       if (verdict !== "skip") return;
       consume(e);
-      swallowClick = true;
+      tail = { ...tail, pointer: true };
       settle();
     };
     const onPointerTail = (e: Event) => {
-      if (swallowClick) consume(e);
+      inTail(e, { type: e.type as "pointerup" | "mousedown" | "mouseup" | "pointercancel" | "contextmenu" | "auxclick" });
+    };
+    const onBlur = () => {
+      tail = onGestureTail(tail, { type: "blur" }).tail;
     };
     const onClick = (e: MouseEvent) => {
-      if (swallowClick) {
-        swallowClick = false;
-        consume(e);
-        return;
-      }
+      if (inTail(e, { type: "click" })) return;
       const t = e.target instanceof Element ? e.target : null;
       const verdict = onIntroInput(phaseRef.current, {
         kind: "click",
@@ -169,21 +176,20 @@ export function useLandingIntro(rootRef: RefObject<HTMLElement>, played: boolean
       settle();
     };
     const opts = { capture: true };
+    const tails = ["pointerup", "mousedown", "mouseup", "pointercancel", "contextmenu", "auxclick"] as const;
     window.addEventListener("keydown", onKeyDown, opts);
     window.addEventListener("keyup", onKeyUp, opts);
     window.addEventListener("pointerdown", onPointerDown, opts);
-    window.addEventListener("pointerup", onPointerTail, opts);
-    window.addEventListener("mousedown", onPointerTail, opts);
-    window.addEventListener("mouseup", onPointerTail, opts);
+    for (const t of tails) window.addEventListener(t, onPointerTail, opts);
     window.addEventListener("click", onClick, opts);
+    window.addEventListener("blur", onBlur);
     return () => {
       window.removeEventListener("keydown", onKeyDown, opts);
       window.removeEventListener("keyup", onKeyUp, opts);
       window.removeEventListener("pointerdown", onPointerDown, opts);
-      window.removeEventListener("pointerup", onPointerTail, opts);
-      window.removeEventListener("mousedown", onPointerTail, opts);
-      window.removeEventListener("mouseup", onPointerTail, opts);
+      for (const t of tails) window.removeEventListener(t, onPointerTail, opts);
       window.removeEventListener("click", onClick, opts);
+      window.removeEventListener("blur", onBlur);
     };
   }, [rootRef, settle]);
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { introStart, onIntroInput, type IntroInput } from "./landingIntro";
+import { NO_TAIL, introStart, onGestureTail, onIntroInput, type GestureTail, type IntroInput } from "./landingIntro";
 
 const key = (k: string, extra: Partial<IntroInput> = {}): IntroInput => ({ kind: "key", key: k, focusAtRoot: true, target: "other", ...extra });
 const press = (target: IntroInput["target"], extra: Partial<IntroInput> = {}): IntroInput => ({ kind: "pointer", focusAtRoot: true, target, ...extra });
@@ -60,6 +60,11 @@ describe("onIntroInput during the intro", () => {
     expect(onIntroInput("intro", press("row"))).toBe("skip");
   });
 
+  it("skips on a pointer press wherever focus is, unlike a key", () => {
+    expect(onIntroInput("intro", press("other", { focusAtRoot: false }))).toBe("skip");
+    expect(onIntroInput("intro", key("Enter", { focusAtRoot: false }))).toBe("pass");
+  });
+
   it("passes a pointer press on a footer link or skip link", () => {
     expect(onIntroInput("intro", press("control"))).toBe("pass");
   });
@@ -82,5 +87,48 @@ describe("onIntroInput once settled", () => {
     expect(onIntroInput("settled", key("Enter"))).toBe("pass");
     expect(onIntroInput("settled", press("other"))).toBe("pass");
     expect(onIntroInput("settled", click("row"))).toBe("pass");
+  });
+});
+
+// After a skip, the rest of that gesture is consumed: the key's repeats and
+// its keyup, or the press's mouse events and click. A gesture whose tail
+// never arrives (a right-click, a cancelled pointer, a lost keyup) must not
+// swallow the next real one.
+describe("onGestureTail", () => {
+  const afterKey = (k: string): GestureTail => ({ key: k, pointer: false });
+  const afterPress: GestureTail = { key: null, pointer: true };
+
+  it("consumes the skipping key's repeats, then its keyup, and lets the next key through", () => {
+    let r = onGestureTail(afterKey("Enter"), { type: "keydown", key: "Enter" });
+    expect(r.consume).toBe(true);
+    r = onGestureTail(r.tail, { type: "keyup", key: "Enter" });
+    expect(r).toEqual({ consume: true, tail: NO_TAIL });
+    expect(onGestureTail(r.tail, { type: "keydown", key: "Enter" }).consume).toBe(false);
+  });
+
+  it("leaves other keys alone while a key tail is open", () => {
+    expect(onGestureTail(afterKey("Enter"), { type: "keydown", key: "a" })).toEqual({ consume: false, tail: afterKey("Enter") });
+    expect(onGestureTail(afterKey("Enter"), { type: "keyup", key: "a" })).toEqual({ consume: false, tail: afterKey("Enter") });
+  });
+
+  it("consumes the press's mouse events and its click, then lets the next click through", () => {
+    expect(onGestureTail(afterPress, { type: "pointerup" }).consume).toBe(true);
+    const r = onGestureTail(afterPress, { type: "click" });
+    expect(r).toEqual({ consume: true, tail: NO_TAIL });
+    expect(onGestureTail(r.tail, { type: "click" }).consume).toBe(false);
+  });
+
+  it("drops a press tail that a right-click or a cancelled pointer never finishes", () => {
+    for (const type of ["contextmenu", "auxclick", "pointercancel"] as const) {
+      expect(onGestureTail(afterPress, { type })).toEqual({ consume: false, tail: NO_TAIL });
+    }
+  });
+
+  it("drops a stale press tail when a new press starts", () => {
+    expect(onGestureTail(afterPress, { type: "pointerdown" })).toEqual({ consume: false, tail: NO_TAIL });
+  });
+
+  it("drops every tail when the window loses focus", () => {
+    expect(onGestureTail({ key: "Enter", pointer: true }, { type: "blur" })).toEqual({ consume: false, tail: NO_TAIL });
   });
 });

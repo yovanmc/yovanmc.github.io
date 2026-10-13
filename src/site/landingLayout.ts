@@ -2,8 +2,8 @@
  * Where the desktop landing's moon scene sits and how large its copy is.
  * The scene is a fixed 1280x800 frame, scaled and anchored bottom-right,
  * sized so the moon and its pool never sit under the copy column. Pure, so
- * it tests without a DOM; Landing measures the column and LandingScene
- * applies the fit.
+ * it tests without a DOM; DesktopLanding measures the column and
+ * LandingScene applies the fit.
  */
 export const SCENE_W = 1280;
 export const SCENE_H = 800;
