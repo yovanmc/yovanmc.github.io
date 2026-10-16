@@ -9,6 +9,7 @@ import { ABILITY_ORDER, commandsForKit } from "./abilities";
 import { deriveKit } from "./engine";
 import { RUSH_ORDER } from "./rushOrder";
 import { SKILLS_IDS, SPELLS_IDS } from "./commandMenu";
+import { COPY_RULE } from "../testing/punctuation";
 
 const FULL_KIT = commandsForKit(["attack", "ct", "pt", "debug", "fo", "rb", "rc", "conv"]);
 const BASE_KIT_COMMANDS = commandsForKit(["attack", "ct", "pt", "debug"]); // no spells unlocked
@@ -300,7 +301,8 @@ describe("commandMenu.ts strings: punctuation gate", () => {
     { label: "spells.title", value: spellsView.title, pinned: "SPELLS" },
   ];
 
-  it.each(strings)("$label matches the pinned default", ({ value, pinned }) => {
+  it.each(strings)("$label matches the pinned default and has no em dash, en dash, or semicolon", ({ value, pinned }) => {
     expect(value).toBe(pinned);
+    expect(COPY_RULE.test(value!)).toBe(false);
   });
 });

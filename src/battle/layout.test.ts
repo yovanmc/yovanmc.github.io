@@ -134,10 +134,10 @@ describe("rectsIntersect", () => {
 });
 
 describe("clip invariant: hero vs COMMAND panel", () => {
-  // At every swept viewport, neither the leftmost clone's painted rect nor the
-  // hero's (`IDLE[0]` at `HERO_AT`; the panel can clip his legs at 360x640) may
-  // intersect the COMMAND panel. Both come from the real public seams, never
-  // hardcoded numbers.
+  // At every swept viewport, the hero's painted rect (`IDLE[0]` at `HERO_AT`; the
+  // panel can clip his legs at 360x640) may not intersect the COMMAND panel. It
+  // comes from the real public seams, never hardcoded numbers. The clones are
+  // checked by the per-boss clip invariant.
   //
   // One case per viewport, not one looping test, so every bad viewport is
   // reported, not just the first.

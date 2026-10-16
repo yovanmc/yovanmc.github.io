@@ -109,7 +109,6 @@ describe("resolveCascadeBossTurn — loop/storm (wrap = loop complete: storm 25,
     expect(outcome).toBe("storm");
     expect(heroDamage).toBe(19);
   });
-
 });
 
 describe("resolveCascadeBossTurn — Debug block / absorb (an absorb replaces the boss turn's damage entirely: no storm AND no jolt)", () => {

@@ -357,7 +357,7 @@ describe("resolveImposterBossTurn", () => {
     expect(result.mirroredDebug).toBe(mirroredDebug);
   });
 
-  it("MIRROR dispatch — Debug arm mirrors into a hero DoT of 2 damage for 3 ticks", () => {
+  it("MIRROR_DEBUG_DOT_TICK and MIRROR_DEBUG_DOT_TICKS are 2 damage for 3 ticks", () => {
     expect(MIRROR_DEBUG_DOT_TICK).toBe(2);
     expect(MIRROR_DEBUG_DOT_TICKS).toBe(3);
   });
