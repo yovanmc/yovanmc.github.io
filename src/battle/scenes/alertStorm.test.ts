@@ -66,27 +66,14 @@ describe("plotMarkChevron (mark-chevron bounds guard)", () => {
     expect(g[10][12]).toBe("k");
   });
 
-  it("drops cells whose row goes negative", () => {
+  it.each([
+    { name: "drops cells whose row goes negative", r: -5, c: 10 },
+    { name: "drops cells whose row overflows EROWS", r: EROWS + 5, c: 10 },
+    { name: "drops cells whose column goes negative", r: 10, c: -3 },
+    { name: "drops cells whose column overflows ECOLS", r: 10, c: ECOLS + 5 },
+  ])("$name", ({ r, c }) => {
     const g = newG();
-    plotMarkChevron(g, -5, 10);
-    for (const row of g) expect(row.includes("k")).toBe(false);
-  });
-
-  it("drops cells whose row overflows EROWS", () => {
-    const g = newG();
-    plotMarkChevron(g, EROWS + 5, 10);
-    for (const row of g) expect(row.includes("k")).toBe(false);
-  });
-
-  it("drops cells whose column goes negative", () => {
-    const g = newG();
-    plotMarkChevron(g, 10, -3);
-    for (const row of g) expect(row.includes("k")).toBe(false);
-  });
-
-  it("drops cells whose column overflows ECOLS", () => {
-    const g = newG();
-    plotMarkChevron(g, 10, ECOLS + 5);
+    plotMarkChevron(g, r, c);
     for (const row of g) expect(row.includes("k")).toBe(false);
   });
 });
@@ -100,21 +87,13 @@ describe("alertStormScene.plate", () => {
 });
 
 describe("alertStormScene.banner", () => {
-  it("shows the scream banner only on an active scream turn", () => {
-    let s = initBattle({ seed: 42 });
-    s = { ...s, turn: 3, status: "active" }; // isScreamTurn: turn % 3 === 0
-    expect(alertStormScene.banner(s)).toBe("THE SWARM SCREAMS · ONE VOICE RUNS RED");
-  });
-
-  it("is empty on a non-scream active turn", () => {
-    let s = initBattle({ seed: 42 });
-    s = { ...s, turn: 1, ctTurns: 0, status: "active" };
-    expect(alertStormScene.banner(s)).toBe("");
-  });
-
-  it("is empty once the battle is no longer active, even on a scream-turn number", () => {
-    let s = initBattle({ seed: 42 });
-    s = { ...s, turn: 3, status: "victory" };
-    expect(alertStormScene.banner(s)).toBe("");
+  it.each([
+    // isScreamTurn: turn % 3 === 0
+    { name: "shows the scream banner only on an active scream turn", patch: { turn: 3, status: "active" }, expected: "THE SWARM SCREAMS · ONE VOICE RUNS RED" },
+    { name: "is empty on a non-scream active turn", patch: { turn: 1, ctTurns: 0, status: "active" }, expected: "" },
+    { name: "is empty once the battle is no longer active, even on a scream-turn number", patch: { turn: 3, status: "victory" }, expected: "" },
+  ] as const)("$name", ({ patch, expected }) => {
+    const s = { ...initBattle({ seed: 42 }), ...patch };
+    expect(alertStormScene.banner(s)).toBe(expected);
   });
 });

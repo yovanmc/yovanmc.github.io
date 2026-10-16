@@ -5,15 +5,12 @@ import { sitemapUrls, shellPaths } from "../../vite.config";
 import { CATS } from "../content";
 
 describe("sitemap urls", () => {
-  it("lists the root and browse shells", () => {
-    const urls = sitemapUrls();
-    expect(urls).toContain("https://yovanmc.github.io/");
-    expect(urls).toContain("https://yovanmc.github.io/work/");
-  });
-
-  it("lists the build shell", () => {
-    const urls = sitemapUrls();
-    expect(urls).toContain("https://yovanmc.github.io/build/");
+  it.each([
+    { name: "lists the root shell", url: "https://yovanmc.github.io/" },
+    { name: "lists the browse shell", url: "https://yovanmc.github.io/work/" },
+    { name: "lists the build shell", url: "https://yovanmc.github.io/build/" },
+  ])("$name", ({ url }) => {
+    expect(sitemapUrls()).toContain(url);
   });
 
   it("lists every project/experience slug's shell", () => {
@@ -43,10 +40,8 @@ describe("sitemap urls", () => {
 
 // Pure: asserts on the same list computeBuildFacts's shareShells count reads.
 describe("shellPaths", () => {
-  it("includes /build/ and /work/", () => {
-    const paths = shellPaths();
-    expect(paths).toContain("/build/");
-    expect(paths).toContain("/work/");
+  it.each(["/build/", "/work/"])("includes %s", (path) => {
+    expect(shellPaths()).toContain(path);
   });
 
   it("has one entry per project/experience slug plus browse and build", () => {

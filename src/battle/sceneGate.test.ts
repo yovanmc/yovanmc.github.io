@@ -22,8 +22,4 @@ describe("shouldComposeBoss", () => {
       expect(shouldComposeBoss({ descend: false, mode })).toBe(true);
     }
   });
-
-  it("is true during defeat specifically (the boss survives a defeat turn, so the layer must never stop for it)", () => {
-    expect(shouldComposeBoss({ descend: false, mode: "defeat" })).toBe(true);
-  });
 });

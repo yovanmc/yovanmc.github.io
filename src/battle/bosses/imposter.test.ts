@@ -55,71 +55,48 @@ describe("spawnImposter", () => {
 });
 
 describe("livingTargets — [0,1,2] during clones, [0] otherwise, [] once dead", () => {
-  it("is [0,1,2] on the fresh (clones) spawn", () => {
-    expect(livingTargets(fresh())).toEqual([0, 1, 2]);
-  });
-
-  it("is [0] outside clones", () => {
-    expect(livingTargets(fresh({ phase: "vanish" }))).toEqual([0]);
-    expect(livingTargets(fresh({ phase: "pulse" }))).toEqual([0]);
-    expect(livingTargets(fresh({ phase: "mirror" }))).toEqual([0]);
-  });
-
-  it("is [] once hp hits 0, even mid-clones", () => {
-    expect(livingTargets(fresh({ hp: 0 }))).toEqual([]);
+  it.each([
+    { name: "is [0,1,2] on the fresh (clones) spawn", boss: fresh(), expected: [0, 1, 2] },
+    { name: "is [0] in vanish", boss: fresh({ phase: "vanish" }), expected: [0] },
+    { name: "is [0] in pulse", boss: fresh({ phase: "pulse" }), expected: [0] },
+    { name: "is [0] in mirror", boss: fresh({ phase: "mirror" }), expected: [0] },
+    { name: "is [] once hp hits 0, even mid-clones", boss: fresh({ hp: 0 }), expected: [] },
+  ])("$name", ({ boss, expected }) => {
+    expect(livingTargets(boss)).toEqual(expected);
   });
 });
 
 describe("damageImposter — unconditional, phase-agnostic hp reduction (overlay-only)", () => {
-  it("a DoT anchored before a CLONES phase keeps ticking THROUGH it into the next phase (crossing OUT of clones)", () => {
-    let boss = fresh({ phase: "clones" });
-    boss = damageImposter(boss, 4); // tick while in clones
+  it.each([
+    { name: "a DoT anchored before a CLONES phase keeps ticking THROUGH it into the next phase (crossing OUT of clones)", from: "clones", to: "pulse" },
+    { name: "a DoT anchored before re-entering CLONES keeps ticking once inside it (crossing INTO clones)", from: "mirror", to: "clones" },
+  ] as const)("$name", ({ from, to }) => {
+    let boss = fresh({ phase: from });
+    boss = damageImposter(boss, 4); // tick before the phase boundary
     expect(boss.hp).toBe(176);
-    boss = { ...boss, phase: "pulse" }; // simulate the natural phase boundary
-    boss = damageImposter(boss, 4); // tick continues after leaving clones
+    boss = { ...boss, phase: to }; // simulate the natural phase boundary
+    boss = damageImposter(boss, 4); // tick continues unconditionally
     expect(boss.hp).toBe(172);
   });
 
-  it("a DoT anchored before re-entering CLONES keeps ticking once inside it (crossing INTO clones)", () => {
-    let boss = fresh({ phase: "mirror" });
-    boss = damageImposter(boss, 4); // tick while NOT in clones
-    expect(boss.hp).toBe(176);
-    boss = { ...boss, phase: "clones" }; // re-enter clones
-    boss = damageImposter(boss, 4); // tick continues inside clones, unconditionally
-    expect(boss.hp).toBe(172);
-  });
-
-  it("the <=50% crossing hit sets forgeFired immediately (94 -> 52 crosses 90)", () => {
-    const before = fresh({ hp: 94 });
-    const after = damageImposter(before, 42);
-    expect(after.hp).toBe(52);
-    expect(after.forgeFired).toBe(true);
-  });
-
-  it("does not fire the forge event before the crossing (91 -> 91-turn stays above)", () => {
-    const boss = damageImposter(fresh({ hp: 100 }), 9); // 100 -> 91, still > 90
-    expect(boss.forgeFired).toBe(false);
-  });
-
-  it("fires exactly at the boundary (90 counts as at-or-below 50%)", () => {
-    const boss = damageImposter(fresh({ hp: 91 }), 1); // 91 -> 90
-    expect(boss.forgeFired).toBe(true);
-  });
-
-  it("never re-fires once already set", () => {
-    const already = fresh({ hp: 50, forgeFired: true });
-    const after = damageImposter(already, 5);
-    expect(after.forgeFired).toBe(true); // still true, no error re-deriving it
+  it.each([
+    { name: "the <=50% crossing hit sets forgeFired immediately (94 -> 52 crosses 90)", hp: 94, damage: 42, forgeFired: false, expectedHp: 52, expectedForge: true },
+    { name: "does not fire the forge event before the crossing (100 -> 91 stays above 90)", hp: 100, damage: 9, forgeFired: false, expectedHp: 91, expectedForge: false },
+    { name: "fires exactly at the boundary (90 counts as at-or-below 50%)", hp: 91, damage: 1, forgeFired: false, expectedHp: 90, expectedForge: true },
+    { name: "never re-fires once already set", hp: 50, damage: 5, forgeFired: true, expectedHp: 45, expectedForge: true },
+  ])("$name", ({ hp, damage, forgeFired, expectedHp, expectedForge }) => {
+    const after = damageImposter(fresh({ hp, forgeFired }), damage);
+    expect(after.hp).toBe(expectedHp);
+    expect(after.forgeFired).toBe(expectedForge);
   });
 });
 
 describe("healImposter — caps at maxHp", () => {
-  it("adds amount", () => {
-    expect(healImposter(fresh({ hp: 50 }), 20).hp).toBe(70);
-  });
-
-  it("caps at maxHp, never overheals", () => {
-    expect(healImposter(fresh({ hp: 170 }), 50).hp).toBe(180);
+  it.each([
+    { name: "adds amount", hp: 50, amount: 20, expected: 70 },
+    { name: "caps at maxHp, never overheals", hp: 170, amount: 50, expected: 180 },
+  ])("$name", ({ hp, amount, expected }) => {
+    expect(healImposter(fresh({ hp }), amount).hp).toBe(expected);
   });
 });
 
@@ -165,14 +142,14 @@ describe("breakPulse — only inside the charge-complete window; consumes the ma
     expect(after.marked).toBe(false);
   });
 
-  it("is a no-op outside the pulse phase", () => {
-    const notPulse = fresh({ phase: "vanish", marked: true });
-    expect(breakPulse(notPulse)).toEqual(notPulse);
-  });
-
-  it("is a no-op during pulse before the charge completes (turn 1)", () => {
-    const charging = fresh({ phase: "pulse", phaseTurnsLeft: 2, pulseCharged: false, marked: true });
-    expect(breakPulse(charging)).toEqual(charging);
+  it.each([
+    { name: "is a no-op outside the pulse phase", boss: fresh({ phase: "vanish", marked: true }) },
+    {
+      name: "is a no-op during pulse before the charge completes (turn 1)",
+      boss: fresh({ phase: "pulse", phaseTurnsLeft: 2, pulseCharged: false, marked: true }),
+    },
+  ])("$name", ({ boss }) => {
+    expect(breakPulse(boss)).toEqual(boss);
   });
 });
 
@@ -214,23 +191,16 @@ describe("trackSpecial — MIRROR's tracker; attack never updates it", () => {
 });
 
 describe("erosionStage — integer-exact, gap-free at 180 max", () => {
-  it("stage 0: hp > 120", () => {
-    expect(erosionStage(fresh({ hp: 180 }))).toBe(0);
-    expect(erosionStage(fresh({ hp: 121 }))).toBe(0);
-  });
-
-  it("stage 1: hp in (60, 120]", () => {
-    expect(erosionStage(fresh({ hp: 120 }))).toBe(1);
-    expect(erosionStage(fresh({ hp: 61 }))).toBe(1);
-  });
-
-  it("stage 2: hp in (0, 60]", () => {
-    expect(erosionStage(fresh({ hp: 60 }))).toBe(2);
-    expect(erosionStage(fresh({ hp: 1 }))).toBe(2);
-  });
-
-  it("stage 3: victory (hp <= 0)", () => {
-    expect(erosionStage(fresh({ hp: 0 }))).toBe(3);
+  it.each([
+    { name: "stage 0: hp > 120", hp: 180, stage: 0 },
+    { name: "stage 0: hp > 120 (121)", hp: 121, stage: 0 },
+    { name: "stage 1: hp in (60, 120]", hp: 120, stage: 1 },
+    { name: "stage 1: hp in (60, 120] (61)", hp: 61, stage: 1 },
+    { name: "stage 2: hp in (0, 60]", hp: 60, stage: 2 },
+    { name: "stage 2: hp in (0, 60] (1)", hp: 1, stage: 2 },
+    { name: "stage 3: victory (hp <= 0)", hp: 0, stage: 3 },
+  ])("$name", ({ hp, stage }) => {
+    expect(erosionStage(fresh({ hp }))).toBe(stage);
   });
 
   it("healing the boss back across a stage line REVERTS the stage", () => {
@@ -243,13 +213,12 @@ describe("erosionStage — integer-exact, gap-free at 180 max", () => {
 });
 
 describe("convictionCastable — integer-exact, no floating point (hp * 4 <= maxHp)", () => {
-  it("castable at or below the line (130 max -> hp <= 32)", () => {
-    expect(convictionCastable(32, 130)).toBe(true);
-    expect(convictionCastable(0, 130)).toBe(true);
-  });
-
-  it("not castable just above the line", () => {
-    expect(convictionCastable(33, 130)).toBe(false);
+  it.each([
+    { name: "castable at the line (130 max -> hp <= 32)", hp: 32, expected: true },
+    { name: "castable below the line (130 max -> hp 0)", hp: 0, expected: true },
+    { name: "not castable just above the line", hp: 33, expected: false },
+  ])("$name", ({ hp, expected }) => {
+    expect(convictionCastable(hp, 130)).toBe(expected);
   });
 });
 
@@ -368,24 +337,27 @@ describe("resolveImposterBossTurn", () => {
     expect(boundary.boss.phaseTurnsLeft).toBe(1);
   });
 
-  it("MIRROR dispatch — PT arm: half of 28 = 14", () => {
-    const boss = fresh({ phase: "mirror", lastSpecial: "pt" });
-    const result = resolveImposterBossTurn(boss, false, false);
+  it.each([
+    { name: "PT arm: half of 28 = 14", lastSpecial: "pt", damage: 14, mirroredDebug: false },
+    { name: "FO arm: half of 8 = 4", lastSpecial: "fo", damage: 4, mirroredDebug: false },
+    { name: "Debug arm: half of 6 = 3, and flags mirroredDebug for the caller's hero mark + DoT", lastSpecial: "debug", damage: 3, mirroredDebug: true },
+    { name: "diagnostic default: null (no special used yet) -> glitch slash 14", lastSpecial: null, damage: 14, mirroredDebug: false },
+    {
+      name: "diagnostic default: an 'attack' tracker value (unreachable via trackSpecial, constructed directly) also falls back to glitch slash",
+      lastSpecial: "attack",
+      damage: 14,
+      mirroredDebug: false,
+    },
+    { name: "RC arm: half of 22 = 11, NOT the 14 glitch-slash default", lastSpecial: "rc", damage: 11, mirroredDebug: false },
+    { name: 'Conviction arm: glitch slash 14 ("the imposter cannot mirror belief")', lastSpecial: "conv", damage: 14, mirroredDebug: false },
+  ] as const)("MIRROR dispatch — $name", ({ lastSpecial, damage, mirroredDebug }) => {
+    const result = resolveImposterBossTurn(fresh({ phase: "mirror", lastSpecial }), false, false);
     expect(result.outcome).toBe("mirror");
-    expect(result.heroDamage).toBe(14);
-    expect(result.mirroredDebug).toBe(false);
+    expect(result.heroDamage).toBe(damage);
+    expect(result.mirroredDebug).toBe(mirroredDebug);
   });
 
-  it("MIRROR dispatch — FO arm: half of 8 = 4", () => {
-    const boss = fresh({ phase: "mirror", lastSpecial: "fo" });
-    expect(resolveImposterBossTurn(boss, false, false).heroDamage).toBe(4);
-  });
-
-  it("MIRROR dispatch — Debug arm: half of 6 = 3, and flags mirroredDebug for the caller's hero mark + DoT", () => {
-    const boss = fresh({ phase: "mirror", lastSpecial: "debug" });
-    const result = resolveImposterBossTurn(boss, false, false);
-    expect(result.heroDamage).toBe(3);
-    expect(result.mirroredDebug).toBe(true);
+  it("MIRROR_DEBUG_DOT_TICK and MIRROR_DEBUG_DOT_TICKS are 2 damage for 3 ticks", () => {
     expect(MIRROR_DEBUG_DOT_TICK).toBe(2);
     expect(MIRROR_DEBUG_DOT_TICKS).toBe(3);
   });
@@ -402,32 +374,6 @@ describe("resolveImposterBossTurn", () => {
     const result = resolveImposterBossTurn(boss, false, false);
     expect(result.heroDamage).toBe(0);
     expect(result.boss.mirrorCtTurns).toBe(2);
-  });
-
-  it("MIRROR dispatch — diagnostic default: null (no special used yet) -> glitch slash 14", () => {
-    const boss = fresh({ phase: "mirror", lastSpecial: null });
-    expect(resolveImposterBossTurn(boss, false, false).heroDamage).toBe(14);
-  });
-
-  it("MIRROR dispatch — diagnostic default: an 'attack' tracker value (unreachable via trackSpecial, constructed directly) also falls back to glitch slash", () => {
-    const boss = fresh({ phase: "mirror", lastSpecial: "attack" });
-    expect(resolveImposterBossTurn(boss, false, false).heroDamage).toBe(14);
-  });
-
-  it("MIRROR dispatch — RC arm: half of 22 = 11, NOT the 14 glitch-slash default", () => {
-    const boss = fresh({ phase: "mirror", lastSpecial: "rc" });
-    const result = resolveImposterBossTurn(boss, false, false);
-    expect(result.outcome).toBe("mirror");
-    expect(result.heroDamage).toBe(11);
-    expect(result.heroDamage).not.toBe(14);
-    expect(result.mirroredDebug).toBe(false);
-  });
-
-  it('MIRROR dispatch — Conviction arm: glitch slash 14 ("the imposter cannot mirror belief")', () => {
-    const boss = fresh({ phase: "mirror", lastSpecial: "conv" });
-    const result = resolveImposterBossTurn(boss, false, false);
-    expect(result.heroDamage).toBe(14);
-    expect(result.mirroredDebug).toBe(false);
   });
 
   it("mirrorCtTurns boosts the NEXT boss turns' slash/ambush/pulse dealt by 1.25x, never the mirror turn itself", () => {

@@ -19,76 +19,70 @@ describe("parseBoss (`boss=` capture key — whitelist = IMPLEMENTED_BOSSES, def
 });
 
 describe("parseDefeatedBosses (`defeated=` capture key — rush-order PREFIX validation after dedupe)", () => {
-  it("is empty, not rejected, when the param is absent", () => {
-    expect(parseDefeatedBosses(null)).toEqual({ value: [], rejected: false });
-  });
-
-  it("is empty, not rejected, when the param is present but blank", () => {
-    expect(parseDefeatedBosses("")).toEqual({ value: [], rejected: false });
-  });
-
-  it("accepts a single-boss prefix", () => {
-    expect(parseDefeatedBosses("alert-storm")).toEqual({ value: ["alert-storm"], rejected: false });
-  });
-
-  it("accepts a multi-boss prefix in rush order", () => {
-    expect(parseDefeatedBosses("alert-storm,cascade")).toEqual({
-      value: ["alert-storm", "cascade"],
-      rejected: false,
-    });
-  });
-
-  it("accepts the full rush order", () => {
-    expect(parseDefeatedBosses("alert-storm,cascade,silent-failure,imposter-syndrome")).toEqual({
-      value: ["alert-storm", "cascade", "silent-failure", "imposter-syndrome"],
-      rejected: false,
-    });
-  });
-
-  it("dedupes a repeated id and still validates", () => {
-    expect(parseDefeatedBosses("alert-storm,alert-storm")).toEqual({
-      value: ["alert-storm"],
-      rejected: false,
-    });
-  });
-
-  it("rejects silent-failure alone (rider count and kit derivation would disagree: 110/12 with Root Cause but no Fan Out is unreachable in play)", () => {
-    expect(parseDefeatedBosses("silent-failure")).toEqual({ value: [], rejected: true });
-  });
-
-  it("rejects a set that skips an earlier boss (cascade without alert-storm)", () => {
-    expect(parseDefeatedBosses("cascade")).toEqual({ value: [], rejected: true });
-  });
-
-  it("rejects an out-of-order prefix (PREFIX means sequence order, not just set membership)", () => {
-    expect(parseDefeatedBosses("cascade,alert-storm")).toEqual({ value: [], rejected: true });
-  });
-
-  it("rejects an unknown id", () => {
-    expect(parseDefeatedBosses("not-a-real-boss")).toEqual({ value: [], rejected: true });
-  });
-
-  it("rejects more ids than the rush order has, even if the prefix is otherwise valid", () => {
-    expect(
-      parseDefeatedBosses("alert-storm,cascade,silent-failure,imposter-syndrome,bogus"),
-    ).toEqual({ value: [], rejected: true });
+  it.each([
+    { name: "is empty, not rejected, when the param is absent", param: null, expected: { value: [], rejected: false } },
+    { name: "is empty, not rejected, when the param is present but blank", param: "", expected: { value: [], rejected: false } },
+    { name: "accepts a single-boss prefix", param: "alert-storm", expected: { value: ["alert-storm"], rejected: false } },
+    {
+      name: "accepts a multi-boss prefix in rush order",
+      param: "alert-storm,cascade",
+      expected: { value: ["alert-storm", "cascade"], rejected: false },
+    },
+    {
+      name: "accepts the full rush order",
+      param: "alert-storm,cascade,silent-failure,imposter-syndrome",
+      expected: { value: ["alert-storm", "cascade", "silent-failure", "imposter-syndrome"], rejected: false },
+    },
+    {
+      name: "dedupes a repeated id and still validates",
+      param: "alert-storm,alert-storm",
+      expected: { value: ["alert-storm"], rejected: false },
+    },
+    {
+      name: "rejects silent-failure alone (rider count and kit derivation would disagree: 110/12 with Root Cause but no Fan Out is unreachable in play)",
+      param: "silent-failure",
+      expected: { value: [], rejected: true },
+    },
+    {
+      name: "rejects a set that skips an earlier boss (cascade without alert-storm)",
+      param: "cascade",
+      expected: { value: [], rejected: true },
+    },
+    {
+      name: "rejects an out-of-order prefix (PREFIX means sequence order, not just set membership)",
+      param: "cascade,alert-storm",
+      expected: { value: [], rejected: true },
+    },
+    { name: "rejects an unknown id", param: "not-a-real-boss", expected: { value: [], rejected: true } },
+    {
+      name: "rejects more ids than the rush order has, even if the prefix is otherwise valid",
+      param: "alert-storm,cascade,silent-failure,imposter-syndrome,bogus",
+      expected: { value: [], rejected: true },
+    },
+  ])("$name", ({ param, expected }) => {
+    expect(parseDefeatedBosses(param)).toEqual(expected);
   });
 });
 
 describe("coerceRushPrefix (shared dedupe+prefix-validation core)", () => {
-  it("dedupes preserving first-seen order and validates against the default RUSH_ORDER", () => {
-    expect(coerceRushPrefix(["alert-storm", "alert-storm", "cascade"])).toEqual({
-      value: ["alert-storm", "cascade"],
-      rejected: false,
-    });
-  });
-
-  it("rejects an out-of-order token set against the default RUSH_ORDER", () => {
-    expect(coerceRushPrefix(["cascade", "alert-storm"])).toEqual({ value: [], rejected: true });
-  });
-
-  it("accepts an empty token list as an empty, non-rejected prefix", () => {
-    expect(coerceRushPrefix([])).toEqual({ value: [], rejected: false });
+  it.each([
+    {
+      name: "dedupes preserving first-seen order and validates against the default RUSH_ORDER",
+      tokens: ["alert-storm", "alert-storm", "cascade"],
+      expected: { value: ["alert-storm", "cascade"], rejected: false },
+    },
+    {
+      name: "rejects an out-of-order token set against the default RUSH_ORDER",
+      tokens: ["cascade", "alert-storm"],
+      expected: { value: [], rejected: true },
+    },
+    {
+      name: "accepts an empty token list as an empty, non-rejected prefix",
+      tokens: [],
+      expected: { value: [], rejected: false },
+    },
+  ])("$name", ({ tokens, expected }) => {
+    expect(coerceRushPrefix(tokens)).toEqual(expected);
   });
 
   it("validates against an explicit non-default rushOrder parameter, not the real RUSH_ORDER", () => {
@@ -100,14 +94,6 @@ describe("coerceRushPrefix (shared dedupe+prefix-validation core)", () => {
 });
 
 describe("parseActions (`actions=` capture key)", () => {
-  it("returns undefined when the param is absent", () => {
-    expect(parseActions(null)).toBeUndefined();
-  });
-
-  it("returns undefined when the param is blank", () => {
-    expect(parseActions("")).toBeUndefined();
-  });
-
   it.each([
     { token: "ct", why: "Critical Thinking is untargeted" },
     { token: "fo", why: "Fan Out hits all living targets, no target id" },
@@ -130,15 +116,17 @@ describe("parseActions (`actions=` capture key)", () => {
     ]);
   });
 
-  it("drops a targetless rc token (target id required, same rule as attack/pt/debug)", () => {
-    expect(parseActions("rc")).toBeUndefined();
-  });
-
-  it("silently drops unrecognized tokens, keeping the recognized ones", () => {
-    expect(parseActions("ct,bogus,fo")).toEqual([{ type: "ct" }, { type: "fo" }]);
-  });
-
-  it("returns undefined when every token is unrecognized", () => {
-    expect(parseActions("bogus")).toBeUndefined();
+  it.each([
+    { name: "returns undefined when the param is absent", param: null, expected: undefined },
+    { name: "returns undefined when the param is blank", param: "", expected: undefined },
+    { name: "drops a targetless rc token (target id required, same rule as attack/pt/debug)", param: "rc", expected: undefined },
+    {
+      name: "silently drops unrecognized tokens, keeping the recognized ones",
+      param: "ct,bogus,fo",
+      expected: [{ type: "ct" }, { type: "fo" }],
+    },
+    { name: "returns undefined when every token is unrecognized", param: "bogus", expected: undefined },
+  ])("$name", ({ param, expected }) => {
+    expect(parseActions(param)).toEqual(expected);
   });
 });

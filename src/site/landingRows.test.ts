@@ -42,45 +42,31 @@ describe("landingRows", () => {
 });
 
 describe("nextRowIndex", () => {
-  it("nothing focused: ArrowDown lands on the first row, ArrowUp on the last", () => {
-    expect(nextRowIndex(null, "ArrowDown", 5)).toBe(0);
-    expect(nextRowIndex(null, "ArrowUp", 5)).toBe(4);
-  });
-
-  it("steps and wraps in both directions", () => {
-    expect(nextRowIndex(0, "ArrowDown", 5)).toBe(1);
-    expect(nextRowIndex(4, "ArrowDown", 5)).toBe(0);
-    expect(nextRowIndex(0, "ArrowUp", 5)).toBe(4);
-    expect(nextRowIndex(2, "ArrowUp", 5)).toBe(1);
-  });
-
-  it("a single row always resolves to itself", () => {
-    expect(nextRowIndex(0, "ArrowDown", 1)).toBe(0);
-    expect(nextRowIndex(null, "ArrowUp", 1)).toBe(0);
+  it.each([
+    { name: "nothing focused: ArrowDown lands on the first row", from: null, key: "ArrowDown", count: 5, expected: 0 },
+    { name: "nothing focused: ArrowUp lands on the last row", from: null, key: "ArrowUp", count: 5, expected: 4 },
+    { name: "steps forward", from: 0, key: "ArrowDown", count: 5, expected: 1 },
+    { name: "wraps forward past the last row", from: 4, key: "ArrowDown", count: 5, expected: 0 },
+    { name: "wraps backward past the first row", from: 0, key: "ArrowUp", count: 5, expected: 4 },
+    { name: "steps backward", from: 2, key: "ArrowUp", count: 5, expected: 1 },
+    { name: "a single row resolves to itself going down", from: 0, key: "ArrowDown", count: 1, expected: 0 },
+    { name: "a single row resolves to itself going up from nothing focused", from: null, key: "ArrowUp", count: 1, expected: 0 },
+  ] as const)("$name", ({ from, key, count, expected }) => {
+    expect(nextRowIndex(from, key, count)).toBe(expected);
   });
 });
 
 describe("menuKeyAction", () => {
-  it("Enter with nothing focused starts the game", () => {
-    expect(menuKeyAction("Enter", true, false)).toBe("play");
-  });
-
-  it("Enter with nothing focused does nothing while the menu is blocked", () => {
-    expect(menuKeyAction("Enter", true, true)).toBe("none");
-  });
-
-  it("Enter on a focused row is left to the row", () => {
-    expect(menuKeyAction("Enter", false, false)).toBe("none");
-  });
-
-  it("arrows move the focus, blocked or not, old key names included", () => {
-    expect(menuKeyAction("ArrowDown", true, false)).toBe("ArrowDown");
-    expect(menuKeyAction("Up", false, true)).toBe("ArrowUp");
-  });
-
-  it("other keys do nothing", () => {
-    expect(menuKeyAction("a", true, false)).toBe("none");
-    expect(menuKeyAction("ArrowLeft", true, false)).toBe("none");
+  it.each([
+    { name: "Enter with nothing focused starts the game", key: "Enter", nothingFocused: true, blocked: false, expected: "play" },
+    { name: "Enter with nothing focused does nothing while the menu is blocked", key: "Enter", nothingFocused: true, blocked: true, expected: "none" },
+    { name: "Enter on a focused row is left to the row", key: "Enter", nothingFocused: false, blocked: false, expected: "none" },
+    { name: "arrows move the focus, blocked or not: ArrowDown", key: "ArrowDown", nothingFocused: true, blocked: false, expected: "ArrowDown" },
+    { name: "arrows move the focus, blocked or not, old key names included: Up", key: "Up", nothingFocused: false, blocked: true, expected: "ArrowUp" },
+    { name: "other keys do nothing: a", key: "a", nothingFocused: true, blocked: false, expected: "none" },
+    { name: "other keys do nothing: ArrowLeft", key: "ArrowLeft", nothingFocused: true, blocked: false, expected: "none" },
+  ])("$name", ({ key, nothingFocused, blocked, expected }) => {
+    expect(menuKeyAction(key, nothingFocused, blocked)).toBe(expected);
   });
 });
 

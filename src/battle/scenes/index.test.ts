@@ -6,20 +6,13 @@ import { imposterScene } from "./imposter";
 import { SCENE_MODULES, sceneFor } from "./index";
 
 describe("scene-module registry", () => {
-  it("registers Alert Storm under its own id", () => {
-    expect(SCENE_MODULES["alert-storm"]).toBe(alertStormScene);
-  });
-
-  it("registers Cascade under its own id", () => {
-    expect(SCENE_MODULES["cascade"]).toBe(cascadeScene);
-  });
-
-  it("registers Silent Failure under its own id", () => {
-    expect(SCENE_MODULES["silent-failure"]).toBe(silentFailureScene);
-  });
-
-  it("registers Imposter Syndrome under its own id", () => {
-    expect(SCENE_MODULES["imposter-syndrome"]).toBe(imposterScene);
+  it.each([
+    ["alert-storm", alertStormScene],
+    ["cascade", cascadeScene],
+    ["silent-failure", silentFailureScene],
+    ["imposter-syndrome", imposterScene],
+  ] as const)("registers %s under its own id", (id, scene) => {
+    expect(SCENE_MODULES[id]).toBe(scene);
   });
 
   it("sceneFor resolves a known boss id", () => {

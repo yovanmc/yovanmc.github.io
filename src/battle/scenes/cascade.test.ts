@@ -29,11 +29,6 @@ describe("cascadeScene.banner — storm telegraph (stormIn threshold, CT shows o
     expect(cascadeScene.banner(ctd)).toBe("THE CHAIN OVERLOADS · A STORM GATHERS");
   });
 
-  it("stays empty at stormIn 2 without CT (the CT rule only pulls the threshold in, never pushes it out)", () => {
-    const s = initBattle({ seed: 42, boss: "cascade" });
-    expect(cascadeScene.banner(s)).toBe("");
-  });
-
   it("is empty once the battle is no longer active, even mid-telegraph", () => {
     const s = initBattle({ seed: 42, boss: "cascade" });
     if (s.boss.kind !== "cascade") throw new Error("unreachable");

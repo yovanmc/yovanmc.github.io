@@ -93,51 +93,19 @@ describe("readProgress", () => {
     expect(readProgress(store)).toEqual([]);
   });
 
-  it("returns [] when v is missing", () => {
+  it.each([
+    { name: "returns [] when v is missing", value: { defeated: ["alert-storm"] } },
+    { name: "returns [] when v is non-numeric", value: { v: "1", defeated: ["alert-storm"] } },
+    { name: "returns [] when v is a number other than 1", value: { v: 2, defeated: ["alert-storm"] } },
+    { name: "returns [] when defeated is missing", value: { v: 1 } },
+    { name: "returns [] when defeated is not an array", value: { v: 1, defeated: "alert-storm" } },
+    { name: "returns [] when defeated contains a non-string element", value: { v: 1, defeated: ["alert-storm", 3] } },
+    { name: "returns [] when defeated contains ids not in RUSH_ORDER", value: { v: 1, defeated: ["not-a-real-boss"] } },
+    { name: "returns [] when defeated is a valid id set but out of rush order", value: { v: 1, defeated: ["cascade", "alert-storm"] } },
+    { name: "returns [] for a fresh empty progress value", value: { v: 1, defeated: [] } },
+  ])("$name", ({ value }) => {
     const store = new FakeStore();
-    store.setItem(PROGRESS_KEY, JSON.stringify({ defeated: ["alert-storm"] }));
-    expect(readProgress(store)).toEqual([]);
-  });
-
-  it("returns [] when v is non-numeric", () => {
-    const store = new FakeStore();
-    store.setItem(PROGRESS_KEY, JSON.stringify({ v: "1", defeated: ["alert-storm"] }));
-    expect(readProgress(store)).toEqual([]);
-  });
-
-  it("returns [] when v is a number other than 1", () => {
-    const store = new FakeStore();
-    store.setItem(PROGRESS_KEY, JSON.stringify({ v: 2, defeated: ["alert-storm"] }));
-    expect(readProgress(store)).toEqual([]);
-  });
-
-  it("returns [] when defeated is missing", () => {
-    const store = new FakeStore();
-    store.setItem(PROGRESS_KEY, JSON.stringify({ v: 1 }));
-    expect(readProgress(store)).toEqual([]);
-  });
-
-  it("returns [] when defeated is not an array", () => {
-    const store = new FakeStore();
-    store.setItem(PROGRESS_KEY, JSON.stringify({ v: 1, defeated: "alert-storm" }));
-    expect(readProgress(store)).toEqual([]);
-  });
-
-  it("returns [] when defeated contains a non-string element", () => {
-    const store = new FakeStore();
-    store.setItem(PROGRESS_KEY, JSON.stringify({ v: 1, defeated: ["alert-storm", 3] }));
-    expect(readProgress(store)).toEqual([]);
-  });
-
-  it("returns [] when defeated contains ids not in RUSH_ORDER", () => {
-    const store = new FakeStore();
-    store.setItem(PROGRESS_KEY, JSON.stringify({ v: 1, defeated: ["not-a-real-boss"] }));
-    expect(readProgress(store)).toEqual([]);
-  });
-
-  it("returns [] when defeated is a valid id set but out of rush order", () => {
-    const store = new FakeStore();
-    store.setItem(PROGRESS_KEY, JSON.stringify({ v: 1, defeated: ["cascade", "alert-storm"] }));
+    store.setItem(PROGRESS_KEY, JSON.stringify(value));
     expect(readProgress(store)).toEqual([]);
   });
 
@@ -145,12 +113,6 @@ describe("readProgress", () => {
     const store = new FakeStore();
     store.setItem(PROGRESS_KEY, JSON.stringify({ v: 1, defeated: ["alert-storm", "alert-storm"] }));
     expect(readProgress(store)).toEqual(["alert-storm"]);
-  });
-
-  it("returns [] for a fresh empty progress value", () => {
-    const store = new FakeStore();
-    store.setItem(PROGRESS_KEY, JSON.stringify({ v: 1, defeated: [] }));
-    expect(readProgress(store)).toEqual([]);
   });
 
   it("returns the full rush-order prefix for a full valid value", () => {

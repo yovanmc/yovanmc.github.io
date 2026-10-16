@@ -8,15 +8,12 @@ const glintStates = (html: string) =>
   [...html.matchAll(/animation:twinkle[^;"]*;animation-play-state:(\w+)/g)].map((m) => m[1]);
 
 describe("case study glints", () => {
-  it("pause while the page is closed", () => {
-    const states = glintStates(renderToStaticMarkup(<CaseStudyPage page={null} isMobile={false} onClose={() => {}} />));
+  it.each([
+    { name: "pause while the page is closed", page: null, state: "paused" },
+    { name: "run while the page is open", page: { ri: 0, si: 0 }, state: "running" },
+  ])("$name", ({ page, state }) => {
+    const states = glintStates(renderToStaticMarkup(<CaseStudyPage page={page} isMobile={false} onClose={() => {}} />));
     expect(states.length).toBe(26);
-    expect(new Set(states)).toEqual(new Set(["paused"]));
-  });
-
-  it("run while the page is open", () => {
-    const states = glintStates(renderToStaticMarkup(<CaseStudyPage page={{ ri: 0, si: 0 }} isMobile={false} onClose={() => {}} />));
-    expect(states.length).toBe(26);
-    expect(new Set(states)).toEqual(new Set(["running"]));
+    expect(new Set(states)).toEqual(new Set([state]));
   });
 });

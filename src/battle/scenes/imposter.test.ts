@@ -143,22 +143,14 @@ describe("arenaFor - erosion stage derived LIVE from hp", () => {
     expect(imposterScene.arenaFor!(boss)).toEqual([varIS(0), varIS(1)]);
   });
 
-  it("stage 1 (60 < hp <= 120)", () => {
-    const boss = fresh({ hp: 90 });
-    expect(erosionStage(boss)).toBe(1);
-    expect(imposterScene.arenaFor!(boss)).toEqual([erosionStageGrid(1, 0), erosionStageGrid(1, 1)]);
-  });
-
-  it("stage 2 (0 < hp <= 60)", () => {
-    const boss = fresh({ hp: 50 });
-    expect(erosionStage(boss)).toBe(2);
-    expect(imposterScene.arenaFor!(boss)).toEqual([erosionStageGrid(2, 0), erosionStageGrid(2, 1)]);
-  });
-
-  it("stage 3 (hp <= 0, victory)", () => {
-    const boss = fresh({ hp: 0 });
-    expect(erosionStage(boss)).toBe(3);
-    expect(imposterScene.arenaFor!(boss)).toEqual([erosionStageGrid(3, 0), erosionStageGrid(3, 1)]);
+  it.each([
+    { name: "stage 1 (60 < hp <= 120)", hp: 90, stage: 1 },
+    { name: "stage 2 (0 < hp <= 60)", hp: 50, stage: 2 },
+    { name: "stage 3 (hp <= 0, victory)", hp: 0, stage: 3 },
+  ])("$name", ({ hp, stage }) => {
+    const boss = fresh({ hp });
+    expect(erosionStage(boss)).toBe(stage);
+    expect(imposterScene.arenaFor!(boss)).toEqual([erosionStageGrid(stage, 0), erosionStageGrid(stage, 1)]);
   });
 
   it("REVERTS across a stage line on a heal", () => {
@@ -225,24 +217,14 @@ describe("plate.footerFor - phase-aware targetable-slot count", () => {
     expect(typeof imposterScene.plate.footerFor).toBe("function");
   });
 
-  it("CLONES: three targetable slots, all alive", () => {
-    expect(imposterScene.plate.footerFor!(withBoss({ phase: "clones" }))).toBe("3/3 TARGET");
-  });
-
-  it("PULSE: one targetable slot, alive", () => {
-    expect(imposterScene.plate.footerFor!(withBoss({ phase: "pulse" }))).toBe("1/1 TARGET");
-  });
-
-  it("VANISH: one targetable slot, alive", () => {
-    expect(imposterScene.plate.footerFor!(withBoss({ phase: "vanish" }))).toBe("1/1 TARGET");
-  });
-
-  it("MIRROR: one targetable slot, alive", () => {
-    expect(imposterScene.plate.footerFor!(withBoss({ phase: "mirror" }))).toBe("1/1 TARGET");
-  });
-
-  it("MIRROR + dead: 0/1, the ordinary single-entity fast-kill display", () => {
-    expect(imposterScene.plate.footerFor!(withBoss({ phase: "mirror", hp: 0 }))).toBe("0/1 TARGET");
+  it.each([
+    { name: "CLONES: three targetable slots, all alive", boss: { phase: "clones" }, expected: "3/3 TARGET" },
+    { name: "PULSE: one targetable slot, alive", boss: { phase: "pulse" }, expected: "1/1 TARGET" },
+    { name: "VANISH: one targetable slot, alive", boss: { phase: "vanish" }, expected: "1/1 TARGET" },
+    { name: "MIRROR: one targetable slot, alive", boss: { phase: "mirror" }, expected: "1/1 TARGET" },
+    { name: "MIRROR + dead: 0/1, the ordinary single-entity fast-kill display", boss: { phase: "mirror", hp: 0 }, expected: "0/1 TARGET" },
+  ] as const)("$name", ({ boss, expected }) => {
+    expect(imposterScene.plate.footerFor!(withBoss(boss))).toBe(expected);
   });
 
   // Not a corner case: a kill never advances the phase and CLONES is the

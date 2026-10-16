@@ -87,12 +87,11 @@ describe("contentWidthForViewport", () => {
 });
 
 describe("measured constants", () => {
-  it("NODE_MIN_PX is within 1px of the measured fixture", () => {
-    expect(Math.abs(NODE_MIN_PX - MEASURED_FIGURE_TYPE.nodeMinPx)).toBeLessThanOrEqual(1);
-  });
-
-  it("MONO_CH_PX is within 1px of the measured fixture", () => {
-    expect(Math.abs(MONO_CH_PX - MEASURED_FIGURE_TYPE.monoChPx)).toBeLessThanOrEqual(1);
+  it.each([
+    { name: "NODE_MIN_PX", value: NODE_MIN_PX, measured: MEASURED_FIGURE_TYPE.nodeMinPx },
+    { name: "MONO_CH_PX", value: MONO_CH_PX, measured: MEASURED_FIGURE_TYPE.monoChPx },
+  ])("$name is within 1px of the measured fixture", ({ value, measured }) => {
+    expect(Math.abs(value - measured)).toBeLessThanOrEqual(1);
   });
 });
 

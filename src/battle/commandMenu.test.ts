@@ -29,27 +29,39 @@ describe("deriveMenuView: partition", () => {
     expect(view.rows[0]).toMatchObject({ kind: "ability", cmd: { id: "attack" } });
   });
 
-  it("skills submenu lists the kit's skills in commands order", () => {
-    const view = deriveMenuView(FULL_KIT, "skills");
-    expect(view.rows.map((r) => (r.kind === "ability" ? r.cmd.id : r.id))).toEqual(["ct", "pt", "debug"]);
-    expect(view.title).toBe("SKILLS");
-  });
-
-  it("spells submenu lists the kit's unlocked spells in commands order", () => {
-    const view = deriveMenuView(FULL_KIT, "spells");
-    expect(view.rows.map((r) => (r.kind === "ability" ? r.cmd.id : r.id))).toEqual(["fo", "rb", "rc", "conv"]);
-    expect(view.title).toBe("SPELLS");
-  });
-
-  it("spells submenu is empty when no spells are unlocked", () => {
-    const view = deriveMenuView(BASE_KIT_COMMANDS, "spells");
-    expect(view.rows).toHaveLength(0);
-  });
-
-  it("a partial spell unlock (only Fan Out) surfaces just that one row", () => {
-    const partial = commandsForKit(["attack", "ct", "pt", "debug", "fo"]);
-    const view = deriveMenuView(partial, "spells");
-    expect(view.rows.map((r) => (r.kind === "ability" ? r.cmd.id : r.id))).toEqual(["fo"]);
+  it.each([
+    {
+      name: "skills submenu lists the kit's skills in commands order",
+      commands: FULL_KIT,
+      level: "skills",
+      ids: ["ct", "pt", "debug"],
+      title: "SKILLS",
+    },
+    {
+      name: "spells submenu lists the kit's unlocked spells in commands order",
+      commands: FULL_KIT,
+      level: "spells",
+      ids: ["fo", "rb", "rc", "conv"],
+      title: "SPELLS",
+    },
+    {
+      name: "spells submenu is empty when no spells are unlocked",
+      commands: BASE_KIT_COMMANDS,
+      level: "spells",
+      ids: [],
+      title: "SPELLS",
+    },
+    {
+      name: "a partial spell unlock (only Fan Out) surfaces just that one row",
+      commands: commandsForKit(["attack", "ct", "pt", "debug", "fo"]),
+      level: "spells",
+      ids: ["fo"],
+      title: "SPELLS",
+    },
+  ] as const)("$name", ({ commands, level, ids, title }) => {
+    const view = deriveMenuView(commands, level);
+    expect(view.rows.map((r) => (r.kind === "ability" ? r.cmd.id : r.id))).toEqual(ids);
+    expect(view.title).toBe(title);
   });
 });
 
@@ -122,17 +134,13 @@ describe("menuReduce: navigation", () => {
     expect(effect).toEqual({ type: "descend" });
   });
 
-  it("confirm on an affordable ability yields cast, state unchanged", () => {
+  it.each([
+    { name: "confirm on an affordable ability yields cast, state unchanged", mp: 10, effect: { type: "cast", cmd: FULL_KIT.find((c) => c.id === "pt") } },
+    { name: "confirm on an unaffordable ability yields blocked, state unchanged", mp: 0, effect: { type: "blocked" } },
+  ])("$name", ({ mp, effect: expected }) => {
     const menu: MenuState = { ...initialMenuState, level: "skills", cursor: { ...initialMenuState.cursor, skills: 1 } }; // pt, mp 3
-    const { menu: next, effect } = menuReduce(menu, "confirm", FULL_KIT, 10);
-    expect(effect).toEqual({ type: "cast", cmd: FULL_KIT.find((c) => c.id === "pt") });
-    expect(next).toEqual(menu);
-  });
-
-  it("confirm on an unaffordable ability yields blocked, state unchanged", () => {
-    const menu: MenuState = { ...initialMenuState, level: "skills", cursor: { ...initialMenuState.cursor, skills: 1 } }; // pt, mp 3
-    const { menu: next, effect } = menuReduce(menu, "confirm", FULL_KIT, 0);
-    expect(effect).toEqual({ type: "blocked" });
+    const { menu: next, effect } = menuReduce(menu, "confirm", FULL_KIT, mp);
+    expect(effect).toEqual(expected);
     expect(next).toEqual(menu);
   });
 
@@ -293,12 +301,8 @@ describe("commandMenu.ts strings: punctuation gate", () => {
     { label: "spells.title", value: spellsView.title, pinned: "SPELLS" },
   ];
 
-  it.each(strings)("$label has no em dash, en dash, or semicolon", ({ value }) => {
-    expect(value).not.toBeNull();
-    expect(COPY_RULE.test(value!)).toBe(false);
-  });
-
-  it.each(strings)("$label matches the pinned default", ({ value, pinned }) => {
+  it.each(strings)("$label matches the pinned default and has no em dash, en dash, or semicolon", ({ value, pinned }) => {
     expect(value).toBe(pinned);
+    expect(COPY_RULE.test(value!)).toBe(false);
   });
 });
