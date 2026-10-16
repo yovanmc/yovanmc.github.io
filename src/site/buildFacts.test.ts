@@ -83,27 +83,35 @@ describe("computeBuildFacts", () => {
     expect(facts!.shareShells).toBe(expected);
   });
 
-  it("throws BuildFactsError naming the missing input when the vitest report is absent", () => {
-    writeSummary();
-    writePackageJson();
+  it.each([
+    {
+      name: "the vitest report",
+      write: () => {
+        writeSummary();
+        writePackageJson();
+      },
+      pattern: /vitest-report\.json/,
+    },
+    {
+      name: "the coverage summary",
+      write: () => {
+        writeReport();
+        writePackageJson();
+      },
+      pattern: /coverage-summary\.json/,
+    },
+    {
+      name: "package.json",
+      write: () => {
+        writeReport();
+        writeSummary();
+      },
+      pattern: /package\.json/,
+    },
+  ])("throws BuildFactsError naming the missing input when $name is absent", ({ write, pattern }) => {
+    write();
     expect(() => computeBuildFacts({ rootDir, mode: "build", listFiles: () => [] })).toThrow(BuildFactsError);
-    expect(() => computeBuildFacts({ rootDir, mode: "build", listFiles: () => [] })).toThrow(
-      /vitest-report\.json/,
-    );
-  });
-
-  it("throws BuildFactsError naming the missing input when the coverage summary is absent", () => {
-    writeReport();
-    writePackageJson();
-    expect(() => computeBuildFacts({ rootDir, mode: "build", listFiles: () => [] })).toThrow(
-      /coverage-summary\.json/,
-    );
-  });
-
-  it("throws BuildFactsError naming the missing input when package.json is absent", () => {
-    writeReport();
-    writeSummary();
-    expect(() => computeBuildFacts({ rootDir, mode: "build", listFiles: () => [] })).toThrow(/package\.json/);
+    expect(() => computeBuildFacts({ rootDir, mode: "build", listFiles: () => [] })).toThrow(pattern);
   });
 
   it("throws BuildFactsError on a partial run (too few test files)", () => {

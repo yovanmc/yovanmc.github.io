@@ -17,46 +17,26 @@ function el(tagName: string, attrs: Record<string, string> = {}): ActivationElem
 }
 
 describe("isNativeActivationTarget", () => {
-  it("null is never a native activation target", () => {
-    expect(isNativeActivationTarget(null)).toBe(false);
-  });
-
-  it("a real anchor with href is a native activation target", () => {
-    expect(isNativeActivationTarget(el("A", { href: "/work/mia/" }))).toBe(true);
-  });
-
-  it("an anchor with no href is not a native activation target", () => {
-    expect(isNativeActivationTarget(el("A"))).toBe(false);
-  });
-
-  it("a real button is a native activation target", () => {
-    expect(isNativeActivationTarget(el("BUTTON"))).toBe(true);
-  });
-
-  it("input, textarea, select are native activation targets", () => {
-    expect(isNativeActivationTarget(el("INPUT"))).toBe(true);
-    expect(isNativeActivationTarget(el("TEXTAREA"))).toBe(true);
-    expect(isNativeActivationTarget(el("SELECT"))).toBe(true);
-  });
-
-  it("role=button with tabindex=0 is a native activation target", () => {
-    expect(isNativeActivationTarget(el("DIV", { role: "button", tabindex: "0" }))).toBe(true);
-  });
-
-  it("role=button with tabindex=-1 is NOT a native activation target (the play command-menu rows)", () => {
-    expect(isNativeActivationTarget(el("DIV", { role: "button", tabindex: "-1" }))).toBe(false);
-  });
-
-  it("role=button with no tabindex is not a native activation target", () => {
-    expect(isNativeActivationTarget(el("DIV", { role: "button" }))).toBe(false);
-  });
-
-  it("a plain div is not a native activation target", () => {
-    expect(isNativeActivationTarget(el("DIV"))).toBe(false);
-  });
-
-  it("lowercase tag names (as some DOM implementations report) are handled case-insensitively", () => {
-    expect(isNativeActivationTarget(el("a", { href: "/x" }))).toBe(true);
-    expect(isNativeActivationTarget(el("button"))).toBe(true);
+  it.each([
+    { name: "null is never a native activation target", element: null, expected: false },
+    { name: "a real anchor with href is a native activation target", element: el("A", { href: "/work/mia/" }), expected: true },
+    { name: "an anchor with no href is not a native activation target", element: el("A"), expected: false },
+    { name: "a real button is a native activation target", element: el("BUTTON"), expected: true },
+    { name: "input is a native activation target", element: el("INPUT"), expected: true },
+    { name: "textarea is a native activation target", element: el("TEXTAREA"), expected: true },
+    { name: "select is a native activation target", element: el("SELECT"), expected: true },
+    { name: "role=button with tabindex=0 is a native activation target", element: el("DIV", { role: "button", tabindex: "0" }), expected: true },
+    {
+      name: "role=button with tabindex=-1 is NOT a native activation target (the play command-menu rows)",
+      element: el("DIV", { role: "button", tabindex: "-1" }),
+      expected: false,
+    },
+    { name: "role=button with no tabindex is not a native activation target", element: el("DIV", { role: "button" }), expected: false },
+    { name: "a plain div is not a native activation target", element: el("DIV"), expected: false },
+    // lowercase tag names, as some DOM implementations report, are handled case-insensitively
+    { name: "a lowercase anchor tag name with href is a native activation target", element: el("a", { href: "/x" }), expected: true },
+    { name: "a lowercase button tag name is a native activation target", element: el("button"), expected: true },
+  ])("$name", ({ element, expected }) => {
+    expect(isNativeActivationTarget(element)).toBe(expected);
   });
 });

@@ -53,24 +53,14 @@ describe("coverage invariant (SEED_UNLOCKED / UNLOCK_BY_BOSS)", () => {
 });
 
 describe("isGateable", () => {
-  it("is false for experience regardless of slug", () => {
-    expect(isGateable("experience", "software-engineer")).toBe(false);
-  });
-
-  it("is false for contact regardless of slug", () => {
-    expect(isGateable("contact", undefined)).toBe(false);
-  });
-
-  it("is false for projects with an undefined slug", () => {
-    expect(isGateable("projects", undefined)).toBe(false);
-  });
-
-  it("is true for a gateable projects slug", () => {
-    expect(isGateable("projects", "curio")).toBe(true);
-  });
-
-  it("is true for a seed-unlocked projects slug (still gateable, just open from the start)", () => {
-    expect(isGateable("projects", "mia")).toBe(true);
+  it.each([
+    { name: "is false for experience regardless of slug", cat: "experience", slug: "software-engineer", expected: false },
+    { name: "is false for contact regardless of slug", cat: "contact", slug: undefined, expected: false },
+    { name: "is false for projects with an undefined slug", cat: "projects", slug: undefined, expected: false },
+    { name: "is true for a gateable projects slug", cat: "projects", slug: "curio", expected: true },
+    { name: "is true for a seed-unlocked projects slug (still gateable, just open from the start)", cat: "projects", slug: "mia", expected: true },
+  ] as const)("$name", ({ cat, slug, expected }) => {
+    expect(isGateable(cat, slug)).toBe(expected);
   });
 });
 
@@ -81,11 +71,10 @@ describe("guardingBoss", () => {
     }
   });
 
-  it("is null for a seed-unlocked slug (mia never has a guarding boss)", () => {
-    expect(guardingBoss("mia")).toBeNull();
-  });
-
-  it("is null for an unknown slug", () => {
-    expect(guardingBoss("not-a-real-slug")).toBeNull();
+  it.each([
+    { name: "is null for a seed-unlocked slug (mia never has a guarding boss)", slug: "mia" },
+    { name: "is null for an unknown slug", slug: "not-a-real-slug" },
+  ])("$name", ({ slug }) => {
+    expect(guardingBoss(slug)).toBeNull();
   });
 });

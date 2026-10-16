@@ -24,66 +24,39 @@ describe("spawnSilentFailure", () => {
 });
 
 describe("livingTargets — [0] while alive, [] once dead (single-entity degenerate case)", () => {
-  it("is [0] on a fresh boss", () => {
-    expect(livingTargets(spawnSilentFailure())).toEqual([SF_TARGET_ID]);
-  });
-
-  it("is [] once hp hits 0", () => {
-    const dead: SilentFailureBoss = { ...spawnSilentFailure(), hp: 0 };
-    expect(livingTargets(dead)).toEqual([]);
+  it.each([
+    { name: "is [0] on a fresh boss", boss: spawnSilentFailure(), expected: [SF_TARGET_ID] },
+    { name: "is [] once hp hits 0", boss: { ...spawnSilentFailure(), hp: 0 } as SilentFailureBoss, expected: [] },
+  ])("$name", ({ boss, expected }) => {
+    expect(livingTargets(boss)).toEqual(expected);
   });
 });
 
 describe("isTargetable: the armor stays selectable, but only embodied is targetable", () => {
-  it("true while embodied", () => {
-    expect(isTargetable(spawnSilentFailure())).toBe(true);
-  });
-
-  it("false while vanished", () => {
-    const vanished: SilentFailureBoss = { ...spawnSilentFailure(), phase: "vanished" };
-    expect(isTargetable(vanished)).toBe(false);
+  it.each([
+    { name: "true while embodied", boss: spawnSilentFailure(), expected: true },
+    { name: "false while vanished", boss: { ...spawnSilentFailure(), phase: "vanished" } as SilentFailureBoss, expected: false },
+  ])("$name", ({ boss, expected }) => {
+    expect(isTargetable(boss)).toBe(expected);
   });
 });
 
 describe("resolveSilentFailureBossTurn: swing 12 (CT -> 9), ambush 18 (CT -> 14)", () => {
-  it("embodied, uncT'd: swing 12, phaseTurnsLeft ticks down, stays embodied", () => {
-    const { boss, outcome, heroDamage } = resolveSilentFailureBossTurn(spawnSilentFailure(), false, false);
-    expect(outcome).toBe("swing");
-    expect(heroDamage).toBe(12);
-    expect(boss.phase).toBe("embodied");
-    expect(boss.phaseTurnsLeft).toBe(1);
-  });
+  const vanishedBoss: SilentFailureBoss = { ...spawnSilentFailure(), phase: "vanished", phaseTurnsLeft: 2 };
 
-  it("embodied, CT'd: takenDamage(12, true, false) = round(9) = 9", () => {
-    const { outcome, heroDamage } = resolveSilentFailureBossTurn(spawnSilentFailure(), true, false);
-    expect(outcome).toBe("swing");
-    expect(heroDamage).toBe(9);
-  });
-
-  it("vanished, uncT'd: ambush 18, phaseTurnsLeft ticks down, stays vanished", () => {
-    const vanished: SilentFailureBoss = { ...spawnSilentFailure(), phase: "vanished", phaseTurnsLeft: 2 };
-    const { boss, outcome, heroDamage } = resolveSilentFailureBossTurn(vanished, false, false);
-    expect(outcome).toBe("ambush");
-    expect(heroDamage).toBe(18);
-    expect(boss.phase).toBe("vanished");
-    expect(boss.phaseTurnsLeft).toBe(1);
-  });
-
-  it("vanished, CT'd: takenDamage(18, true, false) = round(13.5) = 14", () => {
-    const vanished: SilentFailureBoss = { ...spawnSilentFailure(), phase: "vanished", phaseTurnsLeft: 2 };
-    const { outcome, heroDamage } = resolveSilentFailureBossTurn(vanished, true, false);
-    expect(outcome).toBe("ambush");
-    expect(heroDamage).toBe(14);
-  });
-
-  it("Conviction alone (no CT) changes nothing on the taken side (Conviction only ever replaces CT's percentage)", () => {
-    const { heroDamage } = resolveSilentFailureBossTurn(spawnSilentFailure(), false, true);
-    expect(heroDamage).toBe(12);
-  });
-
-  it("CT + Conviction: takenDamage(12, true, true) = round(6) = 6 (0.5 taken mult)", () => {
-    const { heroDamage } = resolveSilentFailureBossTurn(spawnSilentFailure(), true, true);
-    expect(heroDamage).toBe(6);
+  it.each([
+    { name: "embodied, uncT'd: swing 12, phaseTurnsLeft ticks down, stays embodied", boss: spawnSilentFailure(), ct: false, conviction: false, outcome: "swing", damage: 12, phase: "embodied" },
+    { name: "embodied, CT'd: takenDamage(12, true, false) = round(9) = 9", boss: spawnSilentFailure(), ct: true, conviction: false, outcome: "swing", damage: 9, phase: "embodied" },
+    { name: "vanished, uncT'd: ambush 18, phaseTurnsLeft ticks down, stays vanished", boss: vanishedBoss, ct: false, conviction: false, outcome: "ambush", damage: 18, phase: "vanished" },
+    { name: "vanished, CT'd: takenDamage(18, true, false) = round(13.5) = 14", boss: vanishedBoss, ct: true, conviction: false, outcome: "ambush", damage: 14, phase: "vanished" },
+    { name: "Conviction alone (no CT) changes nothing on the taken side (Conviction only ever replaces CT's percentage)", boss: spawnSilentFailure(), ct: false, conviction: true, outcome: "swing", damage: 12, phase: "embodied" },
+    { name: "CT + Conviction: takenDamage(12, true, true) = round(6) = 6 (0.5 taken mult)", boss: spawnSilentFailure(), ct: true, conviction: true, outcome: "swing", damage: 6, phase: "embodied" },
+  ])("$name", ({ boss, ct, conviction, outcome, damage, phase }) => {
+    const result = resolveSilentFailureBossTurn(boss, ct, conviction);
+    expect(result.outcome).toBe(outcome);
+    expect(result.heroDamage).toBe(damage);
+    expect(result.boss.phase).toBe(phase);
+    expect(result.boss.phaseTurnsLeft).toBe(1);
   });
 });
 

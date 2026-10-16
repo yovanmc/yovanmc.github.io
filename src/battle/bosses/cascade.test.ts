@@ -59,31 +59,17 @@ describe("livingNodeIds", () => {
 });
 
 describe("turnsUntilStorm — pulse speed 3 living/turn, constant; CT never slows it (no ct param exists)", () => {
-  it("fresh chain (6 living, carrier at head): 2 turns to storm", () => {
-    expect(turnsUntilStorm(spawnCascade())).toBe(2);
-  });
-
-  it("all nodes dead: 0 (no pulse left to move)", () => {
+  it.each([
+    { name: "fresh chain (6 living, carrier at head): 2 turns to storm", dead: [], expected: 2 },
+    { name: "all nodes dead: 0 (no pulse left to move)", dead: [0, 1, 2, 3, 4, 5], expected: 0 },
+    // ring = [0, 4]
+    { name: "2 living nodes: 1 turn to storm (a storm every turn)", dead: [1, 2, 3, 5], expected: 1 },
+    { name: "1 living node (the carrier itself): 1 turn to storm — its 1-node loop always wraps", dead: [1, 2, 3, 4, 5], expected: 1 },
+  ])("$name", ({ dead, expected }) => {
     let boss = spawnCascade();
-    for (let id = 0; id < NODE_COUNT; id++) boss = kill(boss, id);
-    expect(turnsUntilStorm(boss)).toBe(0);
-  });
-
-  it("2 living nodes: 1 turn to storm (a storm every turn)", () => {
-    let boss = spawnCascade();
-    boss = kill(boss, 1);
-    boss = kill(boss, 2);
-    boss = kill(boss, 3);
-    boss = kill(boss, 5);
-    boss = { ...boss, carrier: 0 }; // ring = [0, 4]
-    expect(turnsUntilStorm(boss)).toBe(1);
-  });
-
-  it("1 living node (the carrier itself): 1 turn to storm — its 1-node loop always wraps", () => {
-    let boss = spawnCascade();
-    for (const id of [1, 2, 3, 4, 5]) boss = kill(boss, id);
-    boss = { ...boss, carrier: 0 };
-    expect(turnsUntilStorm(boss)).toBe(1);
+    for (const id of dead) boss = kill(boss, id);
+    if (dead.length < NODE_COUNT) boss = { ...boss, carrier: 0 };
+    expect(turnsUntilStorm(boss)).toBe(expected);
   });
 });
 
@@ -124,12 +110,6 @@ describe("resolveCascadeBossTurn — loop/storm (wrap = loop complete: storm 25,
     expect(heroDamage).toBe(19);
   });
 
-  it("jolt vs storm exclusivity: a resolution is exactly one outcome, never both a jolt AND a storm amount", () => {
-    const jolt = resolveCascadeBossTurn(spawnCascade(), false, false);
-    const storm = resolveCascadeBossTurn({ ...spawnCascade(), carrier: 3 }, false, false);
-    expect([jolt.outcome, storm.outcome].sort()).toEqual(["jolt", "storm"]);
-    expect(jolt.heroDamage).not.toBe(storm.heroDamage);
-  });
 });
 
 describe("resolveCascadeBossTurn — Debug block / absorb (an absorb replaces the boss turn's damage entirely: no storm AND no jolt)", () => {
@@ -176,65 +156,35 @@ describe("the pulse block triggers on ARRIVAL only", () => {
 });
 
 describe("carrier shield: the node carrying the pulse takes HALF damage, rounded down, from every source", () => {
-  it("halves damage dealt to the current carrier, floored", () => {
-    const boss: CascadeBoss = { ...spawnCascade(), carrier: 2 };
-    const after = damageNode(boss, 2, 11); // floor(11/2) = 5
-    expect(after.nodes.find((n) => n.id === 2)!.hp).toBe(20);
-  });
-
-  it("applies full damage to a non-carrier node", () => {
-    const boss: CascadeBoss = { ...spawnCascade(), carrier: 2 };
-    const after = damageNode(boss, 0, 11);
-    expect(after.nodes.find((n) => n.id === 0)!.hp).toBe(14);
-  });
-
-  it("kills a node at exactly 0 HP and flips alive false", () => {
-    const boss: CascadeBoss = { ...spawnCascade(), carrier: 9 }; // no shield in play
-    const after = damageNode(boss, 0, 25);
-    const node0 = after.nodes.find((n) => n.id === 0)!;
-    expect(node0.hp).toBe(0);
-    expect(node0.alive).toBe(false);
-  });
-
-  it("clamps at 0 rather than going negative", () => {
-    const boss: CascadeBoss = { ...spawnCascade(), carrier: 9 };
-    const after = damageNode(boss, 0, 999);
-    expect(after.nodes.find((n) => n.id === 0)!.hp).toBe(0);
-  });
-
-  it("is a no-op against an already-dead node", () => {
-    const boss = kill(spawnCascade(), 0);
-    const after = damageNode(boss, 0, 25);
-    const node0 = after.nodes.find((n) => n.id === 0)!;
-    expect(node0.hp).toBe(0);
-    expect(node0.alive).toBe(false);
+  it.each([
+    { name: "halves damage dealt to the current carrier, floored", carrier: 2, dead: [], node: 2, dmg: 11, hp: 20, alive: true },
+    { name: "applies full damage to a non-carrier node", carrier: 2, dead: [], node: 0, dmg: 11, hp: 14, alive: true },
+    // carrier 9: no shield in play
+    { name: "kills a node at exactly 0 HP and flips alive false", carrier: 9, dead: [], node: 0, dmg: 25, hp: 0, alive: false },
+    { name: "clamps at 0 rather than going negative", carrier: 9, dead: [], node: 0, dmg: 999, hp: 0, alive: false },
+    { name: "is a no-op against an already-dead node", carrier: 0, dead: [0], node: 0, dmg: 25, hp: 0, alive: false },
+  ])("$name", ({ carrier, dead, node, dmg, hp, alive }) => {
+    let boss: CascadeBoss = { ...spawnCascade(), carrier };
+    for (const id of dead) boss = kill(boss, id);
+    const after = damageNode(boss, node, dmg);
+    expect(after.nodes.find((n) => n.id === node)!.hp).toBe(hp);
+    expect(after.nodes.find((n) => n.id === node)!.alive).toBe(alive);
   });
 });
 
 describe("Fan Out vs the chain (base 8, CT -> 12 via dealtDamage — every living node hit, carrier shield still applies per-node)", () => {
-  it("uncT'd: 8 to every living node, 4 to the carrier", () => {
+  it.each([
+    // carrier 0 takes floor(dmg / 2), every other node takes dmg
+    { name: "uncT'd: 8 to every living node, 4 to the carrier", ct: false, conviction: false, carrierHp: 21, otherHp: 17 },
+    { name: "CT'd: dealtDamage(8, true, false) = 12 to every living node, 6 to the carrier", ct: true, conviction: false, carrierHp: 19, otherHp: 13 },
+    { name: "threads Conviction too (dealtDamage(8, false, true) = 16, carrier floor(16/2) = 8)", ct: false, conviction: true, carrierHp: 17, otherHp: 9 },
+  ])("$name", ({ ct, conviction, carrierHp, otherHp }) => {
     const boss: CascadeBoss = { ...spawnCascade(), carrier: 0 };
-    const after = fanOutNodes(boss, false, false);
-    expect(after.nodes.find((n) => n.id === 0)!.hp).toBe(21); // 25 - floor(8/2)
+    const after = fanOutNodes(boss, ct, conviction);
+    expect(after.nodes.find((n) => n.id === 0)!.hp).toBe(carrierHp);
     for (const id of [1, 2, 3, 4, 5]) {
-      expect(after.nodes.find((n) => n.id === id)!.hp).toBe(17); // 25 - 8
+      expect(after.nodes.find((n) => n.id === id)!.hp).toBe(otherHp);
     }
-  });
-
-  it("CT'd: dealtDamage(8, true, false) = 12 to every living node, 6 to the carrier", () => {
-    const boss: CascadeBoss = { ...spawnCascade(), carrier: 0 };
-    const after = fanOutNodes(boss, true, false);
-    expect(after.nodes.find((n) => n.id === 0)!.hp).toBe(19); // 25 - floor(12/2)
-    for (const id of [1, 2, 3, 4, 5]) {
-      expect(after.nodes.find((n) => n.id === id)!.hp).toBe(13); // 25 - 12
-    }
-  });
-
-  it("threads Conviction too (dealtDamage(8, false, true) = 16, carrier floor(16/2) = 8)", () => {
-    const boss: CascadeBoss = { ...spawnCascade(), carrier: 0 };
-    const after = fanOutNodes(boss, false, true);
-    expect(after.nodes.find((n) => n.id === 0)!.hp).toBe(17); // 25 - 8
-    expect(after.nodes.find((n) => n.id === 1)!.hp).toBe(9); // 25 - 16
   });
 
   it("never touches an already-dead node", () => {

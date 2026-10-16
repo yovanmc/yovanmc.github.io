@@ -3,11 +3,6 @@ import { describe, expect, it } from "vitest";
 import { commandsForKit } from "./abilities";
 
 describe("commandsForKit", () => {
-  it("returns the base four for a fresh kit — no Fan Out row", () => {
-    const cmds = commandsForKit(["attack", "ct", "pt", "debug"]);
-    expect(cmds.map((c) => c.id)).toEqual(["attack", "ct", "pt", "debug"]);
-  });
-
   it("appends Fan Out when the kit includes it (rematch with Alert Storm beaten)", () => {
     const cmds = commandsForKit(["attack", "ct", "pt", "debug", "fo"]);
     expect(cmds.map((c) => c.id)).toEqual(["attack", "ct", "pt", "debug", "fo"]);

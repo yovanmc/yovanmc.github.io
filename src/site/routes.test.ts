@@ -14,25 +14,19 @@ import { resolve } from "node:path";
 import { canonicalPath, phaseForPath } from "./phaseForPath";
 
 describe("phaseForPath", () => {
-  it("resolves /work/ and /work to browse, and the old /browse/ path as a legacy alias", () => {
-    expect(phaseForPath("/work/")).toBe("browse");
-    expect(phaseForPath("/work")).toBe("browse");
-    expect(phaseForPath("/browse/")).toBe("browse");
-    expect(phaseForPath("/browse")).toBe("browse");
-  });
-
-  it("resolves /build/ and /build to build", () => {
-    expect(phaseForPath("/build/")).toBe("build");
-    expect(phaseForPath("/build")).toBe("build");
-  });
-
-  it("resolves the root path to null", () => {
-    expect(phaseForPath("/")).toBeNull();
-  });
-
-  it("resolves an unknown path to null", () => {
-    expect(phaseForPath("/nope")).toBeNull();
-    expect(phaseForPath("/work/curio/")).toBeNull();
+  it.each([
+    // the old /browse/ path is a legacy alias of /work/
+    { name: "resolves /work/ to browse", path: "/work/", phase: "browse" },
+    { name: "resolves /work to browse", path: "/work", phase: "browse" },
+    { name: "resolves the legacy /browse/ alias to browse", path: "/browse/", phase: "browse" },
+    { name: "resolves the legacy /browse alias to browse", path: "/browse", phase: "browse" },
+    { name: "resolves /build/ to build", path: "/build/", phase: "build" },
+    { name: "resolves /build to build", path: "/build", phase: "build" },
+    { name: "resolves the root path to null", path: "/", phase: null },
+    { name: "resolves an unknown path to null", path: "/nope", phase: null },
+    { name: "resolves a case study path to null", path: "/work/curio/", phase: null },
+  ])("$name", ({ path, phase }) => {
+    expect(phaseForPath(path)).toBe(phase);
   });
 });
 
@@ -93,14 +87,15 @@ describe("App.tsx browse/build dispatch parity", () => {
 });
 
 describe("canonicalPath", () => {
-  it("rewrites the legacy /browse/ index path to /work/", () => {
-    expect(canonicalPath("/browse/")).toBe("/work/");
-    expect(canonicalPath("/browse")).toBe("/work/");
-  });
-
-  it("leaves every other path alone", () => {
-    for (const p of ["/work/", "/build/", "/work/curio/", "/experience/software-engineer/", "/"]) {
-      expect(canonicalPath(p)).toBe(p);
-    }
+  it.each([
+    { name: "rewrites the legacy /browse/ index path to /work/", path: "/browse/", expected: "/work/" },
+    { name: "rewrites the legacy /browse index path to /work/", path: "/browse", expected: "/work/" },
+    ...["/work/", "/build/", "/work/curio/", "/experience/software-engineer/", "/"].map((p) => ({
+      name: `leaves ${p} alone`,
+      path: p,
+      expected: p,
+    })),
+  ])("$name", ({ path, expected }) => {
+    expect(canonicalPath(path)).toBe(expected);
   });
 });

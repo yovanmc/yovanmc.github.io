@@ -403,35 +403,34 @@ describe("RUSH_ORDER / IMPLEMENTED_BOSSES", () => {
 });
 
 describe("kit derivation", () => {
-  it("the base four abilities are always in kit, fresh or rematch; Fan Out joins only once alert-storm is defeated", () => {
-    expect(deriveKit([])).toEqual(["attack", "ct", "pt", "debug"]);
-    expect(deriveKit(["alert-storm"])).toEqual(["attack", "ct", "pt", "debug", "fo"]);
-  });
-
-  it("cascade grants its rb unlock; a fake boss id is ignored, with no crash and no phantom kit growth", () => {
-    expect(deriveKit(["cascade", "not-a-real-boss"])).toEqual(["attack", "ct", "pt", "debug", "rb"]);
-  });
-
-  it("imposter-syndrome defeated grants conv; imposter-syndrome NOT defeated does not, even alongside every other boss", () => {
-    expect(deriveKit(["alert-storm", "cascade", "silent-failure", "imposter-syndrome"])).toEqual([
-      "attack",
-      "ct",
-      "pt",
-      "debug",
-      "fo",
-      "rb",
-      "rc",
-      "conv",
-    ]);
-    expect(deriveKit(["alert-storm", "cascade", "silent-failure"])).toEqual([
-      "attack",
-      "ct",
-      "pt",
-      "debug",
-      "fo",
-      "rb",
-      "rc",
-    ]);
+  it.each([
+    {
+      name: "the base four abilities are always in kit on a fresh fight",
+      defeated: [],
+      kit: ["attack", "ct", "pt", "debug"],
+    },
+    {
+      name: "Fan Out joins only once alert-storm is defeated",
+      defeated: ["alert-storm"],
+      kit: ["attack", "ct", "pt", "debug", "fo"],
+    },
+    {
+      name: "cascade grants its rb unlock; a fake boss id is ignored, with no crash and no phantom kit growth",
+      defeated: ["cascade", "not-a-real-boss"],
+      kit: ["attack", "ct", "pt", "debug", "rb"],
+    },
+    {
+      name: "imposter-syndrome defeated grants conv",
+      defeated: ["alert-storm", "cascade", "silent-failure", "imposter-syndrome"],
+      kit: ["attack", "ct", "pt", "debug", "fo", "rb", "rc", "conv"],
+    },
+    {
+      name: "imposter-syndrome NOT defeated does not grant conv, even alongside every other boss",
+      defeated: ["alert-storm", "cascade", "silent-failure"],
+      kit: ["attack", "ct", "pt", "debug", "fo", "rb", "rc"],
+    },
+  ])("$name", ({ defeated, kit }) => {
+    expect(deriveKit(defeated)).toEqual(kit);
   });
 
   it("the reducer rejects an out-of-kit action type as invalid, without mutating turn/hero", () => {
@@ -444,33 +443,32 @@ describe("kit derivation", () => {
 });
 
 describe("Multiplier core (the dealt/taken helpers, tested directly)", () => {
-  it("dealt, PT under both CT and Conviction: 28 × 2 × 2 = 112 (Conviction REPLACES CT's dealt percentage, never stacks it)", () => {
-    expect(dealtDamage(28, true, true)).toBe(112);
-  });
-
-  it("taken, glitch-slash-sized hit under both CT and Conviction: 14 × 0.5 = 7 (Conviction REPLACES CT's taken percentage)", () => {
-    expect(takenDamage(14, true, true)).toBe(7);
-  });
-
-  it("CT alone (Conviction off) uses dealt ×1.5, taken ×0.75", () => {
-    expect(dealtDamage(28, true, false)).toBe(42);
-    expect(takenDamage(14, true, false)).toBe(11); // roundHalfUp(10.5)
-  });
-
-  it("Conviction alone, CT down: dealt still doubles, but taken reduces nothing (CT owns the taken side entirely)", () => {
-    expect(dealtDamage(28, false, true)).toBe(56);
-    expect(takenDamage(14, false, true)).toBe(14);
-  });
-
-  it("neither active: both multipliers are 1", () => {
-    expect(dealtDamage(28, false, false)).toBe(28);
-    expect(takenDamage(14, false, false)).toBe(14);
-  });
-
-  it("a rigged state with conviction:true feeds the same math (conviction is a plain state flag)", () => {
-    const s = { ...initBattle({ seed: 1 }), ctTurns: 3, conviction: true };
-    expect(dealtDamage(28, s.ctTurns > 0, s.conviction)).toBe(112);
-    expect(takenDamage(14, s.ctTurns > 0, s.conviction)).toBe(7);
+  it.each([
+    {
+      name: "PT under both CT and Conviction: dealt 28 × 2 × 2 = 112, taken 14 × 0.5 = 7 (Conviction REPLACES CT's percentages, never stacks them)",
+      ct: true,
+      conviction: true,
+      dealt: 112,
+      taken: 7,
+    },
+    {
+      name: "CT alone (Conviction off) uses dealt ×1.5, taken ×0.75 (roundHalfUp(10.5) = 11)",
+      ct: true,
+      conviction: false,
+      dealt: 42,
+      taken: 11,
+    },
+    {
+      name: "Conviction alone, CT down: dealt still doubles, but taken reduces nothing (CT owns the taken side entirely)",
+      ct: false,
+      conviction: true,
+      dealt: 56,
+      taken: 14,
+    },
+    { name: "neither active: both multipliers are 1", ct: false, conviction: false, dealt: 28, taken: 14 },
+  ])("$name", ({ ct, conviction, dealt, taken }) => {
+    expect(dealtDamage(28, ct, conviction)).toBe(dealt);
+    expect(takenDamage(14, ct, conviction)).toBe(taken);
   });
 });
 
@@ -803,30 +801,23 @@ function silentFailureState(
 
 describe("Silent Failure engine wiring", () => {
   describe("targetability: pt/debug/fo invalid while vanished; attack is exempted and whiffs", () => {
-    it("pt against a vanished boss is invalid: no MP spent, no turn consumed", () => {
+    it.each<{ name: string; action: BattleAction }>([
+      { name: "pt against a vanished boss is invalid: no MP spent, no turn consumed", action: { type: "pt", target: SF_TARGET_ID } },
+      { name: "debug against a vanished boss is invalid: no MP spent, no mark, no DoT started", action: { type: "debug", target: SF_TARGET_ID } },
+      {
+        // gated before the MP deduction, not inside the fan-out helper
+        name: "fo against a vanished boss is invalid: no MP spent, no turn consumed",
+        action: { type: "fo" },
+      },
+    ])("$name", ({ action }) => {
       const s0 = silentFailureState({ phase: "vanished" });
-      const s1 = battleReduce(s0, { type: "pt", target: SF_TARGET_ID });
+      const s1 = battleReduce(s0, action);
       expect(s1.events).toEqual([{ type: "invalid", reason: "target is not there" }]);
       expect(s1.turn).toBe(s0.turn);
-      expect(s1.hero.mp).toBe(s0.hero.mp);
-    });
-
-    it("debug against a vanished boss is invalid: no MP spent, no mark, no DoT started", () => {
-      const s0 = silentFailureState({ phase: "vanished" });
-      const s1 = battleReduce(s0, { type: "debug", target: SF_TARGET_ID });
-      expect(s1.events).toEqual([{ type: "invalid", reason: "target is not there" }]);
       expect(s1.hero.mp).toBe(s0.hero.mp);
       expect(s1.dots).toEqual([]);
       if (s1.boss.kind !== "silent-failure") throw new Error("unreachable");
       expect(s1.boss.marked).toBe(false);
-    });
-
-    it("fo against a vanished boss is invalid: no MP spent, no turn consumed (gated before the MP deduction, not inside the fan-out helper)", () => {
-      const s0 = silentFailureState({ phase: "vanished" });
-      const s1 = battleReduce(s0, { type: "fo" });
-      expect(s1.events).toEqual([{ type: "invalid", reason: "target is not there" }]);
-      expect(s1.turn).toBe(s0.turn);
-      expect(s1.hero.mp).toBe(s0.hero.mp);
     });
 
     it("pt/debug/fo are all legal against an embodied boss (no invalid event)", () => {

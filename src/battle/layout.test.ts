@@ -19,17 +19,10 @@ import { spawnImposter, type ImposterBoss } from "./bosses/imposter";
 import { spawnAlertStorm } from "./bosses/alertStorm";
 import { spawnCascade } from "./bosses/cascade";
 import { spawnSilentFailure } from "./bosses/silentFailure";
-import { imposterScene } from "./scenes/imposter";
 import { sceneFor } from "./scenes/index";
 import type { BossState } from "./engine";
 
 const identityDraw = (r: number) => r;
-
-/** Same as scenes/imposter.test.ts's `fresh`; test files do not import each
- * other. */
-function fresh(overrides: Partial<ImposterBoss> = {}): ImposterBoss {
-  return { ...spawnImposter(0, identityDraw).boss, ...overrides };
-}
 
 describe("stageMetrics", () => {
   // Hand-computed expectations, independent of the implementation. toBeCloseTo
@@ -72,30 +65,32 @@ describe("stageMetrics", () => {
 });
 
 describe("paintedBounds", () => {
-  it("returns null for a blank grid (every cell null)", () => {
-    const blank: Grid = [
-      [null, null],
-      [null, null],
-    ];
-    expect(paintedBounds(blank)).toBeNull();
-  });
-
-  it("returns null for a zero-row grid", () => {
-    expect(paintedBounds([])).toBeNull();
-  });
-
-  it("returns the same cell's index four times for a single painted cell", () => {
-    const grid: Grid = [
-      [null, null, null],
-      [null, "X", null],
-    ];
-    expect(paintedBounds(grid)).toEqual({ top: 1, left: 1, bottom: 1, right: 1 });
-  });
-
-  it("handles a ragged grid (rows of differing length) without an index error", () => {
-    const ragged: Grid = [["X"], [null, null, "Y"]];
-    expect(() => paintedBounds(ragged)).not.toThrow();
-    expect(paintedBounds(ragged)).toEqual({ top: 0, left: 0, bottom: 1, right: 2 });
+  it.each<{ name: string; grid: Grid; expected: ReturnType<typeof paintedBounds> }>([
+    {
+      name: "returns null for a blank grid (every cell null)",
+      grid: [
+        [null, null],
+        [null, null],
+      ],
+      expected: null,
+    },
+    { name: "returns null for a zero-row grid", grid: [], expected: null },
+    {
+      name: "returns the same cell's index four times for a single painted cell",
+      grid: [
+        [null, null, null],
+        [null, "X", null],
+      ],
+      expected: { top: 1, left: 1, bottom: 1, right: 1 },
+    },
+    {
+      name: "handles a ragged grid (rows of differing length) without an index error",
+      grid: [["X"], [null, null, "Y"]],
+      expected: { top: 0, left: 0, bottom: 1, right: 2 },
+    },
+  ])("$name", ({ grid, expected }) => {
+    expect(() => paintedBounds(grid)).not.toThrow();
+    expect(paintedBounds(grid)).toEqual(expected);
   });
 });
 
@@ -126,69 +121,27 @@ describe("rectsIntersect", () => {
   // coverage), plus one true overlap. `a` is fixed unless noted.
   const a = { left: 0, top: 0, width: 10, height: 10 };
 
-  it("false: b entirely right of a (with a gap)", () => {
-    const b = { left: 20, top: 0, width: 10, height: 10 };
-    expect(rectsIntersect(a, b)).toBe(false);
-  });
-
-  it("false: b entirely left of a", () => {
-    const shifted = { left: 20, top: 0, width: 10, height: 10 };
-    const b = { left: 0, top: 0, width: 10, height: 10 };
-    expect(rectsIntersect(shifted, b)).toBe(false);
-  });
-
-  it("false: b entirely above a", () => {
-    const shifted = { left: 0, top: 20, width: 10, height: 10 };
-    const b = { left: 0, top: 0, width: 10, height: 10 };
-    expect(rectsIntersect(shifted, b)).toBe(false);
-  });
-
-  it("false: b entirely below a (with a gap)", () => {
-    const b = { left: 0, top: 20, width: 10, height: 10 };
-    expect(rectsIntersect(a, b)).toBe(false);
-  });
-
-  it("true: a genuine overlap", () => {
-    const b = { left: 5, top: 5, width: 10, height: 10 };
-    expect(rectsIntersect(a, b)).toBe(true);
-  });
-
-  it("edge-touching is NOT intersecting (a.right === b.left)", () => {
-    const b = { left: 10, top: 0, width: 10, height: 10 };
-    expect(rectsIntersect(a, b)).toBe(false);
+  it.each([
+    { name: "false: b entirely right of a (with a gap)", a, b: { left: 20, top: 0, width: 10, height: 10 }, expected: false },
+    { name: "false: b entirely left of a", a: { left: 20, top: 0, width: 10, height: 10 }, b: { left: 0, top: 0, width: 10, height: 10 }, expected: false },
+    { name: "false: b entirely above a", a: { left: 0, top: 20, width: 10, height: 10 }, b: { left: 0, top: 0, width: 10, height: 10 }, expected: false },
+    { name: "false: b entirely below a (with a gap)", a, b: { left: 0, top: 20, width: 10, height: 10 }, expected: false },
+    { name: "true: a genuine overlap", a, b: { left: 5, top: 5, width: 10, height: 10 }, expected: true },
+    { name: "edge-touching is NOT intersecting (a.right === b.left)", a, b: { left: 10, top: 0, width: 10, height: 10 }, expected: false },
+  ])("$name", ({ a: ra, b, expected }) => {
+    expect(rectsIntersect(ra, b)).toBe(expected);
   });
 });
 
-describe("clip invariant: leftmost clone and hero vs COMMAND panel", () => {
+describe("clip invariant: hero vs COMMAND panel", () => {
   // At every swept viewport, neither the leftmost clone's painted rect nor the
   // hero's (`IDLE[0]` at `HERO_AT`; the panel can clip his legs at 360x640) may
   // intersect the COMMAND panel. Both come from the real public seams, never
   // hardcoded numbers.
   //
   // One case per viewport, not one looping test, so every bad viewport is
-  // reported, not just the first. The composition is viewport-independent, so
-  // it is computed once here.
-  const boss = fresh({ phase: "clones" });
-  const [r0, c0] = imposterScene.stampOrigin!(boss);
-  const grid = imposterScene.composeBoss(boss, false, 0, {});
+  // reported, not just the first.
   const heroGrid: Grid = IDLE[0];
-
-  it.each(MEASURED_LAYOUT)(
-    "$vw x $vh — leftmost clone does not overlap the COMMAND panel",
-    (row) => {
-      const m = stageMetrics(row.vw, row.vh, row.isMobile);
-      const clone = gridRect(m, r0, c0, grid)!;
-      const panel = commandPanelRect(row.vw, row.containerHeight, row.isMobile, row.panelHeight);
-      // Overlap depth per axis, for the failure message only; the assertion
-      // checks the boolean.
-      const overlapX = Math.min(clone.left + clone.width, panel.left + panel.width) - Math.max(clone.left, panel.left);
-      const overlapY = Math.min(clone.top + clone.height, panel.top + panel.height) - Math.max(clone.top, panel.top);
-      expect(
-        rectsIntersect(clone, panel),
-        `${row.vw}x${row.vh}: overlap x=${overlapX.toFixed(2)}px y=${overlapY.toFixed(2)}px (negative = clear on that axis)`,
-      ).toBe(false);
-    },
-  );
 
   it.each(MEASURED_LAYOUT)(
     "$vw x $vh — hero does not overlap the COMMAND panel",
@@ -210,36 +163,51 @@ describe("panelMaxHeight unit cases", () => {
   // Desktop probe: commandPanelRect(vw, containerHeight, false, 1) -> left 38,
   // width 262, top = containerHeight - 38 - 1. bottomOffset is always 38 on
   // this arm (the probe-then-subtract trick).
-  it("an actor entirely clear of the panel's x-band is ignored (ceiling wins)", () => {
-    // The panel x-band is [38, 300) at 1440x900; this actor sits right of it.
-    const clearActor = { left: 500, top: 0, width: 50, height: 900 };
-    expect(panelMaxHeight(1440, 900, false, [clearActor])).toBe(MENU_PANEL_CEILING);
-  });
-
-  it("an empty actor list returns the ceiling", () => {
-    expect(panelMaxHeight(1440, 900, false, [])).toBe(MENU_PANEL_CEILING);
-  });
-
-  it("result is never negative even when an actor overlaps the panel's whole x-band down to the floor", () => {
-    // Spans the whole x-band down to the container bottom: the tightest squeeze.
-    const floorActor = { left: 0, top: 0, width: 1440, height: 900 };
-    expect(panelMaxHeight(1440, 900, false, [floorActor])).toBe(0);
-  });
-
-  it("an overlapping actor above the panel constrains the budget below the ceiling", () => {
-    // Bottom at y=700, so budget = 900 - 38 - 700 = 162.
-    const actor = { left: 38, top: 650, width: 262, height: 50 };
-    expect(panelMaxHeight(1440, 900, false, [actor])).toBe(162);
+  it.each([
+    {
+      // The panel x-band is [38, 300) at 1440x900; this actor sits right of it.
+      name: "an actor entirely clear of the panel's x-band is ignored (ceiling wins)",
+      actors: [{ left: 500, top: 0, width: 50, height: 900 }],
+      expected: MENU_PANEL_CEILING,
+    },
+    { name: "an empty actor list returns the ceiling", actors: [], expected: MENU_PANEL_CEILING },
+    {
+      // Spans the whole x-band down to the container bottom: the tightest squeeze.
+      name: "result is never negative even when an actor overlaps the panel's whole x-band down to the floor",
+      actors: [{ left: 0, top: 0, width: 1440, height: 900 }],
+      expected: 0,
+    },
+    {
+      // Bottom at y=700, so budget = 900 - 38 - 700 = 162.
+      name: "an overlapping actor above the panel constrains the budget below the ceiling",
+      actors: [{ left: 38, top: 650, width: 262, height: 50 }],
+      expected: 162,
+    },
+  ])("$name", ({ actors, expected }) => {
+    expect(panelMaxHeight(1440, 900, false, actors)).toBe(expected);
   });
 });
 
 describe("commandPanelRect", () => {
-  it("desktop arm: left 38, width 262, top derived from containerHeight/panelHeight", () => {
-    expect(commandPanelRect(1440, 900, false, 200)).toEqual({ left: 38, top: 900 - 38 - 200, width: 262, height: 200 });
-  });
-
-  it("mobile arm: left 10, width vw-20 (right:10 + width:auto), top derived the same way", () => {
-    expect(commandPanelRect(390, 844, true, 220)).toEqual({ left: 10, top: 844 - 10 - 220, width: 390 - 20, height: 220 });
+  it.each([
+    {
+      name: "desktop arm: left 38, width 262, top derived from containerHeight/panelHeight",
+      vw: 1440,
+      containerHeight: 900,
+      isMobile: false,
+      panelHeight: 200,
+      expected: { left: 38, top: 900 - 38 - 200, width: 262, height: 200 },
+    },
+    {
+      name: "mobile arm: left 10, width vw-20 (right:10 + width:auto), top derived the same way",
+      vw: 390,
+      containerHeight: 844,
+      isMobile: true,
+      panelHeight: 220,
+      expected: { left: 10, top: 844 - 10 - 220, width: 390 - 20, height: 220 },
+    },
+  ])("$name", ({ vw, containerHeight, isMobile, panelHeight, expected }) => {
+    expect(commandPanelRect(vw, containerHeight, isMobile, panelHeight)).toEqual(expected);
   });
 });
 

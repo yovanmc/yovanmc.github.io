@@ -27,24 +27,20 @@ const V1_FULL = '{"v":1,"defeated":["alert-storm","cascade","silent-failure","im
 const V1_EXTRA_FIELD = '{"v":1,"defeated":["alert-storm"],"futureField":true}';
 
 describe("progress schema v1 guard (pins the on-disk shape, not just behavior)", () => {
-  it("V1_EMPTY reads as no progress", () => {
-    expect(readProgress(new FakeStore(V1_EMPTY))).toEqual([]);
-  });
-
-  it("V1_ONE reads as a single defeated boss", () => {
-    expect(readProgress(new FakeStore(V1_ONE))).toEqual(["alert-storm"]);
-  });
-
-  it("V1_FULL reads as the full four-boss rush", () => {
-    expect(readProgress(new FakeStore(V1_FULL))).toEqual([
-      "alert-storm",
-      "cascade",
-      "silent-failure",
-      "imposter-syndrome",
-    ]);
-  });
-
-  it("V1_EXTRA_FIELD drops the unknown top-level field and still reads the known ones", () => {
-    expect(readProgress(new FakeStore(V1_EXTRA_FIELD))).toEqual(["alert-storm"]);
+  it.each([
+    { name: "V1_EMPTY reads as no progress", raw: V1_EMPTY, expected: [] },
+    { name: "V1_ONE reads as a single defeated boss", raw: V1_ONE, expected: ["alert-storm"] },
+    {
+      name: "V1_FULL reads as the full four-boss rush",
+      raw: V1_FULL,
+      expected: ["alert-storm", "cascade", "silent-failure", "imposter-syndrome"],
+    },
+    {
+      name: "V1_EXTRA_FIELD drops the unknown top-level field and still reads the known ones",
+      raw: V1_EXTRA_FIELD,
+      expected: ["alert-storm"],
+    },
+  ])("$name", ({ raw, expected }) => {
+    expect(readProgress(new FakeStore(raw))).toEqual(expected);
   });
 });
